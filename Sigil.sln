@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sigil.Core", "Sigil.Core\Sigil.Core.csproj", "{08F42FC7-8186-40CF-97D0-B4A9A6D0F100}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sigil.Server", "Sigil.Server\Sigil.Server\Sigil.Server.csproj", "{B98BA917-D0E8-4099-A478-08F0AE312811}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sigil.Server.Client", "Sigil.Server\Sigil.Server.Client\Sigil.Server.Client.csproj", "{1046EC09-302A-48D8-B7DE-38CAEA8841FA}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{08F42FC7-8186-40CF-97D0-B4A9A6D0F100}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{08F42FC7-8186-40CF-97D0-B4A9A6D0F100}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{08F42FC7-8186-40CF-97D0-B4A9A6D0F100}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{08F42FC7-8186-40CF-97D0-B4A9A6D0F100}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B98BA917-D0E8-4099-A478-08F0AE312811}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B98BA917-D0E8-4099-A478-08F0AE312811}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B98BA917-D0E8-4099-A478-08F0AE312811}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B98BA917-D0E8-4099-A478-08F0AE312811}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1046EC09-302A-48D8-B7DE-38CAEA8841FA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1046EC09-302A-48D8-B7DE-38CAEA8841FA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1046EC09-302A-48D8-B7DE-38CAEA8841FA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1046EC09-302A-48D8-B7DE-38CAEA8841FA}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
