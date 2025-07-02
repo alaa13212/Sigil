@@ -1,5 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Sigil.Core.Ingestion;
+using Sigil.Core.IssueGrouping;
+using Sigil.Core.Parsing;
 using Sigil.Server.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,6 +23,11 @@ builder.Services.AddSingleton(new JsonSerializerOptions(JsonSerializerDefaults.W
 {
     PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
 });
+
+builder.Services.AddScoped<IEventParser, SentryEventParser>();
+builder.Services.AddScoped<IHashGenerator, HashGenerator>();
+builder.Services.AddScoped<IFingerprintGenerator, FingerprintGenerator>();
+builder.Services.AddScoped<IIngestionService, IngestionService>();
 
 
 var app = builder.Build();
