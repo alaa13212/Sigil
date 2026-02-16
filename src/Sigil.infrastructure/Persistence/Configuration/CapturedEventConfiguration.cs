@@ -1,0 +1,15 @@
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Sigil.Domain.Entities;
+
+namespace Sigil.infrastructure.Persistence.Configuration;
+
+internal class CapturedEventConfiguration : IEntityTypeConfiguration<CapturedEvent>
+{
+    public void Configure(EntityTypeBuilder<CapturedEvent> builder)
+    {
+        builder.HasIndex(e => e.EventId).IsUnique();
+        builder.HasIndex(e => new { e.IssueId, e.Timestamp });
+    }
+}
+

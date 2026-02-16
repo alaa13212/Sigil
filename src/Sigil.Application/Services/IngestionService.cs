@@ -1,0 +1,77 @@
+﻿using Sigil.Application.Interfaces;
+using Sigil.Domain.Entities;
+using Sigil.Domain.Extensions;
+using Sigil.Domain.Ingestion;
+using Sigil.Domain.Interfaces;
+
+namespace Sigil.Application.Services;
+
+public class IngestionService(
+    IProjectCache projectCache,
+    IIssueCache issueCache,
+    IEventService eventService,
+    IReleaseCache releaseCache,
+    IEventUserCache eventUserCache,
+    ITagCache tagCache,
+    IFingerprintGenerator fingerprintGenerator,
+    IEventRanker eventRanker
+) : IIngestionService
+{
+    public async Task BulkIngest(int projectId, List<ParsedEvent> parsedEvents, CancellationToken cancellationToken = default)
+    {
+        // Get or create the project
+        var project = await projectCache.GetProjectById(projectId);
+        ArgumentNullException.ThrowIfNull(project);
+        
+        // Releases
+        List<string> requiredReleases = parsedEvents.Select(item => item.Release).Distinct().ToList();
+        Dictionary<string, Release> releases = (await releaseCache.BulkGetOrCreateReleaseAsync(projectId, requiredReleases)).ToDictionary(r => r.RawName);
+
+        // Tags
+        List<KeyValuePair<string, string>> requiredTags = parsedEvents.Where(item => item.Tags != null).SelectMany(item => item.Tags!).Distinct().ToList();
+        Dictionary<string, TagValue> tagValues = (await tagCache.BulkGetOrCreateTagsAsync(requiredTags)).ToDictionary(t => $"{t.TagKey.Key}:{t.Value}");
+        
+        // Event Users
+        List<ParsedEventUser> parsedEventUsers = parsedEvents.Select(item => item.User).Where(u => u != null).ToList()!;
+        Dictionary<string, EventUser> eventUsers = (await eventUserCache.BulkGetEventUsers(parsedEventUsers)).ToDictionary(u => u.UniqueIdentifier);
+
+        // Issues
+        ILookup<string, ParsedEvent> issueGrouping = parsedEvents.ToLookup(fingerprintGenerator.GenerateFingerprint);
+        Dictionary<string, Issue> issues = (await issueCache.BulkGetOrCreateIssues(project, issueGrouping)).ToDictionary(i => i.Fingerprint);
+
+        List<CapturedEvent> events = [];
+        foreach (IGrouping<string, ParsedEvent> group in issueGrouping)
+        {
+            Issue issue = issues[group.Key];
+            
+            foreach (ParsedEvent parsedEvent in group)
+            {
+                if (parsedEvent.Tags == null)
+                    continue;
+
+                foreach (KeyValuePair<string, string> tag in parsedEvent.Tags)
+                {
+                    TagValue tagValue = tagValues[$"{tag.Key}:{tag.Value}"];
+                    IssueTag? issueTag = issue.Tags.FirstOrDefault(iTag => iTag.TagValueId == tagValue.Id);
+                    if (issueTag == null)
+                    {
+                        issueTag = new IssueTag { Issue = issue, TagValueId = tagValues[$"{tag.Key}:{tag.Value}"].Id, FirstSeen = parsedEvent.Timestamp, LastSeen = parsedEvent.Timestamp };
+                        issue.Tags.Add(issueTag);
+                    }
+                    
+                    issueTag.OccurrenceCount++;
+                    issueTag.FirstSeen = TimeMath.Earlier(issueTag.FirstSeen, parsedEvent.Timestamp);
+                    issueTag.LastSeen = TimeMath.Later(issueTag.LastSeen, parsedEvent.Timestamp);
+                }
+            }
+
+            List<CapturedEvent> eventsEntities = eventService.BulkCreateEventsEntities(group, issue, releases, eventUsers, tagValues).ToList();
+            events.AddRange(eventsEntities);
+
+            issue.SuggestedEvent = eventRanker.GetMostRelevantEvent(eventsEntities);
+        }
+        
+        await eventService.SaveEventsAsync(events);
+    }
+}
+
