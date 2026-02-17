@@ -1,0 +1,248 @@
+@page "/events/{EventId:long}"
+@using Sigil.Application.Models.Events
+@inject IEventService EventService
+@inject NavigationManager Navigation
+
+<PageTitle>Event — Sigil</PageTitle>
+
+@if (loading)
+{
+    <div class="flex justify-center py-16">
+        <span class="loading loading-spinner loading-lg"></span>
+    </div>
+}
+else if (evt is null)
+{
+    <EmptyState Title="Event not found" Description="This event may have been deleted." />
+}
+else
+{
+    <!-- Header -->
+    <div class="mb-6 space-y-2">
+        <div class="text-sm opacity-60">
+            <a href="javascript:void(0)" class="link link-hover" @onclick="GoBackToIssue">&larr; Back to issue</a>
+        </div>
+        <div class="flex items-center gap-3 flex-wrap">
+            <h1 class="text-2xl font-bold">Event</h1>
+            <SeverityBadge Level="evt.Level" />
+            <code class="text-xs opacity-50">@evt.EventId</code>
+        </div>
+        <div class="text-sm opacity-60">
+            <RelativeTime Value="evt.Timestamp" />
+            <span class="ml-2">·</span>
+            <span class="ml-2">@evt.Timestamp.ToString("yyyy-MM-dd HH:mm:ss UTC")</span>
+        </div>
+    </div>
+
+    <!-- Message -->
+    @if (!string.IsNullOrEmpty(evt.Message))
+    {
+        <div class="alert mb-4">
+            <span class="font-mono text-sm break-words">@evt.Message</span>
+        </div>
+    }
+
+    <!-- Tabs -->
+    <div role="tablist" class="tabs tabs-bordered mb-4">
+        <button role="tab" class="tab @(activeTab == Tab.Details ? "tab-active" : "")"
+                @onclick="() => SwitchTab(Tab.Details)">Details</button>
+        <button role="tab" class="tab @(activeTab == Tab.Breadcrumbs ? "tab-active" : "")"
+                @onclick="() => SwitchTab(Tab.Breadcrumbs)">Breadcrumbs</button>
+        <button role="tab" class="tab @(activeTab == Tab.Raw ? "tab-active" : "")"
+                @onclick="() => SwitchTab(Tab.Raw)">Raw JSON</button>
+    </div>
+
+    @if (activeTab == Tab.Details)
+    {
+        <!-- Stack Trace -->
+        @if (evt.StackFrames.Count > 0)
+        {
+            <div class="card bg-base-200 mb-4">
+                <div class="card-body p-4">
+                    <h2 class="card-title text-base">Stack Trace</h2>
+                    <StackTraceViewer Frames="evt.StackFrames" />
+                </div>
+            </div>
+        }
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- Tags -->
+            @if (evt.Tags.Count > 0)
+            {
+                <div class="card bg-base-200">
+                    <div class="card-body p-4">
+                        <h2 class="card-title text-base">Tags</h2>
+                        <div class="overflow-x-auto">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Key</th>
+                                        <th>Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var tag in evt.Tags)
+                                    {
+                                        <tr>
+                                            <td class="opacity-70">@tag.Key</td>
+                                            <td class="font-mono">@tag.Value</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- User info -->
+            @if (evt.User is not null)
+            {
+                <div class="card bg-base-200">
+                    <div class="card-body p-4">
+                        <h2 class="card-title text-base">User</h2>
+                        <div class="space-y-1 text-sm">
+                            @if (!string.IsNullOrEmpty(evt.User.Username))
+                            {
+                                <div class="flex justify-between">
+                                    <span class="opacity-60">Username</span>
+                                    <span>@evt.User.Username</span>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(evt.User.Email))
+                            {
+                                <div class="flex justify-between">
+                                    <span class="opacity-60">Email</span>
+                                    <span>@evt.User.Email</span>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(evt.User.IpAddress))
+                            {
+                                <div class="flex justify-between">
+                                    <span class="opacity-60">IP Address</span>
+                                    <span class="font-mono">@evt.User.IpAddress</span>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(evt.User.Identifier))
+                            {
+                                <div class="flex justify-between">
+                                    <span class="opacity-60">ID</span>
+                                    <span class="font-mono">@evt.User.Identifier</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Context -->
+            <div class="card bg-base-200">
+                <div class="card-body p-4">
+                    <h2 class="card-title text-base">Context</h2>
+                    <div class="space-y-1 text-sm">
+                        <div class="flex justify-between">
+                            <span class="opacity-60">Platform</span>
+                            <span>@evt.Platform</span>
+                        </div>
+                        @if (!string.IsNullOrEmpty(evt.Release))
+                        {
+                            <div class="flex justify-between">
+                                <span class="opacity-60">Release</span>
+                                <span class="font-mono">@evt.Release</span>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(evt.Environment))
+                        {
+                            <div class="flex justify-between">
+                                <span class="opacity-60">Environment</span>
+                                <span>@evt.Environment</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (activeTab == Tab.Breadcrumbs)
+    {
+        @if (breadcrumbsLoading)
+        {
+            <div class="flex justify-center py-8">
+                <span class="loading loading-spinner"></span>
+            </div>
+        }
+        else
+        {
+            <div class="card bg-base-200">
+                <div class="card-body p-4">
+                    <BreadcrumbsViewer Breadcrumbs="breadcrumbs" EventTimestamp="evt.Timestamp" />
+                </div>
+            </div>
+        }
+    }
+    else if (activeTab == Tab.Raw)
+    {
+        <RawJsonViewer EventId="EventId" AutoLoad="true" />
+    }
+}
+
+@code {
+    [Parameter] public long EventId { get; set; }
+
+    private EventDetailResponse? evt;
+    private List<BreadcrumbResponse> breadcrumbs = [];
+    private bool loading = true;
+    private bool breadcrumbsLoading;
+    private Tab activeTab = Tab.Details;
+
+    private enum Tab { Details, Breadcrumbs, Raw }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        activeTab = Tab.Details;
+        breadcrumbs = [];
+        try
+        {
+            evt = await EventService.GetEventDetailAsync(EventId);
+        }
+        catch
+        {
+            evt = null;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task SwitchTab(Tab tab)
+    {
+        activeTab = tab;
+        if (tab == Tab.Breadcrumbs && breadcrumbs.Count == 0)
+            await LoadBreadcrumbs();
+    }
+
+    private async Task LoadBreadcrumbs()
+    {
+        breadcrumbsLoading = true;
+        try
+        {
+            breadcrumbs = await EventService.GetBreadcrumbsAsync(EventId);
+        }
+        catch
+        {
+            breadcrumbs = [];
+        }
+        finally
+        {
+            breadcrumbsLoading = false;
+        }
+    }
+
+    private void GoBackToIssue()
+    {
+        if (evt is not null)
+            Navigation.NavigateTo($"/issues/{evt.IssueId}");
+    }
+}

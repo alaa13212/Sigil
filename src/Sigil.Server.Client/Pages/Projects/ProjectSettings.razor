@@ -1,0 +1,191 @@
+@page "/projects/{ProjectId:int}/settings"
+@using Sigil.Application.Models.Projects
+@inject IProjectService ProjectService
+@inject IJSRuntime JS
+
+<PageTitle>Project Settings — Sigil</PageTitle>
+
+@if (loading)
+{
+    <div class="flex justify-center py-16">
+        <span class="loading loading-spinner loading-lg"></span>
+    </div>
+}
+else if (project is null)
+{
+    <EmptyState Title="Project not found" />
+}
+else
+{
+    <div class="max-w-2xl space-y-6">
+        <h1 class="text-2xl font-bold">Project Settings</h1>
+
+        <!-- Project Name -->
+        <div class="card bg-base-200">
+            <div class="card-body p-5 space-y-3">
+                <h2 class="font-semibold">General</h2>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Project Name</span></label>
+                    <div class="join w-full">
+                        <input type="text" class="input input-bordered join-item flex-1" @bind="editName" />
+                        <button class="btn join-item" @onclick="SaveName" disabled="@saving">
+                            @(saving ? "Saving..." : "Save")
+                        </button>
+                    </div>
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Platform</span></label>
+                    <input type="text" class="input input-bordered" value="@project.Platform" disabled />
+                </div>
+            </div>
+        </div>
+
+        <!-- API Key & DSN -->
+        <div class="card bg-base-200">
+            <div class="card-body p-5 space-y-3">
+                <h2 class="font-semibold">Integration</h2>
+
+                <div class="form-control">
+                    <label class="label"><span class="label-text">API Key</span></label>
+                    <div class="join w-full">
+                        <input type="text" class="input input-bordered join-item flex-1 font-mono text-sm"
+                               value="@project.ApiKey" readonly />
+                        <button class="btn join-item btn-ghost" @onclick="() => CopyToClipboard(project.ApiKey)">Copy</button>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(project.Dsn))
+                {
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">DSN</span></label>
+                        <div class="join w-full">
+                            <input type="text" class="input input-bordered join-item flex-1 font-mono text-sm"
+                                   value="@project.Dsn" readonly />
+                            <button class="btn join-item btn-ghost" @onclick="() => CopyToClipboard(project.Dsn)">Copy</button>
+                        </div>
+                    </div>
+                }
+
+                <div class="divider"></div>
+
+                <div>
+                    <button class="btn btn-warning btn-sm" @onclick="RotateKey" disabled="@rotating">
+                        @(rotating ? "Rotating..." : "Rotate API Key")
+                    </button>
+                    <p class="text-xs opacity-60 mt-1">This will invalidate the current key. Update your SDK configuration after rotating.</p>
+                </div>
+
+                @if (!string.IsNullOrEmpty(actionMessage))
+                {
+                    <div class="alert alert-info text-sm">@actionMessage</div>
+                }
+            </div>
+        </div>
+
+        <!-- SDK Setup -->
+        <div class="card bg-base-200">
+            <div class="card-body p-5 space-y-3">
+                <h2 class="font-semibold">SDK Integration</h2>
+                <p class="text-sm opacity-70">Use the DSN above in your Sentry SDK configuration:</p>
+
+                <div class="space-y-3 text-sm">
+                    <div>
+                        <div class="font-semibold opacity-70">C# / .NET</div>
+                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>SentrySdk.Init(o =&gt; o.Dsn = "@(project.Dsn)");</code></pre>
+                    </div>
+                    <div>
+                        <div class="font-semibold opacity-70">JavaScript</div>
+                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>Sentry.init({ dsn: "@(project.Dsn)" });</code></pre>
+                    </div>
+                    <div>
+                        <div class="font-semibold opacity-70">Python</div>
+                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>sentry_sdk.init(dsn="@(project.Dsn)")</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+
+    private ProjectDetailResponse? project;
+    private string editName = "";
+    private bool loading = true;
+    private bool saving;
+    private bool rotating;
+    private string? actionMessage;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        await LoadProject();
+        loading = false;
+    }
+
+    private async Task LoadProject()
+    {
+        try
+        {
+            project = await ProjectService.GetProjectDetailAsync(ProjectId);
+            if (project is not null)
+                editName = project.Name;
+        }
+        catch
+        {
+            project = null;
+        }
+    }
+
+    private async Task SaveName()
+    {
+        if (string.IsNullOrWhiteSpace(editName)) return;
+
+        saving = true;
+        actionMessage = null;
+        try
+        {
+            await ProjectService.UpdateProjectAsync(ProjectId, editName);
+            await LoadProject();
+            actionMessage = "Project name updated.";
+        }
+        catch
+        {
+            actionMessage = "Failed to update project name.";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task RotateKey()
+    {
+        rotating = true;
+        actionMessage = null;
+        try
+        {
+            await ProjectService.RotateApiKeyAsync(ProjectId);
+            await LoadProject();
+            actionMessage = "API key rotated successfully. Update your SDK configuration.";
+        }
+        catch
+        {
+            actionMessage = "Failed to rotate API key.";
+        }
+        finally
+        {
+            rotating = false;
+        }
+    }
+
+    private async Task CopyToClipboard(string text)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+        }
+        catch { }
+    }
+}

@@ -30,9 +30,11 @@
       <Folder Include="Extensions\" />
       <Folder Include="Migrations\" />
     </ItemGroup>
+
     
     <ItemGroup>
       <EditorConfigFiles Remove=".editorconfig" />
+      <EditorConfigFiles Remove="Migrations\.editorconfig" />
     </ItemGroup>
 
 

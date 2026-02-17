@@ -1,0 +1,387 @@
+@page "/issues/{IssueId:int}"
+@using Sigil.Application.Models.Issues
+@using Sigil.Application.Models.Events
+@inject IIssueService IssueService
+@inject IEventService EventService
+@inject IIssueActivityService ActivityService
+@inject NavigationManager Navigation
+
+<PageTitle>@(issue?.Title ?? "Issue") — Sigil</PageTitle>
+
+@if (loading)
+{
+    <div class="flex justify-center py-16">
+        <span class="loading loading-spinner loading-lg"></span>
+    </div>
+}
+else if (issue is null)
+{
+    <EmptyState Title="Issue not found" Description="This issue may have been deleted." />
+}
+else
+{
+    <PageBreadcrumb Items="@([ new PageBreadcrumb.BreadcrumbItem("Projects", "/"), new PageBreadcrumb.BreadcrumbItem("Issues", $"/projects/{issue.Id}/issues"), new PageBreadcrumb.BreadcrumbItem(issue.Title) ])" />
+
+    <div class="flex flex-col lg:flex-row gap-6">
+        <!-- Left column: main content -->
+        <div class="flex-1 min-w-0 space-y-4">
+            <!-- Title and exception type -->
+            <div>
+                <h1 class="text-2xl font-bold break-words">@issue.Title</h1>
+                @if (!string.IsNullOrEmpty(issue.ExceptionType))
+                {
+                    <div class="text-sm opacity-60 mt-1 font-mono">@issue.ExceptionType</div>
+                }
+                @if (!string.IsNullOrEmpty(issue.Culprit))
+                {
+                    <div class="text-sm opacity-50 mt-1">@issue.Culprit</div>
+                }
+            </div>
+
+            <!-- Suggested event stack trace -->
+            @if (issue.SuggestedEvent is not null && eventDetail is not null && eventDetail.StackFrames.Count > 0)
+            {
+                <div class="collapse collapse-open bg-base-200 rounded-lg">
+                    <div class="collapse-title text-sm font-semibold">Stack Trace</div>
+                    <div class="collapse-content">
+                        <StackTraceViewer Frames="eventDetail.StackFrames" />
+                    </div>
+                </div>
+            }
+
+            <!-- Tabs -->
+            <div role="tablist" class="tabs tabs-bordered">
+                <button role="tab" class="tab @(activeTab == Tab.Events ? "tab-active" : "")"
+                        @onclick="() => SwitchTab(Tab.Events)">
+                    Events
+                </button>
+                <button role="tab" class="tab @(activeTab == Tab.Activity ? "tab-active" : "")"
+                        @onclick="() => SwitchTab(Tab.Activity)">
+                    Activity
+                </button>
+            </div>
+
+            <!-- Events tab -->
+            @if (activeTab == Tab.Events)
+            {
+                @if (eventsLoading)
+                {
+                    <div class="flex justify-center py-8">
+                        <span class="loading loading-spinner"></span>
+                    </div>
+                }
+                else if (events is null || events.Items.Count == 0)
+                {
+                    <EmptyState Title="No events" />
+                }
+                else
+                {
+                    <div class="overflow-x-auto">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Message</th>
+                                    <th>Severity</th>
+                                    <th>User</th>
+                                    <th>Release</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var evt in events.Items)
+                                {
+                                    <tr class="hover cursor-pointer" @onclick="() => GoToEvent(evt.Id)">
+                                        <td><RelativeTime Value="evt.Timestamp" /></td>
+                                        <td class="max-w-md truncate">@(evt.Message ?? "—")</td>
+                                        <td><SeverityBadge Level="evt.Level" /></td>
+                                        <td class="text-sm opacity-70">@(evt.UserIdentifier ?? "—")</td>
+                                        <td class="text-sm font-mono opacity-70">@(evt.Release ?? "—")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <Pagination Page="eventsPage" TotalCount="events.TotalCount" PageSize="EventsPageSize"
+                                OnPageChanged="OnEventsPageChanged" />
+                }
+            }
+
+            <!-- Activity tab -->
+            @if (activeTab == Tab.Activity)
+            {
+                @if (activityLoading)
+                {
+                    <div class="flex justify-center py-8">
+                        <span class="loading loading-spinner"></span>
+                    </div>
+                }
+                else if (activities is null || activities.Items.Count == 0)
+                {
+                    <EmptyState Title="No activity yet" />
+                }
+                else
+                {
+                    <ul class="timeline timeline-vertical timeline-compact">
+                        @foreach (var act in activities.Items)
+                        {
+                            <li>
+                                <div class="timeline-start text-xs opacity-60">
+                                    <RelativeTime Value="act.Timestamp" />
+                                </div>
+                                <div class="timeline-middle">
+                                    <div class="w-2 h-2 rounded-full bg-base-content opacity-40"></div>
+                                </div>
+                                <div class="timeline-end text-sm pb-4">
+                                    <span class="font-medium">@FormatAction(act.Action)</span>
+                                    @if (!string.IsNullOrEmpty(act.UserName))
+                                    {
+                                        <span class="opacity-70"> by @act.UserName</span>
+                                    }
+                                    @if (!string.IsNullOrEmpty(act.Message))
+                                    {
+                                        <div class="text-xs opacity-60 mt-0.5">@act.Message</div>
+                                    }
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+        </div>
+
+        <!-- Right sidebar -->
+        <div class="w-full lg:w-72 space-y-4">
+            <!-- Status actions -->
+            <div class="card bg-base-200">
+                <div class="card-body p-4 space-y-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm font-semibold">Status</span>
+                        <StatusBadge Status="issue.Status" />
+                    </div>
+                    <div class="flex flex-wrap gap-1">
+                        @if (issue.Status != IssueStatus.Resolved)
+                        {
+                            <button class="btn btn-success btn-sm" @onclick="() => UpdateStatus(IssueStatus.Resolved)" disabled="@actionLoading">
+                                Resolve
+                            </button>
+                        }
+                        @if (issue.Status != IssueStatus.Open)
+                        {
+                            <button class="btn btn-info btn-sm" @onclick="() => UpdateStatus(IssueStatus.Open)" disabled="@actionLoading">
+                                Reopen
+                            </button>
+                        }
+                        @if (issue.Status != IssueStatus.Ignored)
+                        {
+                            <button class="btn btn-ghost btn-sm" @onclick="() => UpdateStatus(IssueStatus.Ignored)" disabled="@actionLoading">
+                                Ignore
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Priority -->
+            <div class="card bg-base-200">
+                <div class="card-body p-4 space-y-2">
+                    <span class="text-sm font-semibold">Priority</span>
+                    <select class="select select-bordered select-sm w-full" value="@issue.Priority"
+                            @onchange="OnPriorityChanged" disabled="@actionLoading">
+                        @foreach (var p in Enum.GetValues<Priority>())
+                        {
+                            <option value="@p">@p</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <!-- Details -->
+            <div class="card bg-base-200">
+                <div class="card-body p-4 space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="opacity-60">Severity</span>
+                        <SeverityBadge Level="issue.Level" />
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="opacity-60">Assigned</span>
+                        <span>@(issue.AssignedToName ?? "Unassigned")</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="opacity-60">First Seen</span>
+                        <RelativeTime Value="issue.FirstSeen" />
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="opacity-60">Last Seen</span>
+                        <RelativeTime Value="issue.LastSeen" />
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="opacity-60">Events</span>
+                        <span class="font-mono">@issue.OccurrenceCount</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fingerprint -->
+            <div class="card bg-base-200">
+                <div class="card-body p-4 space-y-1">
+                    <span class="text-sm font-semibold">Fingerprint</span>
+                    <code class="text-xs break-all opacity-70">@issue.Fingerprint</code>
+                </div>
+            </div>
+
+            <!-- Tags -->
+            @if (issue.Tags.Count > 0)
+            {
+                <div class="card bg-base-200">
+                    <div class="card-body p-4 space-y-2">
+                        <span class="text-sm font-semibold">Tags</span>
+                        <div class="space-y-1">
+                            @foreach (var tag in issue.Tags)
+                            {
+                                <div class="flex justify-between text-xs">
+                                    <span class="opacity-60">@tag.Key</span>
+                                    <span class="font-mono">@tag.Value</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int IssueId { get; set; }
+
+    private IssueDetailResponse? issue;
+    private EventDetailResponse? eventDetail;
+    private PagedResponse<EventSummary>? events;
+    private PagedResponse<ActivityResponse>? activities;
+    private bool loading = true;
+    private bool eventsLoading;
+    private bool activityLoading;
+    private bool actionLoading;
+    private Tab activeTab = Tab.Events;
+    private int eventsPage = 1;
+    private const int EventsPageSize = 50;
+
+    private enum Tab { Events, Activity }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        await LoadIssue();
+        loading = false;
+        await LoadEvents();
+    }
+
+    private async Task LoadIssue()
+    {
+        try
+        {
+            issue = await IssueService.GetIssueDetailAsync(IssueId);
+            if (issue?.SuggestedEvent is not null)
+            {
+                eventDetail = await EventService.GetEventDetailAsync(issue.SuggestedEvent.Id);
+            }
+        }
+        catch
+        {
+            issue = null;
+        }
+    }
+
+    private async Task LoadEvents()
+    {
+        eventsLoading = true;
+        try
+        {
+            events = await EventService.GetEventSummariesAsync(IssueId, eventsPage, EventsPageSize);
+        }
+        catch
+        {
+            events = null;
+        }
+        finally
+        {
+            eventsLoading = false;
+        }
+    }
+
+    private async Task LoadActivity()
+    {
+        activityLoading = true;
+        try
+        {
+            activities = await ActivityService.GetActivitySummariesAsync(IssueId);
+        }
+        catch
+        {
+            activities = null;
+        }
+        finally
+        {
+            activityLoading = false;
+        }
+    }
+
+    private async Task SwitchTab(Tab tab)
+    {
+        activeTab = tab;
+        if (tab == Tab.Activity && activities is null)
+            await LoadActivity();
+    }
+
+    private async Task UpdateStatus(IssueStatus status)
+    {
+        actionLoading = true;
+        try
+        {
+            await IssueService.UpdateIssueStatusAsync(IssueId, status);
+            await LoadIssue();
+        }
+        finally
+        {
+            actionLoading = false;
+        }
+    }
+
+    private async Task OnPriorityChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<Priority>(e.Value?.ToString(), out var priority))
+        {
+            actionLoading = true;
+            try
+            {
+                await IssueService.UpdateIssuePriorityAsync(IssueId, priority);
+                await LoadIssue();
+            }
+            finally
+            {
+                actionLoading = false;
+            }
+        }
+    }
+
+    private async Task OnEventsPageChanged(int newPage)
+    {
+        eventsPage = newPage;
+        await LoadEvents();
+    }
+
+    private void GoToEvent(long eventId) => Navigation.NavigateTo($"/events/{eventId}");
+
+    private static string FormatAction(IssueActivityAction action) => action switch
+    {
+        IssueActivityAction.Created => "Issue created",
+        IssueActivityAction.Resolved => "Resolved",
+        IssueActivityAction.Unresolved => "Reopened",
+        IssueActivityAction.Ignored => "Ignored",
+        IssueActivityAction.Assigned => "Assigned",
+        IssueActivityAction.Unassigned => "Unassigned",
+        IssueActivityAction.Commented => "Commented",
+        _ => action.ToString()
+    };
+}

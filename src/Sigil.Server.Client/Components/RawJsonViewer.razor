@@ -1,0 +1,86 @@
+@inject IEventService EventService
+@inject IJSRuntime JS
+
+@if (loading)
+{
+    <div class="flex justify-center py-8">
+        <span class="loading loading-spinner"></span>
+    </div>
+}
+else if (error is not null)
+{
+    <div class="alert alert-error text-sm">@error</div>
+}
+else if (rawJson is not null)
+{
+    <div class="space-y-2">
+        <div class="flex gap-2">
+            <button class="btn btn-ghost btn-xs" @onclick="CopyJson">@(copied ? "Copied!" : "Copy")</button>
+            <a href="@($"api/events/{EventId}/download")" class="btn btn-ghost btn-xs">Download</a>
+        </div>
+        <pre class="bg-base-300 p-3 rounded text-xs overflow-x-auto max-h-96 overflow-y-auto"><code>@rawJson</code></pre>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public long EventId { get; set; }
+
+    [Parameter]
+    public bool AutoLoad { get; set; }
+
+    private string? rawJson;
+    private string? error;
+    private bool loading;
+    private bool loaded;
+    private bool copied;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AutoLoad && !loaded)
+            await Load();
+    }
+
+    public async Task Load()
+    {
+        if (loaded) return;
+        loading = true;
+        try
+        {
+            var bytes = await EventService.GetRawEventJsonAsync(EventId);
+            if (bytes is not null)
+            {
+                rawJson = System.Text.Json.JsonSerializer.Serialize(
+                    System.Text.Json.JsonDocument.Parse(bytes).RootElement,
+                    new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            }
+            else
+            {
+                error = "Raw event data not available.";
+            }
+            loaded = true;
+        }
+        catch (Exception ex)
+        {
+            error = $"Failed to load raw JSON: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task CopyJson()
+    {
+        if (rawJson is not null)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("navigator.clipboard.writeText", rawJson);
+            }
+            catch { }
+        }
+        copied = true;
+        StateHasChanged();
+    }
+}

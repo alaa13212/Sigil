@@ -1,0 +1,13 @@
+@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+@source not "./tailwindcss.exe";
+@source not "./daisyui{,*}.mjs";
+@source "../../Sigil.Server.Client/";
+
+@plugin "./daisyui.mjs";
+
+@plugin "./daisyui-theme.mjs"

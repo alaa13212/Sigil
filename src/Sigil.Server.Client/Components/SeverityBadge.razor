@@ -1,0 +1,18 @@
+@{
+    var (css, label) = Level switch
+    {
+        Severity.Fatal => ("badge-error", "Fatal"),
+        Severity.Error => ("badge-warning", "Error"),
+        Severity.Warning => ("badge-accent", "Warning"),
+        Severity.Info => ("badge-info", "Info"),
+        Severity.Debug => ("badge-ghost", "Debug"),
+        _ => ("badge-ghost", Level.ToString())
+    };
+}
+
+<span class="badge @css badge-sm">@label</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public Severity Level { get; set; }
+}

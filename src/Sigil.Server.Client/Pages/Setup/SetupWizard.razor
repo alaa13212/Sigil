@@ -1,0 +1,467 @@
+@page "/setup"
+@using Sigil.Application.Models.Auth
+@layout SetupLayout
+@inject ISetupService SetupService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Setup — Sigil</PageTitle>
+
+<div class="min-h-screen flex items-center justify-center bg-base-300 p-4">
+    <div class="card bg-base-100 shadow-xl w-full max-w-lg">
+        <div class="card-body">
+            <!-- Progress steps -->
+            <ul class="steps steps-horizontal w-full mb-6 text-xs">
+                <li class="step @(step >= 1 ? "step-primary" : "")">Welcome</li>
+                <li class="step @(step >= 2 ? "step-primary" : "")">Database</li>
+                <li class="step @(step >= 3 ? "step-primary" : "")">Config</li>
+                <li class="step @(step >= 4 ? "step-primary" : "")">Admin</li>
+                <li class="step @(step >= 5 ? "step-primary" : "")">Project</li>
+                <li class="step @(step >= 6 ? "step-primary" : "")">Done</li>
+            </ul>
+
+            @if (setupAlreadyComplete)
+            {
+                <div class="text-center space-y-4">
+                    <h2 class="text-xl font-bold">Setup Already Complete</h2>
+                    <p class="opacity-70">Sigil has already been configured.</p>
+                    <button class="btn btn-primary" @onclick="GoToDashboard">Go to Dashboard</button>
+                </div>
+            }
+            else if (step == 1)
+            {
+                <!-- Step 1: Welcome -->
+                <div class="text-center space-y-4">
+                    <h2 class="text-2xl font-bold">Welcome to Sigil</h2>
+                    <p class="opacity-70">Self-hosted error monitoring for your applications. Let's get you set up in a few steps.</p>
+                    <button class="btn btn-primary" @onclick="() => GoTo(2)">Get Started</button>
+                </div>
+            }
+            else if (step == 2)
+            {
+                <!-- Step 2: Database -->
+                <div class="space-y-4">
+                    <h2 class="text-xl font-bold">Database</h2>
+
+                    @if (dbLoading)
+                    {
+                        <div class="flex items-center gap-2">
+                            <span class="loading loading-spinner loading-sm"></span>
+                            <span>Checking database connection...</span>
+                        </div>
+                    }
+                    else if (!dbCanConnect)
+                    {
+                        <div class="alert alert-error">
+                            <span>Cannot connect to the database. Please check your connection string and ensure PostgreSQL is running.</span>
+                        </div>
+                        @if (!string.IsNullOrEmpty(dbError))
+                        {
+                            <pre class="text-xs opacity-60 bg-base-200 p-2 rounded overflow-x-auto">@dbError</pre>
+                        }
+                        <button class="btn btn-outline btn-sm" @onclick="CheckDatabase">Retry</button>
+                    }
+                    else if (dbPending.Count > 0)
+                    {
+                        <div class="alert alert-warning">
+                            <span>Database connected but @dbPending.Count migration(s) need to be applied.</span>
+                        </div>
+                        <div class="bg-base-200 rounded p-3 text-sm space-y-1">
+                            <div class="font-semibold mb-1">Pending migrations:</div>
+                            @foreach (var m in dbPending)
+                            {
+                                <div class="font-mono text-xs">@m</div>
+                            }
+                        </div>
+                        <div class="alert alert-info text-sm">
+                            <span>This will create or update database tables. Make sure you have a backup if this is an existing database.</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button class="btn btn-primary" @onclick="RunMigrations" disabled="@migrating">
+                                @if (migrating)
+                                {
+                                    <span class="loading loading-spinner loading-sm"></span>
+                                }
+                                Apply Migrations
+                            </button>
+                        </div>
+                        @if (!string.IsNullOrEmpty(migrateError))
+                        {
+                            <div class="alert alert-error text-sm">@migrateError</div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="alert alert-success">
+                            <span>Database connected and up to date. @dbApplied.Count migration(s) applied.</span>
+                        </div>
+                        <div class="flex justify-end">
+                            <button class="btn btn-primary" @onclick="() => GoTo(3)">Next</button>
+                        </div>
+                    }
+                </div>
+            }
+            else if (step == 3)
+            {
+                <!-- Step 3: Config -->
+                <div class="space-y-4">
+                    <h2 class="text-xl font-bold">Configuration</h2>
+                    <p class="text-sm opacity-70">Set the public URL where Sigil will be accessible. This is used to generate DSN strings for your SDKs.</p>
+
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Host URL</span></label>
+                        <input type="url" class="input input-bordered" placeholder="https://sigil.example.com"
+                               @bind="hostUrl" />
+                        <label class="label"><span class="label-text-alt opacity-60">Leave empty to auto-detect from the current URL</span></label>
+                    </div>
+
+                    <div class="flex justify-between">
+                        <button class="btn btn-ghost" @onclick="() => GoTo(2)">Back</button>
+                        <button class="btn btn-primary" @onclick="() => GoTo(4)">Next</button>
+                    </div>
+                </div>
+            }
+            else if (step == 4)
+            {
+                <!-- Step 4: Admin -->
+                <div class="space-y-4">
+                    <h2 class="text-xl font-bold">Create Admin Account</h2>
+
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Display Name</span></label>
+                        <input type="text" class="input input-bordered" placeholder="Admin" @bind="adminDisplayName" />
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Email</span></label>
+                        <input type="email" class="input input-bordered" placeholder="admin@example.com" @bind="adminEmail" />
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Password</span></label>
+                        <input type="password" class="input input-bordered" placeholder="Min 8 characters" @bind="adminPassword" />
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Confirm Password</span></label>
+                        <input type="password" class="input input-bordered" @bind="adminPasswordConfirm" />
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(adminError))
+                    {
+                        <div class="alert alert-error text-sm">@adminError</div>
+                    }
+
+                    <div class="flex justify-between">
+                        <button class="btn btn-ghost" @onclick="() => GoTo(3)">Back</button>
+                        <button class="btn btn-primary" @onclick="ValidateAdmin">Next</button>
+                    </div>
+                </div>
+            }
+            else if (step == 5)
+            {
+                <!-- Step 5: Project -->
+                <div class="space-y-4">
+                    <h2 class="text-xl font-bold">Create Team & Project</h2>
+
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Team Name</span></label>
+                        <input type="text" class="input input-bordered" @bind="teamName" />
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Project Name</span></label>
+                        <input type="text" class="input input-bordered" placeholder="My App" @bind="projectName" />
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Platform</span></label>
+                        <select class="select select-bordered w-full" @bind="projectPlatform">
+                            @foreach (var p in popularPlatforms)
+                            {
+                                <option value="@p">@p</option>
+                            }
+                        </select>
+                    </div>
+
+                    @if (setupErrors.Count > 0)
+                    {
+                        <div class="alert alert-error text-sm">
+                            <ul class="list-disc list-inside">
+                                @foreach (var err in setupErrors)
+                                {
+                                    <li>@err</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
+                    <div class="flex justify-between">
+                        <button class="btn btn-ghost" @onclick="() => GoTo(4)">Back</button>
+                        <button class="btn btn-primary" @onclick="RunSetup" disabled="@initializing">
+                            @if (initializing)
+                            {
+                                <span class="loading loading-spinner loading-sm"></span>
+                            }
+                            Create
+                        </button>
+                    </div>
+                </div>
+            }
+            else if (step == 6)
+            {
+                <!-- Step 6: Done -->
+                <div class="space-y-4">
+                    <div class="text-center">
+                        <h2 class="text-xl font-bold">You're all set!</h2>
+                        <p class="opacity-70 mt-1">Sigil is ready to receive events.</p>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(dsn))
+                    {
+                        <div class="form-control">
+                            <label class="label"><span class="label-text font-semibold">Your DSN</span></label>
+                            <div class="join w-full">
+                                <input type="text" class="input input-bordered join-item flex-1 font-mono text-sm" value="@dsn" readonly />
+                                <button class="btn join-item" @onclick="CopyDsn">@(copied ? "Copied!" : "Copy")</button>
+                            </div>
+                            <label class="label"><span class="label-text-alt opacity-60">Use this in your Sentry SDK configuration</span></label>
+                        </div>
+
+                        <div class="collapse collapse-arrow bg-base-200">
+                            <input type="checkbox" />
+                            <div class="collapse-title font-medium text-sm">SDK Integration Examples</div>
+                            <div class="collapse-content space-y-3 text-sm">
+                                <div>
+                                    <div class="font-semibold opacity-70">C# / .NET</div>
+                                    <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>SentrySdk.Init(o =&gt; o.Dsn = "@dsn");</code></pre>
+                                </div>
+                                <div>
+                                    <div class="font-semibold opacity-70">JavaScript</div>
+                                    <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>Sentry.init({ dsn: "@dsn" });</code></pre>
+                                </div>
+                                <div>
+                                    <div class="font-semibold opacity-70">Python</div>
+                                    <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>sentry_sdk.init(dsn="@dsn")</code></pre>
+                                </div>
+                                <div>
+                                    <div class="font-semibold opacity-70">Java</div>
+                                    <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>Sentry.init(options -&gt; options.setDsn("@dsn"));</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="flex justify-center">
+                        <button class="btn btn-primary" @onclick="GoToDashboard">Go to Dashboard</button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private int step = 1;
+    private bool setupAlreadyComplete;
+
+    // Step 2: Database
+    private bool dbLoading = true;
+    private bool dbCanConnect;
+    private string? dbError;
+    private IReadOnlyList<string> dbPending = [];
+    private IReadOnlyList<string> dbApplied = [];
+    private bool migrating;
+    private string? migrateError;
+
+    // Step 3: Config
+    private string hostUrl = "";
+
+    // Step 4: Admin
+    private string adminDisplayName = "";
+    private string adminEmail = "";
+    private string adminPassword = "";
+    private string adminPasswordConfirm = "";
+    private string? adminError;
+
+    // Step 5: Project
+    private string teamName = "Default Team";
+    private string projectName = "";
+    private Platform projectPlatform = Platform.CSharp;
+    private bool initializing;
+    private List<string> setupErrors = [];
+
+    // Step 6: Done
+    private string? dsn;
+    private bool copied;
+
+    private static readonly Platform[] popularPlatforms =
+    [
+        Platform.CSharp, Platform.JavaScript, Platform.Python, Platform.Java,
+        Platform.Node, Platform.Go, Platform.Ruby, Platform.PHP,
+        Platform.Elixir, Platform.Perl, Platform.Other
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var status = await SetupService.GetSetupStatusAsync();
+            if (status.IsComplete)
+            {
+                setupAlreadyComplete = true;
+                return;
+            }
+        }
+        catch { }
+
+        await CheckDatabase();
+    }
+
+    private void GoTo(int target)
+    {
+        step = target;
+        if (target == 2 && !dbLoading && !dbCanConnect)
+            _ = CheckDatabase();
+    }
+
+    private void GoToDashboard() => Navigation.NavigateTo("/", forceLoad: true);
+
+    private async Task CheckDatabase()
+    {
+        dbLoading = true;
+        dbError = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await SetupService.GetDbStatusAsync();
+            dbCanConnect = result.CanConnect;
+            dbError = result.Error;
+            dbPending = result.Pending;
+            dbApplied = result.Applied;
+        }
+        catch (Exception ex)
+        {
+            dbCanConnect = false;
+            dbError = ex.Message;
+        }
+        finally
+        {
+            dbLoading = false;
+        }
+    }
+
+    private async Task RunMigrations()
+    {
+        migrating = true;
+        migrateError = null;
+        StateHasChanged();
+
+        try
+        {
+            var success = await SetupService.MigrateAsync();
+            if (success)
+            {
+                await CheckDatabase();
+            }
+            else
+            {
+                migrateError = "Migration failed. Setup may already be complete.";
+            }
+        }
+        catch (Exception ex)
+        {
+            migrateError = ex.Message;
+        }
+        finally
+        {
+            migrating = false;
+        }
+    }
+
+    private void ValidateAdmin()
+    {
+        adminError = null;
+
+        if (string.IsNullOrWhiteSpace(adminDisplayName))
+        {
+            adminError = "Display name is required.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(adminEmail) || !adminEmail.Contains('@'))
+        {
+            adminError = "A valid email is required.";
+            return;
+        }
+        if (adminPassword.Length < 8)
+        {
+            adminError = "Password must be at least 8 characters.";
+            return;
+        }
+        if (adminPassword != adminPasswordConfirm)
+        {
+            adminError = "Passwords do not match.";
+            return;
+        }
+
+        step = 5;
+    }
+
+    private async Task RunSetup()
+    {
+        setupErrors.Clear();
+
+        if (string.IsNullOrWhiteSpace(projectName))
+        {
+            setupErrors.Add("Project name is required.");
+            return;
+        }
+
+        initializing = true;
+        StateHasChanged();
+
+        try
+        {
+            var host = string.IsNullOrWhiteSpace(hostUrl) ? null : hostUrl.TrimEnd('/');
+
+            var request = new SetupRequest(
+                adminEmail, adminPassword, adminDisplayName,
+                teamName, projectName, projectPlatform, host);
+
+            var result = await SetupService.InitializeAsync(request);
+            if (result.Succeeded)
+            {
+                var baseUrl = host ?? Navigation.BaseUri.TrimEnd('/');
+                dsn = $"{baseUrl}/api/{result.ProjectId}?key={result.ProjectApiKey}";
+                step = 6;
+            }
+            else
+            {
+                setupErrors.AddRange(result.Errors);
+            }
+        }
+        catch (Exception ex)
+        {
+            setupErrors.Add(ex.Message);
+        }
+        finally
+        {
+            initializing = false;
+        }
+    }
+
+    private async Task CopyDsn()
+    {
+        if (!string.IsNullOrEmpty(dsn))
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("navigator.clipboard.writeText", dsn);
+            }
+            catch { }
+        }
+        copied = true;
+        StateHasChanged();
+    }
+}

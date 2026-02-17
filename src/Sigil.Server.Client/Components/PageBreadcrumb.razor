@@ -1,0 +1,27 @@
+@if (Items.Count > 0)
+{
+    <div class="breadcrumbs text-sm mb-4">
+        <ul>
+            @foreach (var item in Items)
+            {
+                <li>
+                    @if (!string.IsNullOrEmpty(item.Href))
+                    {
+                        <a href="@item.Href">@item.Label</a>
+                    }
+                    else
+                    {
+                        <span class="opacity-70">@item.Label</span>
+                    }
+                </li>
+            }
+        </ul>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public List<BreadcrumbItem> Items { get; set; } = [];
+
+    public record BreadcrumbItem(string Label, string? Href = null);
+}

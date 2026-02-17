@@ -18,6 +18,9 @@ internal class SigilDbContext(DbContextOptions<SigilDbContext> options) : SaveSu
     public DbSet<TagKey> TagKeys => Set<TagKey>();
     public DbSet<TagValue> TagValues => Set<TagValue>();
     public DbSet<IssueTag> IssueTags => Set<IssueTag>();
+    public DbSet<IssueActivity> IssueActivities => Set<IssueActivity>();
+    public DbSet<AppConfig> AppConfigs => Set<AppConfig>();
+    public DbSet<FailedEvent> FailedEvents => Set<FailedEvent>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

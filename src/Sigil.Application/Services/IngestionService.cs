@@ -23,6 +23,12 @@ public class IngestionService(
         var project = await projectCache.GetProjectById(projectId);
         ArgumentNullException.ThrowIfNull(project);
         
+        // Drop events that already exist in the database
+        var existingIds = await eventService.FindExistingEventIdsAsync(parsedEvents.Select(e => e.EventId));
+        parsedEvents.RemoveAll(e => existingIds.Contains(e.EventId));
+        if (parsedEvents.Count == 0)
+            return;
+
         // Releases
         List<string> requiredReleases = parsedEvents.Select(item => item.Release).Distinct().ToList();
         Dictionary<string, Release> releases = (await releaseCache.BulkGetOrCreateReleaseAsync(projectId, requiredReleases)).ToDictionary(r => r.RawName);

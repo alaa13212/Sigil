@@ -1,9 +1,11 @@
 ﻿using System.Reflection;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Services;
+using Sigil.Domain.Entities;
 using Sigil.Domain.Interfaces;
 using Sigil.infrastructure.Cache;
 using Sigil.infrastructure.Parsing;
@@ -40,7 +42,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IReleaseService, ReleaseService>();
         services.AddScoped<IEventUserService, EventUserService>();
         services.AddScoped<ITagService, TagService>();
+        services.AddScoped<IIssueActivityService, IssueActivityService>();
+        services.AddScoped<IAppConfigService, AppConfigService>();
+        services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<ISetupService, SetupService>();
+        services.AddScoped<IFailedEventService, FailedEventService>();
 
+        services.AddIdentityServices();
         services.AddCaches();
         services.AddWorkers(configuration);
     }
@@ -64,6 +72,17 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEventUserCache, EventUserCache>();
     }
     
+    private static void AddIdentityServices(this IServiceCollection services)
+    {
+        services.AddIdentity<User, IdentityRole<Guid>>(options =>
+            {
+                options.User.RequireUniqueEmail = true;
+                options.Password.RequiredLength = 8;
+            })
+            .AddEntityFrameworkStores<SigilDbContext>()
+            .AddDefaultTokenProviders();
+    }
+
     private static void AddWorkers(this IServiceCollection services, IConfigurationManager configuration)
     {
         services.AddHostedService<WorkersHost>();

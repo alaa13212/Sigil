@@ -52,4 +52,7 @@ public class Issue
     [ForeignKey(nameof(AssignedTo))]
     public Guid? AssignedToId { get; set; }
     public User? AssignedTo { get; set; }
+
+    [InverseProperty(nameof(IssueActivity.Issue))]
+    public ICollection<IssueActivity> Activities { get; set; } = [];
 }

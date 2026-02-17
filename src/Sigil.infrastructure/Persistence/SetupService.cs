@@ -1,0 +1,117 @@
+using System.Security.Cryptography;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Sigil.Application.Interfaces;
+using Sigil.Application.Models.Auth;
+using Sigil.Domain.Entities;
+using Sigil.Domain.Enums;
+
+namespace Sigil.infrastructure.Persistence;
+
+internal class SetupService(
+    SigilDbContext dbContext,
+    UserManager<User> userManager,
+    SignInManager<User> signInManager,
+    RoleManager<IdentityRole<Guid>> roleManager,
+    IAppConfigService appConfigService,
+    IDatabaseMigrator databaseMigrator) : ISetupService
+{
+    public async Task<SetupStatus> GetSetupStatusAsync()
+    {
+        var canConnect = await databaseMigrator.CanConnectAsync();
+        if (!canConnect)
+            return new SetupStatus(IsComplete: false, UserCount: 0);
+        var userCount = await dbContext.Users.CountAsync();
+        return new SetupStatus(IsComplete: userCount > 0, UserCount: userCount);
+    }
+
+    public async Task<DbStatusResponse> GetDbStatusAsync()
+    {
+        try
+        {
+            var canConnect = await databaseMigrator.CanConnectAsync();
+            if (!canConnect)
+                return new DbStatusResponse(false, null, [], []);
+
+            var pending = await databaseMigrator.GetPendingMigrationsAsync();
+            var applied = await databaseMigrator.GetAppliedMigrationsAsync();
+            return new DbStatusResponse(true, null, pending, applied);
+        }
+        catch (Exception ex)
+        {
+            return new DbStatusResponse(false, ex.Message, [], []);
+        }
+    }
+
+    public async Task<bool> MigrateAsync()
+    {
+        var status = await GetSetupStatusAsync();
+        if (status.IsComplete) return false;
+
+        await databaseMigrator.MigrateAsync();
+        return true;
+    }
+
+    public async Task<SetupResult> InitializeAsync(SetupRequest request)
+    {
+        // Guard against re-initialization
+        var status = await GetSetupStatusAsync();
+        if (status.IsComplete)
+            return SetupResult.Failure("Setup has already been completed.");
+
+        // Create admin user
+        var admin = new User
+        {
+            UserName = request.AdminEmail,
+            Email = request.AdminEmail,
+            DisplayName = request.AdminDisplayName,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        var createResult = await userManager.CreateAsync(admin, request.AdminPassword);
+        if (!createResult.Succeeded)
+            return SetupResult.Failure(createResult.Errors.Select(e => e.Description));
+
+        // Ensure Admin role exists and assign it
+        if (!await roleManager.RoleExistsAsync("Admin"))
+            await roleManager.CreateAsync(new IdentityRole<Guid> { Name = "Admin" });
+        await userManager.AddToRoleAsync(admin, "Admin");
+
+        // Create team
+        var team = new Team { Name = request.TeamName };
+        dbContext.Teams.Add(team);
+        await dbContext.SaveChangesAsync();
+
+        // Add admin to team
+        dbContext.TeamMemberships.Add(new TeamMembership
+        {
+            UserId = admin.Id,
+            User = admin,
+            TeamId = team.Id,
+            Team = team,
+            Role = TeamRole.Owner
+        });
+        await dbContext.SaveChangesAsync();
+
+        // Create project
+        var project = new Project
+        {
+            Name = request.ProjectName,
+            Platform = request.ProjectPlatform,
+            ApiKey = RandomNumberGenerator.GetHexString(32),
+            TeamId = team.Id
+        };
+        dbContext.Projects.Add(project);
+        await dbContext.SaveChangesAsync();
+
+        // Save host URL config if provided
+        if (!string.IsNullOrWhiteSpace(request.HostUrl))
+            await appConfigService.SetAsync("host_url", request.HostUrl);
+
+        // Sign in the admin
+        await signInManager.SignInAsync(admin, isPersistent: false);
+
+        var userInfo = new UserInfo(admin.Id, admin.Email, admin.DisplayName, admin.CreatedAt, admin.LastLogin, ["Admin"]);
+        return SetupResult.Success(userInfo, project.ApiKey, project.Id);
+    }
+}

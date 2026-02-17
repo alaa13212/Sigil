@@ -1,0 +1,26 @@
+@if (TotalPages > 1)
+{
+    <div class="join mt-4">
+        <button class="join-item btn btn-sm" disabled="@(!HasPrevious)" @onclick="() => OnPageChanged.InvokeAsync(Page - 1)">«</button>
+        @for (int i = StartPage; i <= EndPage; i++)
+        {
+            var pageNum = i;
+            <button class="join-item btn btn-sm @(pageNum == Page ? "btn-active" : "")" @onclick="() => OnPageChanged.InvokeAsync(pageNum)">@pageNum</button>
+        }
+        <button class="join-item btn btn-sm" disabled="@(!HasNext)" @onclick="() => OnPageChanged.InvokeAsync(Page + 1)">»</button>
+    </div>
+}
+
+@code {
+    [Parameter] public int Page { get; set; } = 1;
+    [Parameter] public int TotalCount { get; set; }
+    [Parameter] public int PageSize { get; set; } = 50;
+    [Parameter] public EventCallback<int> OnPageChanged { get; set; }
+
+    private int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
+    private bool HasPrevious => Page > 1;
+    private bool HasNext => Page < TotalPages;
+
+    private int StartPage => Math.Max(1, Page - 2);
+    private int EndPage => Math.Min(TotalPages, Page + 2);
+}

@@ -1,0 +1,81 @@
+@using Sigil.Application.Models.Events
+
+@if (Breadcrumbs.Count == 0)
+{
+    <p class="text-sm opacity-60">No breadcrumbs available.</p>
+}
+else
+{
+    var visible = showAll ? Breadcrumbs : Breadcrumbs.TakeLast(DefaultVisible).ToList();
+
+    @if (!showAll && Breadcrumbs.Count > DefaultVisible)
+    {
+        <button class="btn btn-ghost btn-xs mb-2" @onclick="() => showAll = true">
+            Show all (@Breadcrumbs.Count)
+        </button>
+    }
+
+    <div class="space-y-1">
+        @foreach (var crumb in visible)
+        {
+            var levelColor = (crumb.Level ?? "info") switch
+            {
+                "error" or "fatal" => "bg-error",
+                "warning" => "bg-warning",
+                "debug" => "bg-base-content/20",
+                _ => "bg-info"
+            };
+
+            <div class="flex gap-3 items-start text-sm py-1.5 border-b border-base-300 last:border-0">
+                <!-- Level dot -->
+                <div class="mt-1.5">
+                    <div class="w-2 h-2 rounded-full @levelColor"></div>
+                </div>
+
+                <!-- Timestamp -->
+                @if (crumb.Timestamp.HasValue && EventTimestamp.HasValue)
+                {
+                    var delta = (crumb.Timestamp.Value - EventTimestamp.Value).TotalSeconds;
+                    <div class="w-16 text-xs opacity-50 font-mono shrink-0 mt-0.5"
+                         title="@crumb.Timestamp.Value.ToString("yyyy-MM-dd HH:mm:ss")">
+                        @(delta >= 0 ? $"+{delta:F1}s" : $"{delta:F1}s")
+                    </div>
+                }
+
+                <!-- Content -->
+                <div class="flex-1 min-w-0">
+                    <div class="flex gap-2 items-center flex-wrap">
+                        @if (!string.IsNullOrEmpty(crumb.Category))
+                        {
+                            <span class="badge badge-ghost badge-xs font-mono">@crumb.Category</span>
+                        }
+                        @if (!string.IsNullOrEmpty(crumb.Message))
+                        {
+                            <span class="opacity-80 truncate">@crumb.Message</span>
+                        }
+                    </div>
+                    @if (crumb.Data is { Count: > 0 })
+                    {
+                        <div class="mt-1 text-xs opacity-50 space-y-0.5">
+                            @foreach (var kv in crumb.Data.Take(5))
+                            {
+                                <div><span class="font-semibold">@kv.Key</span>: @kv.Value</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public List<BreadcrumbResponse> Breadcrumbs { get; set; } = [];
+
+    [Parameter]
+    public DateTime? EventTimestamp { get; set; }
+
+    private const int DefaultVisible = 10;
+    private bool showAll;
+}

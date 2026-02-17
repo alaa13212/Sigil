@@ -1,0 +1,214 @@
+@page "/projects/{ProjectId:int}/issues"
+@using Sigil.Application.Models.Issues
+@inject IIssueService IssueService
+@inject NavigationManager Navigation
+
+<PageTitle>Issues — Sigil</PageTitle>
+
+<PageBreadcrumb Items="@([ new PageBreadcrumb.BreadcrumbItem("Projects", "/"), new PageBreadcrumb.BreadcrumbItem("Issues") ])" />
+
+<div class="space-y-4">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold">Issues</h1>
+        @if (response is not null)
+        {
+            <span class="text-sm opacity-60">@response.TotalCount total</span>
+        }
+    </div>
+
+    <!-- Filters -->
+    <div class="flex flex-wrap gap-2 items-center">
+        <!-- Status tabs -->
+        <div class="join">
+            @foreach (var s in statusOptions)
+            {
+                var isActive = s.Value == statusFilter;
+                <button class="join-item btn btn-sm @(isActive ? "btn-active" : "")"
+                        @onclick="() => SetStatusFilter(s.Value)">@s.Label</button>
+            }
+        </div>
+
+        <!-- Severity filter -->
+        <select class="select select-bordered select-sm" value="@severityFilter" @onchange="OnSeverityChanged">
+            <option value="">All Severities</option>
+            @foreach (var sev in Enum.GetValues<Severity>())
+            {
+                <option value="@sev">@sev</option>
+            }
+        </select>
+
+        <!-- Sort -->
+        <select class="select select-bordered select-sm" value="@sortBy" @onchange="OnSortChanged">
+            @foreach (var opt in sortOptions)
+            {
+                <option value="@opt.Value">@opt.Label</option>
+            }
+        </select>
+
+        <!-- Search -->
+        <input type="text" placeholder="Search issues..." class="input input-bordered input-sm w-48"
+               @bind="searchText" @bind:event="oninput" @onkeydown="OnSearchKeyDown" />
+    </div>
+
+    <!-- Content -->
+    @if (loading)
+    {
+        <div class="flex justify-center py-16">
+            <span class="loading loading-spinner loading-lg"></span>
+        </div>
+    }
+    else if (response is null || response.Items.Count == 0)
+    {
+        <EmptyState Title="No issues found" Description="Try adjusting your filters or wait for events to come in." />
+    }
+    else
+    {
+        <div class="overflow-x-auto">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Issue</th>
+                        <th>Severity</th>
+                        <th>Status</th>
+                        <th class="text-right">Events</th>
+                        <th>Last Seen</th>
+                        <th>Assigned</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var issue in response.Items)
+                    {
+                        <tr class="hover cursor-pointer" @onclick="() => GoToIssue(issue.Id)">
+                            <td>
+                                <div class="font-semibold">@issue.Title</div>
+                                @if (!string.IsNullOrEmpty(issue.ExceptionType))
+                                {
+                                    <div class="text-xs opacity-60">@issue.ExceptionType</div>
+                                }
+                            </td>
+                            <td><SeverityBadge Level="issue.Level" /></td>
+                            <td><StatusBadge Status="issue.Status" /></td>
+                            <td class="text-right font-mono">@issue.OccurrenceCount</td>
+                            <td><RelativeTime Value="issue.LastSeen" /></td>
+                            <td class="text-sm opacity-70">@(issue.AssignedToName ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <Pagination Page="currentPage" TotalCount="response.TotalCount" PageSize="PageSize"
+                    OnPageChanged="OnPageChanged" />
+    }
+</div>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+
+    private const int PageSize = 50;
+    private PagedResponse<IssueSummary>? response;
+    private bool loading = true;
+    private int currentPage = 1;
+
+    // Filters
+    private IssueStatus? statusFilter;
+    private string severityFilter = "";
+    private IssueSortBy sortBy = IssueSortBy.LastSeen;
+    private string searchText = "";
+
+    private static readonly (string Label, IssueStatus? Value)[] statusOptions =
+    [
+        ("All", null),
+        ("Open", IssueStatus.Open),
+        ("Resolved", IssueStatus.Resolved),
+        ("Ignored", IssueStatus.Ignored),
+    ];
+
+    private static readonly (string Label, IssueSortBy Value)[] sortOptions =
+    [
+        ("Last Seen", IssueSortBy.LastSeen),
+        ("First Seen", IssueSortBy.FirstSeen),
+        ("Occurrences", IssueSortBy.OccurrenceCount),
+        ("Priority", IssueSortBy.Priority),
+    ];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        currentPage = 1;
+        await LoadIssues();
+    }
+
+    private async Task LoadIssues()
+    {
+        loading = true;
+        try
+        {
+            Severity? level = null;
+            if (!string.IsNullOrEmpty(severityFilter) && Enum.TryParse<Severity>(severityFilter, out var parsed))
+                level = parsed;
+
+            var query = new IssueQueryParams
+            {
+                Status = statusFilter,
+                Level = level,
+                SortBy = sortBy,
+                SortDescending = true,
+                Search = string.IsNullOrWhiteSpace(searchText) ? null : searchText,
+                Page = currentPage,
+                PageSize = PageSize
+            };
+
+            response = await IssueService.GetIssueSummariesAsync(ProjectId, query);
+        }
+        catch
+        {
+            response = null;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task SetStatusFilter(IssueStatus? status)
+    {
+        statusFilter = status;
+        currentPage = 1;
+        await LoadIssues();
+    }
+
+    private async Task OnSeverityChanged(ChangeEventArgs e)
+    {
+        severityFilter = e.Value?.ToString() ?? "";
+        currentPage = 1;
+        await LoadIssues();
+    }
+
+    private async Task OnSortChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<IssueSortBy>(e.Value?.ToString(), out var sort))
+        {
+            sortBy = sort;
+            currentPage = 1;
+            await LoadIssues();
+        }
+    }
+
+    private async Task OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            currentPage = 1;
+            await LoadIssues();
+        }
+    }
+
+    private async Task OnPageChanged(int newPage)
+    {
+        currentPage = newPage;
+        await LoadIssues();
+    }
+
+    private void GoToIssue(int issueId) => Navigation.NavigateTo($"/issues/{issueId}");
+}

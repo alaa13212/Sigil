@@ -1,7 +1,91 @@
-﻿@page "/"
+@page "/"
+@using Sigil.Application.Models.Projects
+@inject IProjectService ProjectService
+@inject NavigationManager Navigation
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Sigil</PageTitle>
 
-<h1>Hello, world!</h1>
+@if (loading)
+{
+    <div class="flex items-center justify-center h-64">
+        <span class="loading loading-spinner loading-lg"></span>
+    </div>
+}
+else if (projects is null || projects.Count == 0)
+{
+    <EmptyState Title="No projects yet" Description="Create a project to get started." />
+}
+else if (projects.Count > 1)
+{
+    <div class="space-y-4">
+        <h1 class="text-2xl font-bold">Projects</h1>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            @foreach (var project in projects)
+            {
+                <a href="/projects/@project.Id/issues" class="card bg-base-200 hover:bg-base-300 transition-colors cursor-pointer">
+                    <div class="card-body p-5">
+                        <h2 class="card-title text-base">@project.Name</h2>
+                        <div class="badge badge-ghost badge-sm">@project.Platform</div>
+                        @{
+                            var overview = overviews.GetValueOrDefault(project.Id);
+                        }
+                        @if (overview is not null)
+                        {
+                            <div class="flex gap-4 mt-2 text-sm opacity-70">
+                                <div>
+                                    <span class="font-mono font-semibold">@overview.IssueCount</span> issues
+                                </div>
+                                <div>
+                                    <span class="font-mono font-semibold">@overview.EventCount</span> events
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </a>
+            }
+        </div>
+    </div>
+}
 
-Welcome to your new app.
+@code {
+    private List<ProjectResponse>? projects;
+    private Dictionary<int, ProjectOverviewResponse> overviews = new();
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            projects = await ProjectService.GetProjectListAsync();
+
+            if (projects is { Count: 1 })
+            {
+                Navigation.NavigateTo($"/projects/{projects[0].Id}/issues", replace: true);
+                return;
+            }
+
+            if (projects is { Count: > 1 })
+            {
+                var tasks = projects.Select(async p =>
+                {
+                    try
+                    {
+                        var o = await ProjectService.GetProjectOverviewAsync(p.Id);
+                        if (o is not null)
+                            overviews[p.Id] = o;
+                    }
+                    catch { }
+                });
+                await Task.WhenAll(tasks);
+            }
+        }
+        catch
+        {
+            projects = null;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

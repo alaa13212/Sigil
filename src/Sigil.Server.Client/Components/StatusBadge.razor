@@ -1,0 +1,17 @@
+@{
+    var (css, label) = Status switch
+    {
+        IssueStatus.Open => ("badge-info", "Open"),
+        IssueStatus.Resolved => ("badge-success", "Resolved"),
+        IssueStatus.ResolvedInFuture => ("badge-success", "Resolved (Next)"),
+        IssueStatus.Ignored => ("badge-ghost", "Ignored"),
+        _ => ("badge-ghost", Status.ToString())
+    };
+}
+
+<span class="badge @css badge-sm">@label</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public IssueStatus Status { get; set; }
+}

@@ -1,4 +1,9 @@
-﻿using Sigil.Application.Interfaces;
+using System.Text;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Sigil.Application.Interfaces;
+using Sigil.Application.Models;
+using Sigil.Application.Models.Events;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Extensions;
 using Sigil.Domain.Ingestion;
@@ -7,6 +12,16 @@ namespace Sigil.infrastructure.Persistence;
 
 internal class EventService(SigilDbContext dbContext, ICompressionService compressionService, IDateTime dateTime) : IEventService
 {
+    public async Task<HashSet<string>> FindExistingEventIdsAsync(IEnumerable<string> eventIds)
+    {
+        var ids = eventIds.ToList();
+        var existing = await dbContext.Events
+            .Where(e => ids.Contains(e.EventId))
+            .Select(e => e.EventId)
+            .ToListAsync();
+        return existing.ToHashSet();
+    }
+
     public IEnumerable<CapturedEvent> BulkCreateEventsEntities(IEnumerable<ParsedEvent> capturedEvent, Issue issue,
         Dictionary<string, Release> releases, Dictionary<string, EventUser> users,
         Dictionary<string, TagValue> tagValues)
@@ -37,6 +52,53 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         return await dbContext.SaveChangesAsync() > 0;
     }
 
+    public async Task<CapturedEvent?> GetEventByIdAsync(long eventId, bool includeStackFrames = false, bool includeTags = false)
+    {
+        IQueryable<CapturedEvent> query = dbContext.Events;
+
+        if (includeStackFrames)
+            query = query.Include(e => e.StackFrames);
+
+        if (includeTags)
+            query = query.Include(e => e.Tags).ThenInclude(tv => tv.TagKey);
+
+        return await query
+            .Include(e => e.User)
+            .Include(e => e.Release)
+            .FirstOrDefaultAsync(e => e.Id == eventId);
+    }
+
+    public async Task<(List<CapturedEvent> Items, int TotalCount)> GetEventsForIssueAsync(int issueId, int page = 1, int pageSize = 50)
+    {
+        var query = dbContext.Events.Where(e => e.IssueId == issueId);
+
+        int totalCount = await query.CountAsync();
+
+        var items = await query
+            .Include(e => e.User)
+            .Include(e => e.Release)
+            .OrderByDescending(e => e.Timestamp)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return (items, totalCount);
+    }
+
+    public async Task<byte[]?> GetRawEventJsonAsync(long eventId)
+    {
+        var compressed = await dbContext.Events
+            .Where(e => e.Id == eventId)
+            .Select(e => e.RawCompressedJson)
+            .FirstOrDefaultAsync();
+
+        if (compressed is null)
+            return null;
+
+        var json = compressionService.DecompressToString(compressed);
+        return Encoding.UTF8.GetBytes(json);
+    }
+
     private static ICollection<StackFrame> MakeStackFrames(ParsedEvent parsedEvent)
     {
         return parsedEvent.Stacktrace.Select(frame => new StackFrame
@@ -54,7 +116,112 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
     {
         if (eventTags.IsNullOrEmpty())
             return [];
-        
+
         return eventTags.Select(tag => tagValues[$"{tag.Key}:{tag.Value}"]).ToList();
+    }
+
+    public async Task<PagedResponse<EventSummary>> GetEventSummariesAsync(int issueId, int page = 1, int pageSize = 50)
+    {
+        var (items, totalCount) = await GetEventsForIssueAsync(issueId, page, pageSize);
+
+        var summaries = items.Select(e => new EventSummary(
+            e.Id, e.EventId, e.Message, e.Level,
+            e.Timestamp, e.Release?.RawName, e.User?.Identifier)).ToList();
+
+        return new PagedResponse<EventSummary>(summaries, totalCount, page, pageSize);
+    }
+
+    public async Task<EventDetailResponse?> GetEventDetailAsync(long eventId)
+    {
+        var e = await GetEventByIdAsync(eventId, includeStackFrames: true, includeTags: true);
+        if (e is null) return null;
+
+        var tags = e.Tags
+            .Where(tv => tv.TagKey != null)
+            .Select(tv => new TagSummary(tv.TagKey!.Key, tv.Value))
+            .ToList();
+
+        var stackFrames = e.StackFrames
+            .Select(f => new StackFrameResponse(f.Function, f.Filename, f.LineNumber, f.ColumnNumber, f.Module, f.InApp))
+            .ToList();
+
+        EventUserResponse? user = e.User is not null
+            ? new EventUserResponse(e.User.Username, e.User.Email, e.User.IpAddress, e.User.Identifier)
+            : null;
+
+        var environment = tags.FirstOrDefault(t => t.Key == "environment")?.Value;
+
+        return new EventDetailResponse(
+            e.Id, e.EventId, e.IssueId, e.Message, e.Level,
+            e.Timestamp, e.Platform, e.Release?.RawName,
+            environment, user, stackFrames, tags);
+    }
+
+    public async Task<List<BreadcrumbResponse>> GetBreadcrumbsAsync(long eventId)
+    {
+        var rawBytes = await GetRawEventJsonAsync(eventId);
+        if (rawBytes is null) return [];
+
+        try
+        {
+            using var doc = JsonDocument.Parse(rawBytes);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("breadcrumbs", out var breadcrumbsEl))
+                return [];
+
+            JsonElement valuesArray;
+            if (breadcrumbsEl.ValueKind == JsonValueKind.Object &&
+                breadcrumbsEl.TryGetProperty("values", out var vals))
+                valuesArray = vals;
+            else if (breadcrumbsEl.ValueKind == JsonValueKind.Array)
+                valuesArray = breadcrumbsEl;
+            else
+                return [];
+
+            var breadcrumbs = new List<BreadcrumbResponse>();
+            foreach (var item in valuesArray.EnumerateArray())
+            {
+                DateTime? timestamp = null;
+                if (item.TryGetProperty("timestamp", out var ts))
+                {
+                    if (ts.ValueKind == JsonValueKind.Number)
+                        timestamp = DateTimeOffset.FromUnixTimeSeconds((long)ts.GetDouble()).UtcDateTime;
+                    else if (ts.ValueKind == JsonValueKind.String && DateTime.TryParse(ts.GetString(), out var parsed))
+                        timestamp = parsed;
+                }
+
+                Dictionary<string, object>? data = null;
+                if (item.TryGetProperty("data", out var dataEl) && dataEl.ValueKind == JsonValueKind.Object)
+                {
+                    data = new Dictionary<string, object>();
+                    foreach (var prop in dataEl.EnumerateObject())
+                    {
+                        data[prop.Name] = prop.Value.ValueKind switch
+                        {
+                            JsonValueKind.String => prop.Value.GetString()!,
+                            JsonValueKind.Number => prop.Value.GetDouble(),
+                            JsonValueKind.True => true,
+                            JsonValueKind.False => false,
+                            _ => prop.Value.GetRawText()
+                        };
+                    }
+                }
+
+                breadcrumbs.Add(new BreadcrumbResponse(
+                    timestamp,
+                    item.TryGetProperty("category", out var cat) ? cat.GetString() : null,
+                    item.TryGetProperty("message", out var msg) ? msg.GetString() : null,
+                    item.TryGetProperty("level", out var lvl) ? lvl.GetString() : null,
+                    item.TryGetProperty("type", out var typ) ? typ.GetString() : null,
+                    data));
+            }
+
+            return breadcrumbs;
+        }
+        catch
+        {
+            return [];
+        }
     }
 }

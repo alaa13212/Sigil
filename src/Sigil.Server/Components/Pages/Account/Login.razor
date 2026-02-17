@@ -1,0 +1,95 @@
+@page "/login"
+@using Microsoft.AspNetCore.Identity
+@using Sigil.Domain.Entities
+@attribute [AllowAnonymous]
+@inject SignInManager<User> SignInManager
+@inject NavigationManager Navigation
+
+<PageTitle>Sign In — Sigil</PageTitle>
+
+<div class="flex min-h-screen items-center justify-center">
+    <div class="card w-full max-w-md bg-base-200 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title text-2xl justify-center mb-4">Sign in to Sigil</h2>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-error">@errorMessage</div>
+            }
+
+            <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login">
+                <DataAnnotationsValidator />
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Email</span></label>
+                    <InputText @bind-Value="Input.Email" class="input input-bordered" type="email" placeholder="you@example.com" required />
+                </div>
+                <div class="form-control mt-4">
+                    <label class="label"><span class="label-text">Password</span></label>
+                    <InputText @bind-Value="Input.Password" class="input input-bordered" type="password" placeholder="••••••••" required />
+                </div>
+                <div class="form-control mt-2">
+                    <label class="label cursor-pointer justify-start gap-2">
+                        <InputCheckbox @bind-Value="Input.RememberMe" class="checkbox checkbox-sm" />
+                        <span class="label-text">Remember me</span>
+                    </label>
+                </div>
+                <div class="form-control mt-6">
+                    <button type="submit" class="btn btn-primary">Sign In</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    [SupplyParameterFromForm]
+    private LoginInputModel Input { get; set; } = new();
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpContext is not null)
+        {
+            if (HttpContext.User.Identity?.IsAuthenticated == true)
+            {
+                Navigation.NavigateTo(ReturnUrl ?? "/", forceLoad: true);
+            }
+        }
+    }
+
+    private async Task LoginUser()
+    {
+        var user = await SignInManager.UserManager.FindByEmailAsync(Input.Email);
+        if (user is null)
+        {
+            errorMessage = "Invalid email or password.";
+            return;
+        }
+
+        var result = await SignInManager.PasswordSignInAsync(user, Input.Password, Input.RememberMe, lockoutOnFailure: false);
+        if (!result.Succeeded)
+        {
+            errorMessage = "Invalid email or password.";
+            return;
+        }
+
+        user.LastLogin = DateTime.UtcNow;
+        await SignInManager.UserManager.UpdateAsync(user);
+
+        Navigation.NavigateTo(ReturnUrl ?? "/", forceLoad: true);
+    }
+
+    private sealed class LoginInputModel
+    {
+        public string Email { get; set; } = "";
+        public string Password { get; set; } = "";
+        public bool RememberMe { get; set; }
+    }
+}

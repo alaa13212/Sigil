@@ -1,11 +1,12 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Components.Authorization;
 using Sigil.Application.DependencyInjection;
-using Sigil.Application.Interfaces;
 using Sigil.Application.Services;
 using Sigil.Domain.DependencyInjection;
 using Sigil.Domain.Interfaces;
 using Sigil.infrastructure.DependencyInjection;
+using Sigil.Server.Auth;
 using Sigil.Server.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,13 +29,46 @@ builder.Services.AddSingleton(new JsonSerializerOptions(JsonSerializerDefaults.W
     PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
 });
 
-builder.Services.AddAuthorization();
-
 // Core services
 builder.Services.AddScoped<IIngestionService, IngestionService>();
 builder.Services.AddDomain();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// Authentication & Authorization (must come after AddInfrastructure which registers Identity)
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.ExpireTimeSpan = TimeSpan.FromDays(14);
+    options.SlidingExpiration = true;
+    options.LoginPath = "/login";
+    options.LogoutPath = "/logout";
+    options.Events.OnRedirectToLogin = context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        }
+        context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    };
+    options.Events.OnRedirectToAccessDenied = context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        }
+        context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    };
+});
+builder.Services.AddAuthorization();
+builder.Services.AddScoped<AuthenticationStateProvider, PersistingServerAuthenticationStateProvider>();
+builder.Services.AddCascadingAuthenticationState();
 
 
 var app = builder.Build();
@@ -52,24 +86,16 @@ else
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseAntiforgery();
 app.UseRequestDecompression();
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode()
     .AddInteractiveWebAssemblyRenderMode()
     .AddAdditionalAssemblies(typeof(Sigil.Server.Client._Imports).Assembly);
 
 app.MapControllers();
-
-
-// Auto-migrate database in development
-if (app.Environment.IsDevelopment())
-{
-    using var scope = app.Services.CreateScope();
-    var databaseMigrator = scope.ServiceProvider.GetRequiredService<IDatabaseMigrator>();
-    await databaseMigrator.MigrateAsync();
-}
 
 app.Run();
