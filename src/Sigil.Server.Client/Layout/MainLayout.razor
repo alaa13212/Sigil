@@ -1,71 +1,35 @@
 @inherits LayoutComponentBase
-@inject ISetupService SetupService
-@inject NavigationManager Navigation
 
-@if (checkingSetup)
-{
-    <div class="flex items-center justify-center min-h-screen">
-        <span class="loading loading-spinner loading-lg"></span>
-    </div>
-}
-else
-{
-    <div class="drawer lg:drawer-open">
-        <input id="sidebar-toggle" type="checkbox" class="drawer-toggle" />
-        <div class="drawer-content flex flex-col">
-            <!-- Top bar (mobile only) -->
-            <div class="navbar bg-base-200 border-b border-base-300 lg:hidden">
-                <label for="sidebar-toggle" class="btn btn-ghost drawer-button">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                    </svg>
-                </label>
-                <span class="text-lg font-bold">Sigil</span>
-            </div>
-
-            <!-- Page content -->
-            <main class="flex-1 p-6">
-                @Body
-            </main>
+<div class="drawer lg:drawer-open">
+    <input id="sidebar-toggle" type="checkbox" class="drawer-toggle" />
+    <div class="drawer-content flex flex-col">
+        <!-- Top bar (mobile only) -->
+        <div class="navbar bg-base-200 border-b border-base-300 lg:hidden">
+            <label for="sidebar-toggle" class="btn btn-ghost drawer-button">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </label>
+            <span class="text-lg font-bold">Sigil</span>
         </div>
 
-        <!-- Sidebar -->
-        <div class="drawer-side z-40">
-            <label for="sidebar-toggle" class="drawer-overlay"></label>
-            <aside class="bg-base-200 w-64 min-h-screen border-r border-base-300 flex flex-col">
-                <NavMenu />
-            </aside>
-        </div>
+        <!-- Page content -->
+        <main class="flex-1 p-6">
+            @Body
+        </main>
     </div>
-}
+
+    <!-- Sidebar -->
+    <div class="drawer-side z-40">
+        <label for="sidebar-toggle" class="drawer-overlay"></label>
+        <aside class="bg-base-200 w-64 min-h-screen border-r border-base-300 flex flex-col">
+            <NavMenu />
+        </aside>
+    </div>
+</div>
 
 <div id="blazor-error-ui" data-nosnippet class="fixed bottom-0 left-0 right-0 bg-warning text-warning-content p-3 text-sm z-50 hidden">
     An unhandled error has occurred.
     <a href="." class="link">Reload</a>
     <span class="dismiss cursor-pointer absolute right-3 top-2">✕</span>
 </div>
-
-@code {
-    private bool checkingSetup = true;
-
-    protected override async Task OnInitializedAsync()
-    {
-        try
-        {
-            var status = await SetupService.GetSetupStatusAsync();
-            if (!status.IsComplete)
-            {
-                Navigation.NavigateTo("/setup", forceLoad: true);
-                return;
-            }
-        }
-        catch
-        {
-            // DB unreachable or not created yet — send to setup wizard
-            Navigation.NavigateTo("/setup", forceLoad: true);
-            return;
-        }
-
-        checkingSetup = false;
-    }
-}

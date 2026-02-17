@@ -6,14 +6,7 @@
 }
 else
 {
-    var visible = showAll ? Breadcrumbs : Breadcrumbs.TakeLast(DefaultVisible).ToList();
-
-    @if (!showAll && Breadcrumbs.Count > DefaultVisible)
-    {
-        <button class="btn btn-ghost btn-xs mb-2" @onclick="() => showAll = true">
-            Show all (@Breadcrumbs.Count)
-        </button>
-    }
+    var visible = showAll ? Breadcrumbs : Breadcrumbs.Take(DefaultVisible).ToList();
 
     <div class="space-y-1">
         @foreach (var crumb in visible)
@@ -38,7 +31,7 @@ else
                     var delta = (crumb.Timestamp.Value - EventTimestamp.Value).TotalSeconds;
                     <div class="w-16 text-xs opacity-50 font-mono shrink-0 mt-0.5"
                          title="@crumb.Timestamp.Value.ToString("yyyy-MM-dd HH:mm:ss")">
-                        @(delta >= 0 ? $"+{delta:F1}s" : $"{delta:F1}s")
+                        @(delta >= 0 ? $"+{delta:F3}s" : $"{delta:F3}s")
                     </div>
                 }
 
@@ -67,6 +60,13 @@ else
             </div>
         }
     </div>
+    
+    @if (!showAll && Breadcrumbs.Count > DefaultVisible)
+    {
+        <button class="btn btn-ghost btn-xs mb-2" @onclick="() => showAll = true">
+            Show all (@Breadcrumbs.Count)
+        </button>
+    }
 }
 
 @code {

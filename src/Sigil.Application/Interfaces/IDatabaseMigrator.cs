@@ -1,9 +1,11 @@
+using Sigil.Application.Models.Auth;
+
 namespace Sigil.Application.Interfaces;
 
 public interface IDatabaseMigrator
 {
     Task MigrateAsync();
-    Task<bool> CanConnectAsync();
+    Task<DbConnectionStatus> CheckConnectionAsync();
     Task<IReadOnlyList<string>> GetPendingMigrationsAsync();
     Task<IReadOnlyList<string>> GetAppliedMigrationsAsync();
 }

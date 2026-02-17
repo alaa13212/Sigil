@@ -283,6 +283,32 @@ namespace Sigil.infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "FailedEvents",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ProjectId = table.Column<int>(type: "integer", nullable: false),
+                    RawEnvelope = table.Column<string>(type: "text", nullable: false),
+                    ErrorMessage = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false),
+                    ExceptionType = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    Stage = table.Column<int>(type: "integer", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Reprocessed = table.Column<bool>(type: "boolean", nullable: false),
+                    ReprocessedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_FailedEvents", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_FailedEvents_Projects_ProjectId",
+                        column: x => x.ProjectId,
+                        principalTable: "Projects",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Releases",
                 columns: table => new
                 {
@@ -342,9 +368,9 @@ namespace Sigil.infrastructure.Migrations
                     ReleaseId = table.Column<int>(type: "integer", nullable: false),
                     Extra = table.Column<Dictionary<string, string>>(type: "jsonb", nullable: true),
                     IssueId = table.Column<int>(type: "integer", nullable: false),
+                    ProjectId = table.Column<int>(type: "integer", nullable: false),
                     UserId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
-                    RawCompressedJson = table.Column<byte[]>(type: "bytea", nullable: false),
-                    ProjectId = table.Column<int>(type: "integer", nullable: true)
+                    RawCompressedJson = table.Column<byte[]>(type: "bytea", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -358,7 +384,8 @@ namespace Sigil.infrastructure.Migrations
                         name: "FK_Events_Projects_ProjectId",
                         column: x => x.ProjectId,
                         principalTable: "Projects",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_Events_Releases_ReleaseId",
                         column: x => x.ReleaseId,
@@ -535,6 +562,11 @@ namespace Sigil.infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_FailedEvents_ProjectId_Reprocessed",
+                table: "FailedEvents",
+                columns: new[] { "ProjectId", "Reprocessed" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_IssueActivities_IssueId",
                 table: "IssueActivities",
                 column: "IssueId");
@@ -697,6 +729,9 @@ namespace Sigil.infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "CapturedEventTagValue");
+
+            migrationBuilder.DropTable(
+                name: "FailedEvents");
 
             migrationBuilder.DropTable(
                 name: "IssueActivities");

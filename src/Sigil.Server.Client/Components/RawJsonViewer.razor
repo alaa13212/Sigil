@@ -16,9 +16,11 @@ else if (rawJson is not null)
     <div class="space-y-2">
         <div class="flex gap-2">
             <button class="btn btn-ghost btn-xs" @onclick="CopyJson">@(copied ? "Copied!" : "Copy")</button>
-            <a href="@($"api/events/{EventId}/download")" class="btn btn-ghost btn-xs">Download</a>
+            <a href="@($"events/{EventId}/download")" class="btn btn-ghost btn-xs">Download</a>
+            <a href="@($"events/{EventId}/raw")" class="btn btn-ghost btn-xs">Raw</a>
+            <a href="@($"events/{EventId}/md")" class="btn btn-ghost btn-xs">Markdown</a>
         </div>
-        <pre class="bg-base-300 p-3 rounded text-xs overflow-x-auto max-h-96 overflow-y-auto"><code>@rawJson</code></pre>
+        <pre class="bg-base-300 p-3 rounded text-xs overflow-x-auto overflow-y-auto"><code>@rawJson</code></pre>
     </div>
 }
 

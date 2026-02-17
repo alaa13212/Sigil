@@ -1,0 +1,121 @@
+@page "/teams"
+@attribute [Authorize]
+@using Sigil.Application.Models.Teams
+@inject ITeamService TeamService
+@inject NavigationManager Navigation
+
+<PageTitle>Teams — Sigil</PageTitle>
+
+<div class="max-w-4xl space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold">Teams</h1>
+        <button class="btn btn-primary btn-sm" @onclick="() => showCreate = !showCreate">
+            @(showCreate ? "Cancel" : "Create Team")
+        </button>
+    </div>
+
+    @if (showCreate)
+    {
+        <div class="card bg-base-200">
+            <div class="card-body p-5">
+                <div class="join w-full">
+                    <input type="text" class="input join-item flex-1" placeholder="Team name"
+                           @bind="newTeamName" @onkeydown="OnCreateKeyDown" />
+                    <button class="btn join-item btn-primary" @onclick="CreateTeam" disabled="@creating">
+                        @(creating ? "Creating..." : "Create")
+                    </button>
+                </div>
+                @if (!string.IsNullOrEmpty(error))
+                {
+                    <div class="alert alert-error text-sm mt-2">@error</div>
+                }
+            </div>
+        </div>
+    }
+
+    @if (loading)
+    {
+        <div class="flex justify-center py-16">
+            <span class="loading loading-spinner loading-lg"></span>
+        </div>
+    }
+    else if (teams is null || teams.Count == 0)
+    {
+        <EmptyState Title="No teams yet" Description="Create a team to organize your projects and members." />
+    }
+    else
+    {
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            @foreach (var team in teams)
+            {
+                <a href="/teams/@team.Id" class="card bg-base-200 hover:bg-base-300 transition-colors cursor-pointer">
+                    <div class="card-body p-5">
+                        <h2 class="card-title text-base">@team.Name</h2>
+                        <div class="flex gap-4 text-sm opacity-70">
+                            <div><span class="font-mono font-semibold">@team.MemberCount</span> members</div>
+                            <div><span class="font-mono font-semibold">@team.ProjectCount</span> projects</div>
+                        </div>
+                    </div>
+                </a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<TeamResponse>? teams;
+    private bool loading = true;
+    private bool showCreate;
+    private bool creating;
+    private string newTeamName = "";
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTeams();
+    }
+
+    private async Task LoadTeams()
+    {
+        loading = true;
+        try
+        {
+            teams = await TeamService.GetTeamsAsync();
+        }
+        catch
+        {
+            teams = null;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task CreateTeam()
+    {
+        if (string.IsNullOrWhiteSpace(newTeamName)) return;
+
+        creating = true;
+        error = null;
+        try
+        {
+            var team = await TeamService.CreateTeamAsync(newTeamName, Guid.Empty);
+            Navigation.NavigateTo($"/teams/{team.Id}");
+        }
+        catch
+        {
+            error = "Failed to create team.";
+        }
+        finally
+        {
+            creating = false;
+        }
+    }
+
+    private async Task OnCreateKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await CreateTeam();
+    }
+}

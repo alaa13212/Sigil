@@ -69,9 +69,14 @@ public class IngestionService(
                     issueTag.FirstSeen = TimeMath.Earlier(issueTag.FirstSeen, parsedEvent.Timestamp);
                     issueTag.LastSeen = TimeMath.Later(issueTag.LastSeen, parsedEvent.Timestamp);
                 }
+                
+                
+                issue.OccurrenceCount++;
+                issue.FirstSeen = TimeMath.Earlier(issue.FirstSeen, parsedEvent.Timestamp);
+                issue.LastSeen = TimeMath.Later(issue.LastSeen, parsedEvent.Timestamp);
             }
 
-            List<CapturedEvent> eventsEntities = eventService.BulkCreateEventsEntities(group, issue, releases, eventUsers, tagValues).ToList();
+            List<CapturedEvent> eventsEntities = eventService.BulkCreateEventsEntities(group, project, issue, releases, eventUsers, tagValues).ToList();
             events.AddRange(eventsEntities);
 
             issue.SuggestedEvent = eventRanker.GetMostRelevantEvent(eventsEntities);

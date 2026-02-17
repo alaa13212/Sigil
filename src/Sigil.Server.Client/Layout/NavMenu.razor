@@ -1,7 +1,5 @@
 @using Sigil.Application.Models.Projects
 @inject IProjectService ProjectService
-@inject IAuthService AuthService
-@inject NavigationManager Navigation
 
 <div class="p-4 border-b border-base-300">
     <a href="/" class="text-xl font-bold">Sigil</a>
@@ -9,72 +7,85 @@
 
 <AuthorizeView>
     <Authorized>
-        <!-- Project selector -->
-        <div class="p-3">
-            <select class="select select-bordered select-sm w-full" @onchange="OnProjectChanged">
-                @if (projects is not null)
-                {
-                    @foreach (var p in projects)
-                    {
-                        <option value="@p.Id" selected="@(p.Id == selectedProjectId)">@p.Name</option>
-                    }
-                }
-            </select>
-        </div>
 
-        <ul class="menu flex-1">
-            @if (selectedProjectId > 0)
+
+        <ul class="menu flex-1 w-full">
+            <!-- Project selector -->
+            @if (Projects is not null)
+            {
+                @foreach (var p in Projects)
+                {
+                    <li>
+                        <NavLink href="@($"/projects/{p.Id}/issues")" Match="NavLinkMatch.Prefix" ActiveClass="menu-active">@p.Name</NavLink>
+                    </li>
+                }
+            }
+            <div class="divider"></div>
+            @if (_projectId > 0)
             {
                 <li>
-                    <NavLink href="@($"/projects/{selectedProjectId}/issues")" Match="NavLinkMatch.Prefix">
+                    <NavLink href="@($"/projects/{_projectId}/issues")" Match="NavLinkMatch.Prefix" ActiveClass="menu-active">
                         Issues
                     </NavLink>
                 </li>
                 <li>
-                    <NavLink href="@($"/projects/{selectedProjectId}/settings")" Match="NavLinkMatch.All">
+                    <NavLink href="@($"/projects/{_projectId}/settings")" Match="NavLinkMatch.All" ActiveClass="menu-active">
                         Settings
                     </NavLink>
                 </li>
             }
+
+            <li class="menu-title mt-4">Organization</li>
+            <li>
+                <NavLink href="/teams" Match="NavLinkMatch.Prefix" ActiveClass="menu-active">
+                    Teams
+                </NavLink>
+            </li>
+            <li>
+                <NavLink href="/projects/create" Match="NavLinkMatch.All" ActiveClass="menu-active">
+                    Create Project
+                </NavLink>
+            </li>
+
+            <li class="menu-title mt-4">Admin</li>
+            <li>
+                <NavLink href="/admin/users" Match="NavLinkMatch.Prefix" ActiveClass="menu-active">
+                    Users
+                </NavLink>
+            </li>
         </ul>
 
-        <div class="p-3 border-t border-base-300">
+        <form action="/logout" method="post" class="p-3 border-t border-base-300">
             <div class="text-sm opacity-70 mb-2">@context.User.Identity?.Name</div>
-            <button class="btn btn-ghost btn-sm w-full" @onclick="Logout">Sign Out</button>
-        </div>
+            <button type="submit" class="btn btn-ghost btn-sm w-full">Sign Out</button>
+        </form>
     </Authorized>
 </AuthorizeView>
 
 @code {
-    private List<ProjectResponse>? projects;
-    private int selectedProjectId;
+    [PersistentState] public List<ProjectResponse>? Projects { get; set; }
 
+    [CascadingParameter] public RouteData? RouteData { get; set; }
+
+    private int _projectId;
+    
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            projects = await ProjectService.GetProjectListAsync();
-            if (projects.Count > 0)
-                selectedProjectId = projects[0].Id;
+            Projects ??= await ProjectService.GetProjectListAsync();
         }
         catch
         {
             // Not authenticated or server error
         }
     }
-
-    private void OnProjectChanged(ChangeEventArgs e)
+    
+    protected override void OnParametersSet()
     {
-        if (int.TryParse(e.Value?.ToString(), out var id))
+        if (RouteData?.RouteValues.TryGetValue("ProjectId", out var projectId) == true)
         {
-            selectedProjectId = id;
-            Navigation.NavigateTo($"/projects/{id}/issues");
+            _projectId = int.TryParse(projectId?.ToString(), out int id) ? id : 0;
         }
-    }
-
-    private async Task Logout()
-    {
-        await AuthService.LogoutAsync();
-        Navigation.NavigateTo("/login", forceLoad: true);
     }
 }

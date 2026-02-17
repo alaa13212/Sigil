@@ -1,0 +1,289 @@
+@page "/teams/{TeamId:int}"
+@attribute [Authorize]
+@using Sigil.Application.Models.Auth
+@using Sigil.Application.Models.Teams
+@inject ITeamService TeamService
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Team — Sigil</PageTitle>
+
+@if (loading)
+{
+    <div class="flex justify-center py-16">
+        <span class="loading loading-spinner loading-lg"></span>
+    </div>
+}
+else if (team is null)
+{
+    <EmptyState Title="Team not found" />
+}
+else
+{
+    <div class="max-w-4xl space-y-6">
+        <!-- Team Name -->
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                @if (editingName)
+                {
+                    <div class="join">
+                        <input type="text" class="input join-item" @bind="editName" />
+                        <button class="btn join-item btn-primary" @onclick="SaveName" disabled="@saving">Save</button>
+                        <button class="btn join-item" @onclick="() => editingName = false">Cancel</button>
+                    </div>
+                }
+                else
+                {
+                    <h1 class="text-2xl font-bold">@team.Name</h1>
+                    <button class="btn btn-ghost btn-xs" @onclick="StartEditName">Edit</button>
+                }
+            </div>
+            <button class="btn btn-error btn-sm" @onclick="DeleteTeam" disabled="@deleting">
+                @(deleting ? "Deleting..." : "Delete Team")
+            </button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(message))
+        {
+            <div class="alert alert-info text-sm">@message</div>
+        }
+
+        <!-- Members Section -->
+        <div class="card bg-base-200">
+            <div class="card-body p-5 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="font-semibold">Members</h2>
+                    <button class="btn btn-ghost btn-xs" @onclick="() => showAddMember = !showAddMember">
+                        @(showAddMember ? "Cancel" : "Add Member")
+                    </button>
+                </div>
+
+                @if (showAddMember)
+                {
+                    <div class="flex gap-2 items-end">
+                        <fieldset class="fieldset flex-1">
+                            <legend class="fieldset-legend">User</legend>
+                            <select class="select w-full" @bind="selectedUserId">
+                                <option value="">Select a user...</option>
+                                @if (allUsers is not null)
+                                {
+                                    @foreach (var user in allUsers.Where(u => team.Members.All(m => m.UserId != u.Id)))
+                                    {
+                                        <option value="@user.Id">@(user.DisplayName ?? user.Email)</option>
+                                    }
+                                }
+                            </select>
+                        </fieldset>
+                        <fieldset class="fieldset">
+                            <legend class="fieldset-legend">Role</legend>
+                            <select class="select" @bind="selectedRole">
+                                @foreach (var role in Enum.GetValues<TeamRole>())
+                                {
+                                    <option value="@role">@role</option>
+                                }
+                            </select>
+                        </fieldset>
+                        <button class="btn btn-primary" @onclick="AddMember" disabled="@addingMember">Add</button>
+                    </div>
+                }
+
+                <div class="overflow-x-auto">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var member in team.Members)
+                            {
+                                <tr>
+                                    <td>@(member.DisplayName ?? "—")</td>
+                                    <td>@member.Email</td>
+                                    <td>
+                                        <span class="badge badge-ghost badge-sm">@member.Role</span>
+                                    </td>
+                                    <td class="text-right">
+                                        <button class="btn btn-ghost btn-xs text-error"
+                                                @onclick="() => RemoveMember(member.UserId)">
+                                            Remove
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Projects Section -->
+        <div class="card bg-base-200">
+            <div class="card-body p-5 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="font-semibold">Projects</h2>
+                    <a href="/projects/create?teamId=@TeamId" class="btn btn-ghost btn-xs">Create Project</a>
+                </div>
+
+                @if (team.Projects.Count == 0)
+                {
+                    <p class="text-sm opacity-60">No projects in this team yet.</p>
+                }
+                else
+                {
+                    <div class="overflow-x-auto">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Platform</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var project in team.Projects)
+                                {
+                                    <tr>
+                                        <td>@project.Name</td>
+                                        <td>
+                                            <span class="badge badge-ghost badge-sm">@project.Platform</span>
+                                        </td>
+                                        <td class="text-right">
+                                            <a href="/projects/@project.Id/settings" class="btn btn-ghost btn-xs">Settings</a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int TeamId { get; set; }
+
+    private TeamDetailResponse? team;
+    private List<UserInfo>? allUsers;
+    private bool loading = true;
+    private bool saving;
+    private bool deleting;
+    private bool editingName;
+    private bool showAddMember;
+    private bool addingMember;
+    private string editName = "";
+    private string selectedUserId = "";
+    private TeamRole selectedRole = TeamRole.Member;
+    private string? message;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        await LoadTeam();
+        loading = false;
+    }
+
+    private async Task LoadTeam()
+    {
+        try
+        {
+            team = await TeamService.GetTeamDetailAsync(TeamId);
+            allUsers = await AuthService.GetAllUsersAsync();
+        }
+        catch
+        {
+            team = null;
+        }
+    }
+
+    private void StartEditName()
+    {
+        editName = team?.Name ?? "";
+        editingName = true;
+    }
+
+    private async Task SaveName()
+    {
+        if (string.IsNullOrWhiteSpace(editName)) return;
+        saving = true;
+        message = null;
+        try
+        {
+            await TeamService.UpdateTeamAsync(TeamId, editName);
+            await LoadTeam();
+            editingName = false;
+            message = "Team name updated.";
+        }
+        catch
+        {
+            message = "Failed to update team name.";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task DeleteTeam()
+    {
+        deleting = true;
+        try
+        {
+            await TeamService.DeleteTeamAsync(TeamId);
+            Navigation.NavigateTo("/teams");
+        }
+        catch
+        {
+            message = "Failed to delete team.";
+            deleting = false;
+        }
+    }
+
+    private async Task AddMember()
+    {
+        if (string.IsNullOrEmpty(selectedUserId)) return;
+        addingMember = true;
+        message = null;
+        try
+        {
+            var added = await TeamService.AddMemberAsync(TeamId, Guid.Parse(selectedUserId), selectedRole);
+            if (added)
+            {
+                await LoadTeam();
+                selectedUserId = "";
+                showAddMember = false;
+            }
+            else
+            {
+                message = "Could not add member. They may already be on the team.";
+            }
+        }
+        catch
+        {
+            message = "Failed to add member.";
+        }
+        finally
+        {
+            addingMember = false;
+        }
+    }
+
+    private async Task RemoveMember(Guid userId)
+    {
+        message = null;
+        try
+        {
+            await TeamService.RemoveMemberAsync(TeamId, userId);
+            await LoadTeam();
+        }
+        catch
+        {
+            message = "Failed to remove member.";
+        }
+    }
+}

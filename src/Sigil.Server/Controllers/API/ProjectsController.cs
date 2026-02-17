@@ -17,11 +17,10 @@ public class ProjectsController(IProjectService projectService) : SigilControlle
         return Ok(await projectService.GetProjectListAsync());
     }
 
-    [HttpGet("{id:int}/overview")]
-    public async Task<IActionResult> Overview(int id)
+    [HttpGet("overviews")]
+    public async Task<IActionResult> Overviews()
     {
-        var overview = await projectService.GetProjectOverviewAsync(id);
-        return overview is not null ? Ok(overview) : NotFound();
+        return Ok(await projectService.GetAllProjectOverviewsAsync());
     }
 
     [HttpGet("{id:int}")]
@@ -34,7 +33,7 @@ public class ProjectsController(IProjectService projectService) : SigilControlle
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateProjectRequest request)
     {
-        var project = await projectService.CreateProjectAsync(request.Name, request.Platform);
+        var project = await projectService.CreateProjectAsync(request.Name, request.Platform, request.TeamId);
         return CreatedAtAction(nameof(Get), new { id = project.Id },
             new ProjectResponse(project.Id, project.Name, project.Platform, project.ApiKey));
     }

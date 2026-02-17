@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sigil.Application.Interfaces;
@@ -23,14 +24,21 @@ public class EventsController(
         return detail is not null ? Ok(detail) : NotFound();
     }
 
-    [HttpGet("api/events/{id:long}/raw")]
+    [HttpGet("events/{id:long}/raw")]
     public async Task<IActionResult> Raw(long id)
     {
         var rawBytes = await eventService.GetRawEventJsonAsync(id);
         return rawBytes is not null ? File(rawBytes, "application/json") : NotFound();
     }
 
-    [HttpGet("api/events/{id:long}/download")]
+    [HttpGet("events/{id:long}/md")]
+    public async Task<IActionResult> Markdown(long id)
+    {
+        string? markdownText = await eventService.GetEventMarkdownAsync(id);
+        return markdownText is not null ? File(Encoding.UTF8.GetBytes(markdownText), "text/markdown") : NotFound();
+    }
+
+    [HttpGet("events/{id:long}/download")]
     public async Task<IActionResult> Download(long id)
     {
         var rawBytes = await eventService.GetRawEventJsonAsync(id);

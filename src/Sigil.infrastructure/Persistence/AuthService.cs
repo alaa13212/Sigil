@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Auth;
 using Sigil.Domain.Entities;
@@ -8,8 +9,7 @@ namespace Sigil.infrastructure.Persistence;
 
 internal class AuthService(
     UserManager<User> userManager,
-    SignInManager<User> signInManager,
-    IHttpContextAccessor httpContextAccessor) : IAuthService
+    SignInManager<User> signInManager) : IAuthService
 {
     public async Task<AuthResult> LoginAsync(LoginRequest request)
     {
@@ -17,7 +17,7 @@ internal class AuthService(
         if (user is null)
             return AuthResult.Failure("Invalid email or password.");
 
-        var result = await signInManager.PasswordSignInAsync(user, request.Password, request.RememberMe, lockoutOnFailure: false);
+        var result = await signInManager.PasswordSignInAsync(user, request.Password, false, lockoutOnFailure: false);
         if (!result.Succeeded)
             return AuthResult.Failure("Invalid email or password.");
 
@@ -49,6 +49,15 @@ internal class AuthService(
     public async Task LogoutAsync()
     {
         await signInManager.SignOutAsync();
+    }
+
+    public async Task<List<UserInfo>> GetAllUsersAsync()
+    {
+        var users = await userManager.Users
+            .OrderBy(u => u.Email)
+            .ToListAsync();
+
+        return users.Select(u => new UserInfo(u.Id, u.Email!, u.DisplayName, u.CreatedAt, u.LastLogin, [])).ToList();
     }
 
     private static UserInfo ToUserInfo(User user, IList<string> roles) =>

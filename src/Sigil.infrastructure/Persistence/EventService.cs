@@ -22,7 +22,8 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         return existing.ToHashSet();
     }
 
-    public IEnumerable<CapturedEvent> BulkCreateEventsEntities(IEnumerable<ParsedEvent> capturedEvent, Issue issue,
+    public IEnumerable<CapturedEvent> BulkCreateEventsEntities(IEnumerable<ParsedEvent> capturedEvent, Project project,
+        Issue issue,
         Dictionary<string, Release> releases, Dictionary<string, EventUser> users,
         Dictionary<string, TagValue> tagValues)
     {
@@ -37,6 +38,7 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
             Platform = e.Platform,
             ReleaseId = releases[e.Release].Id,
             Extra = e.Extra,
+            ProjectId = project.Id,
             Issue = issue,
             UserId = e.User != null? users[e.User.UniqueIdentifier!].UniqueIdentifier : null,
             StackFrames = MakeStackFrames(e),
@@ -98,6 +100,78 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         var json = compressionService.DecompressToString(compressed);
         return Encoding.UTF8.GetBytes(json);
     }
+    
+    public async Task<string?> GetEventMarkdownAsync(long eventId)                                                                                                               
+    {                                                                                                                                                                            
+        var evt = await GetEventDetailAsync(eventId);                                                                                                                            
+        if (evt is null) return null;                                                                                                                                            
+                                                                                                                                                                                 
+        var sb = new StringBuilder();                                                                                                                                            
+                                                                                                                                                                                 
+        sb.AppendLine($"# Event {evt.Id}");                                                                                                                                      
+        sb.AppendLine();                                                                                                                                                         
+        sb.AppendLine($"**Level:** {evt.Level}  ");                                                                                                                              
+        sb.AppendLine($"**Timestamp:** {evt.Timestamp:yyyy-MM-dd HH:mm:ss} UTC  ");                                                                                              
+        sb.AppendLine($"**Platform:** {evt.Platform}  ");                                                                                                                        
+        if (!string.IsNullOrEmpty(evt.Release))                                                                                                                                  
+            sb.AppendLine($"**Release:** {evt.Release}  ");                                                                                                                      
+        if (!string.IsNullOrEmpty(evt.Environment))                                                                                                                              
+            sb.AppendLine($"**Environment:** {evt.Environment}  ");                                                                                                              
+        if (!string.IsNullOrEmpty(evt.EventId))                                                                                                                                  
+            sb.AppendLine($"**Event ID:** `{evt.EventId}`  ");                                                                                                                   
+                                                                                                                                                                                 
+        if (!string.IsNullOrEmpty(evt.Message))                                                                                                                                  
+        {                                                                                                                                                                        
+            sb.AppendLine();                                                                                                                                                     
+            sb.AppendLine("## Exception");                                                                                                                                       
+            sb.AppendLine();                                                                                                                                                     
+            sb.AppendLine($"```");                                                                                                                                               
+            sb.AppendLine(evt.Message);                                                                                                                                          
+            sb.AppendLine("```");                                                                                                                                                
+        }                                                                                                                                                                        
+                                                                                                                                                                                 
+        if (evt.StackFrames.Count > 0)                                                                                                                                           
+        {                                                                                                                                                                        
+            sb.AppendLine();                                                                                                                                                     
+            sb.AppendLine("## Stack Trace");                                                                                                                                     
+            sb.AppendLine();                                                                                                                                                     
+            sb.AppendLine("```");                                                                                                                                                
+            foreach (var frame in evt.StackFrames)                                                                                                                               
+            {                                                                                                                                                                    
+                var location = frame.Filename is not null                                                                                                                        
+                    ? $" in {frame.Filename}{(frame.LineNumber.HasValue ? $":{frame.LineNumber}" : "")}"                                                                         
+                    : "";                                                                                                                                                        
+                var inApp = frame.InApp ? "" : " [external]";                                                                                                                    
+                sb.AppendLine($"  at {frame.Function ?? "?"}{location}{inApp}");                                                                                                 
+            }                                                                                                                                                                    
+            sb.AppendLine("```");                                                                                                                                                
+        }                                                                                                                                                                        
+                                                                                                                                                                                 
+        if (evt.User is not null)                                                                                                                                                
+        {                                                                                                                                                                        
+            sb.AppendLine();                                                                                                                                                     
+            sb.AppendLine("## User");                                                                                                                                            
+            sb.AppendLine();                                                                                                                                                     
+            if (!string.IsNullOrEmpty(evt.User.Identifier)) sb.AppendLine($"- **ID:** {evt.User.Identifier}");                                                                   
+            if (!string.IsNullOrEmpty(evt.User.Username))   sb.AppendLine($"- **Username:** {evt.User.Username}");                                                               
+            if (!string.IsNullOrEmpty(evt.User.Email))      sb.AppendLine($"- **Email:** {evt.User.Email}");                                                                     
+            if (!string.IsNullOrEmpty(evt.User.IpAddress))  sb.AppendLine($"- **IP:** {evt.User.IpAddress}");                                                                    
+        }                                                                                                                                                                        
+                                                                                                                                                                                 
+        var displayTags = evt.Tags.Where(t => t.Key != "environment").ToList();                                                                                                  
+        if (displayTags.Count > 0)                                                                                                                                               
+        {                                                                                                                                                                        
+            sb.AppendLine();                                                                                                                                                     
+            sb.AppendLine("## Tags");                                                                                                                                            
+            sb.AppendLine();                                                                                                                                                     
+            sb.AppendLine("| Key | Value |");                                                                                                                                    
+            sb.AppendLine("|-----|-------|");                                                                                                                                    
+            foreach (var tag in displayTags)                                                                                                                                     
+                sb.AppendLine($"| {tag.Key} | {tag.Value} |");                                                                                                                   
+        }                                                                                                                                                                        
+                                                                                                                                                                                 
+        return sb.ToString();                                                                                                                                                    
+    }   
 
     private static ICollection<StackFrame> MakeStackFrames(ParsedEvent parsedEvent)
     {
@@ -188,7 +262,7 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
                     if (ts.ValueKind == JsonValueKind.Number)
                         timestamp = DateTimeOffset.FromUnixTimeSeconds((long)ts.GetDouble()).UtcDateTime;
                     else if (ts.ValueKind == JsonValueKind.String && DateTime.TryParse(ts.GetString(), out var parsed))
-                        timestamp = parsed;
+                        timestamp = parsed.ToUniversalTime();
                 }
 
                 Dictionary<string, object>? data = null;
@@ -217,6 +291,7 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
                     data));
             }
 
+            breadcrumbs.Reverse();
             return breadcrumbs;
         }
         catch

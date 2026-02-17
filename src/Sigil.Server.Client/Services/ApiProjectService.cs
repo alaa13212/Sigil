@@ -26,24 +26,11 @@ public class ApiProjectService(HttpClient http) : IProjectService
         }
     }
 
-    public async Task<ProjectOverviewResponse?> GetProjectOverviewAsync(int id)
+    public async Task<List<ProjectOverviewResponse>> GetAllProjectOverviewsAsync()
     {
-        try
-        {
-            return await http.GetFromJsonAsync<ProjectOverviewResponse>($"api/projects/{id}/overview");
-        }
-        catch (HttpRequestException)
-        {
-            return null;
-        }
+        return await http.GetFromJsonAsync<List<ProjectOverviewResponse>>("api/projects/overviews") ?? [];
     }
 
-    // Entity access (delegates to DTO methods)
-    public async Task<List<Project>> GetAllProjectsAsync()
-    {
-        var items = await GetProjectListAsync();
-        return items.Select(ToEntity).ToList();
-    }
 
     public async Task<Project?> GetProjectByIdAsync(int id)
     {
@@ -58,9 +45,9 @@ public class ApiProjectService(HttpClient http) : IProjectService
         };
     }
 
-    public async Task<Project> CreateProjectAsync(string name, Platform platform)
+    public async Task<Project> CreateProjectAsync(string name, Platform platform, int? teamId = null)
     {
-        var response = await http.PostAsJsonAsync("api/projects", new CreateProjectRequest(name, platform));
+        var response = await http.PostAsJsonAsync("api/projects", new CreateProjectRequest(name, platform, teamId));
         response.EnsureSuccessStatusCode();
         var result = await response.Content.ReadFromJsonAsync<ProjectResponse>();
         return ToEntity(result!);
@@ -87,9 +74,6 @@ public class ApiProjectService(HttpClient http) : IProjectService
         var result = await response.Content.ReadFromJsonAsync<RotateKeyResponse>();
         return result!.ApiKey;
     }
-
-    public Task<Project?> GetProjectByApiKeyAsync(string apiKey) =>
-        throw new NotSupportedException("Not available on client.");
 
     private static Project ToEntity(ProjectResponse r) =>
         new() { Id = r.Id, Name = r.Name, Platform = r.Platform, ApiKey = r.ApiKey };

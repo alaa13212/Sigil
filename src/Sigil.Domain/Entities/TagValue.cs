@@ -10,7 +10,7 @@ public class TagValue
 
     [ForeignKey(nameof(TagKey))]
     public int TagKeyId { get; set; }
-    public required TagKey TagKey { get; set; }
+    public TagKey? TagKey { get; set; }
 
     [Required, MaxLength(1000)]
     public required string Value { get; set; }

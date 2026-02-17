@@ -10,7 +10,7 @@ else
         @foreach (var frame in Frames)
         {
             var bgClass = frame.InApp ? "bg-base-200" : "opacity-50";
-            <div class="@bgClass rounded px-3 py-2 text-sm font-mono">
+            <div class="@bgClass rounded px-3 py-1 text-sm font-mono">
                 <div class="font-semibold">@(frame.Function ?? "(unknown)")</div>
                 @if (!string.IsNullOrEmpty(frame.Filename))
                 {

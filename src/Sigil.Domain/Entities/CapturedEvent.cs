@@ -39,6 +39,12 @@ public class CapturedEvent
     
     [InverseProperty(nameof(Issue.Events))]
     public Issue? Issue { get; set; }
+    
+    [ForeignKey(nameof(Project))]
+    public int ProjectId { get; set; }
+    
+    [InverseProperty(nameof(Project.Events))]
+    public Project? Project { get; set; }
 
     [ForeignKey(nameof(User)), StringLength(64)]
     public string? UserId { get; set; }

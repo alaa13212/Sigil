@@ -40,4 +40,9 @@ public class ApiAuthService(HttpClient http, AuthenticationStateProvider authSta
         if (authStateProvider is CookieAuthenticationStateProvider cookie)
             cookie.NotifyAuthStateChanged();
     }
+
+    public async Task<List<UserInfo>> GetAllUsersAsync()
+    {
+        return await http.GetFromJsonAsync<List<UserInfo>>("api/account/users") ?? [];
+    }
 }

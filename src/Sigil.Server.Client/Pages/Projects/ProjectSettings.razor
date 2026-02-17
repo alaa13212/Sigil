@@ -1,4 +1,5 @@
 @page "/projects/{ProjectId:int}/settings"
+@attribute [Authorize]
 @using Sigil.Application.Models.Projects
 @inject IProjectService ProjectService
 @inject IJSRuntime JS
@@ -24,19 +25,19 @@ else
         <div class="card bg-base-200">
             <div class="card-body p-5 space-y-3">
                 <h2 class="font-semibold">General</h2>
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Project Name</span></label>
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Project Name</legend>
                     <div class="join w-full">
-                        <input type="text" class="input input-bordered join-item flex-1" @bind="editName" />
+                        <input type="text" class="input join-item flex-1" @bind="editName" />
                         <button class="btn join-item" @onclick="SaveName" disabled="@saving">
                             @(saving ? "Saving..." : "Save")
                         </button>
                     </div>
-                </div>
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Platform</span></label>
-                    <input type="text" class="input input-bordered" value="@project.Platform" disabled />
-                </div>
+                </fieldset>
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Platform</legend>
+                    <input type="text" class="input" value="@project.Platform" disabled />
+                </fieldset>
             </div>
         </div>
 
@@ -45,25 +46,25 @@ else
             <div class="card-body p-5 space-y-3">
                 <h2 class="font-semibold">Integration</h2>
 
-                <div class="form-control">
-                    <label class="label"><span class="label-text">API Key</span></label>
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">API Key</legend>
                     <div class="join w-full">
-                        <input type="text" class="input input-bordered join-item flex-1 font-mono text-sm"
+                        <input type="text" class="input join-item flex-1 font-mono text-sm"
                                value="@project.ApiKey" readonly />
                         <button class="btn join-item btn-ghost" @onclick="() => CopyToClipboard(project.ApiKey)">Copy</button>
                     </div>
-                </div>
+                </fieldset>
 
                 @if (!string.IsNullOrEmpty(project.Dsn))
                 {
-                    <div class="form-control">
-                        <label class="label"><span class="label-text">DSN</span></label>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">DSN</legend>
                         <div class="join w-full">
-                            <input type="text" class="input input-bordered join-item flex-1 font-mono text-sm"
+                            <input type="text" class="input join-item flex-1 font-mono text-sm"
                                    value="@project.Dsn" readonly />
                             <button class="btn join-item btn-ghost" @onclick="() => CopyToClipboard(project.Dsn)">Copy</button>
                         </div>
-                    </div>
+                    </fieldset>
                 }
 
                 <div class="divider"></div>

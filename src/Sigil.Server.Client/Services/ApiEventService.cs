@@ -89,7 +89,20 @@ public class ApiEventService(HttpClient http) : IEventService
     {
         try
         {
-            return await http.GetByteArrayAsync($"api/events/{eventId}/raw");
+            return await http.GetByteArrayAsync($"events/{eventId}/raw");
+        }
+        catch (HttpRequestException)
+        {
+            return null;
+        }
+    }
+    
+    
+    public async Task<string?> GetEventMarkdownAsync(long eventId)
+    {
+        try
+        {
+            return await http.GetStringAsync($"events/{eventId}/md");
         }
         catch (HttpRequestException)
         {
@@ -100,7 +113,9 @@ public class ApiEventService(HttpClient http) : IEventService
     public Task<HashSet<string>> FindExistingEventIdsAsync(IEnumerable<string> eventIds) =>
         throw new NotSupportedException("Not available on client.");
 
-    public IEnumerable<CapturedEvent> BulkCreateEventsEntities(IEnumerable<ParsedEvent> capturedEvent, Issue issue, Dictionary<string, Release> releases, Dictionary<string, EventUser> users, Dictionary<string, TagValue> tagValues) =>
+    public IEnumerable<CapturedEvent> BulkCreateEventsEntities(IEnumerable<ParsedEvent> capturedEvent, Project project,
+        Issue issue, Dictionary<string, Release> releases, Dictionary<string, EventUser> users,
+        Dictionary<string, TagValue> tagValues) =>
         throw new NotSupportedException("Not available on client.");
 
     public Task<bool> SaveEventsAsync(IEnumerable<CapturedEvent> capturedEvents) =>

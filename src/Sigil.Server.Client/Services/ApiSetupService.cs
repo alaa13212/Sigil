@@ -17,11 +17,11 @@ public class ApiSetupService(HttpClient http) : ISetupService
         try
         {
             return await http.GetFromJsonAsync<DbStatusResponse>("api/setup/db-status")
-                   ?? new DbStatusResponse(false, "Failed to get status", [], []);
+                   ?? new DbStatusResponse(DbConnectionStatus.ConnectionFailed, "Failed to get status", [], []);
         }
         catch (Exception ex)
         {
-            return new DbStatusResponse(false, ex.Message, [], []);
+            return new DbStatusResponse(DbConnectionStatus.ConnectionFailed, ex.Message, [], []);
         }
     }
 

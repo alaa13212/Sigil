@@ -74,7 +74,9 @@ internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSeri
                 LineNumber = f.LineNumber,
                 ColumnNumber = f.ColumnNumber,
                 InApp = f.InApp == true
-            }).ToList() ?? [],
+            })
+            .Reverse()
+            .ToList() ?? [],
             
         };
     }

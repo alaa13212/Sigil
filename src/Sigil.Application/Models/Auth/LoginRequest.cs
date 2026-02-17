@@ -1,3 +1,8 @@
 namespace Sigil.Application.Models.Auth;
 
-public record LoginRequest(string Email, string Password, bool RememberMe = false);
+public class LoginRequest()
+{
+    public string Email { get; set; }
+    public string Password { get; set; }
+
+}

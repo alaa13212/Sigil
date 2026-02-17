@@ -1,4 +1,5 @@
 @page "/events/{EventId:long}"
+@attribute [Authorize]
 @using Sigil.Application.Models.Events
 @inject IEventService EventService
 @inject NavigationManager Navigation
@@ -54,110 +55,112 @@ else
 
     @if (activeTab == Tab.Details)
     {
-        <!-- Stack Trace -->
-        @if (evt.StackFrames.Count > 0)
-        {
-            <div class="card bg-base-200 mb-4">
-                <div class="card-body p-4">
-                    <h2 class="card-title text-base">Stack Trace</h2>
-                    <StackTraceViewer Frames="evt.StackFrames" />
-                </div>
-            </div>
-        }
-
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <!-- Tags -->
-            @if (evt.Tags.Count > 0)
+        <div class="flex flex-col md:flex-row gap-4">
+            <!-- Stack Trace -->
+            @if (evt.StackFrames.Count > 0)
             {
-                <div class="card bg-base-200">
+                <div class="card bg-base-200 mb-4 flex-1">
                     <div class="card-body p-4">
-                        <h2 class="card-title text-base">Tags</h2>
-                        <div class="overflow-x-auto">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Key</th>
-                                        <th>Value</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var tag in evt.Tags)
-                                    {
+                        <h2 class="card-title text-base">Stack Trace</h2>
+                        <StackTraceViewer Frames="evt.StackFrames" />
+                    </div>
+                </div>
+            }
+
+            <div class="flex flex-col gap-4">
+                <!-- Tags -->
+                @if (evt.Tags.Count > 0)
+                {
+                    <div class="card bg-base-200">
+                        <div class="card-body p-4">
+                            <h2 class="card-title text-base">Tags</h2>
+                            <div class="overflow-x-auto">
+                                <table class="table table-sm">
+                                    <thead>
                                         <tr>
-                                            <td class="opacity-70">@tag.Key</td>
-                                            <td class="font-mono">@tag.Value</td>
+                                            <th>Key</th>
+                                            <th>Value</th>
                                         </tr>
-                                    }
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var tag in evt.Tags)
+                                        {
+                                            <tr>
+                                                <td class="opacity-70">@tag.Key</td>
+                                                <td class="font-mono">@tag.Value</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
-                </div>
-            }
+                }
 
-            <!-- User info -->
-            @if (evt.User is not null)
-            {
+                <!-- User info -->
+                @if (evt.User is not null)
+                {
+                    <div class="card bg-base-200">
+                        <div class="card-body p-4">
+                            <h2 class="card-title text-base">User</h2>
+                            <div class="space-y-1 text-sm">
+                                @if (!string.IsNullOrEmpty(evt.User.Username))
+                                {
+                                    <div class="flex justify-between">
+                                        <span class="opacity-60">Username</span>
+                                        <span>@evt.User.Username</span>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(evt.User.Email))
+                                {
+                                    <div class="flex justify-between">
+                                        <span class="opacity-60">Email</span>
+                                        <span>@evt.User.Email</span>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(evt.User.IpAddress))
+                                {
+                                    <div class="flex justify-between">
+                                        <span class="opacity-60">IP Address</span>
+                                        <span class="font-mono">@evt.User.IpAddress</span>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(evt.User.Identifier))
+                                {
+                                    <div class="flex justify-between">
+                                        <span class="opacity-60">ID</span>
+                                        <span class="font-mono">@evt.User.Identifier</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- Context -->
                 <div class="card bg-base-200">
                     <div class="card-body p-4">
-                        <h2 class="card-title text-base">User</h2>
+                        <h2 class="card-title text-base">Context</h2>
                         <div class="space-y-1 text-sm">
-                            @if (!string.IsNullOrEmpty(evt.User.Username))
+                            <div class="flex justify-between">
+                                <span class="opacity-60">Platform</span>
+                                <span>@evt.Platform</span>
+                            </div>
+                            @if (!string.IsNullOrEmpty(evt.Release))
                             {
                                 <div class="flex justify-between">
-                                    <span class="opacity-60">Username</span>
-                                    <span>@evt.User.Username</span>
+                                    <span class="opacity-60">Release</span>
+                                    <span class="font-mono">@evt.Release</span>
                                 </div>
                             }
-                            @if (!string.IsNullOrEmpty(evt.User.Email))
+                            @if (!string.IsNullOrEmpty(evt.Environment))
                             {
                                 <div class="flex justify-between">
-                                    <span class="opacity-60">Email</span>
-                                    <span>@evt.User.Email</span>
-                                </div>
-                            }
-                            @if (!string.IsNullOrEmpty(evt.User.IpAddress))
-                            {
-                                <div class="flex justify-between">
-                                    <span class="opacity-60">IP Address</span>
-                                    <span class="font-mono">@evt.User.IpAddress</span>
-                                </div>
-                            }
-                            @if (!string.IsNullOrEmpty(evt.User.Identifier))
-                            {
-                                <div class="flex justify-between">
-                                    <span class="opacity-60">ID</span>
-                                    <span class="font-mono">@evt.User.Identifier</span>
+                                    <span class="opacity-60">Environment</span>
+                                    <span>@evt.Environment</span>
                                 </div>
                             }
                         </div>
-                    </div>
-                </div>
-            }
-
-            <!-- Context -->
-            <div class="card bg-base-200">
-                <div class="card-body p-4">
-                    <h2 class="card-title text-base">Context</h2>
-                    <div class="space-y-1 text-sm">
-                        <div class="flex justify-between">
-                            <span class="opacity-60">Platform</span>
-                            <span>@evt.Platform</span>
-                        </div>
-                        @if (!string.IsNullOrEmpty(evt.Release))
-                        {
-                            <div class="flex justify-between">
-                                <span class="opacity-60">Release</span>
-                                <span class="font-mono">@evt.Release</span>
-                            </div>
-                        }
-                        @if (!string.IsNullOrEmpty(evt.Environment))
-                        {
-                            <div class="flex justify-between">
-                                <span class="opacity-60">Environment</span>
-                                <span>@evt.Environment</span>
-                            </div>
-                        }
                     </div>
                 </div>
             </div>

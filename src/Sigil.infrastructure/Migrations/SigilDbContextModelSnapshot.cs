@@ -219,7 +219,7 @@ namespace Sigil.infrastructure.Migrations
                     b.Property<int>("Platform")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("ProjectId")
+                    b.Property<int>("ProjectId")
                         .HasColumnType("integer");
 
                     b.Property<byte[]>("RawCompressedJson")
@@ -821,9 +821,11 @@ namespace Sigil.infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Sigil.Domain.Entities.Project", null)
+                    b.HasOne("Sigil.Domain.Entities.Project", "Project")
                         .WithMany("Events")
-                        .HasForeignKey("ProjectId");
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Sigil.Domain.Entities.Release", "Release")
                         .WithMany()
@@ -836,6 +838,8 @@ namespace Sigil.infrastructure.Migrations
                         .HasForeignKey("UserId");
 
                     b.Navigation("Issue");
+
+                    b.Navigation("Project");
 
                     b.Navigation("Release");
 

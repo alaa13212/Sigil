@@ -8,16 +8,14 @@ public interface IProjectService
 {
     // Entity access
     Task<Project?> GetProjectByIdAsync(int id);
-    Task<List<Project>> GetAllProjectsAsync();
-    Task<Project?> GetProjectByApiKeyAsync(string apiKey);
 
     // DTO access (UI/API)
     Task<List<ProjectResponse>> GetProjectListAsync();
     Task<ProjectDetailResponse?> GetProjectDetailAsync(int id);
-    Task<ProjectOverviewResponse?> GetProjectOverviewAsync(int id);
+    Task<List<ProjectOverviewResponse>> GetAllProjectOverviewsAsync();
 
     // Mutations
-    Task<Project> CreateProjectAsync(string name, Platform platform);
+    Task<Project> CreateProjectAsync(string name, Platform platform, int? teamId = null);
     Task<Project> UpdateProjectAsync(int projectId, string name);
     Task<bool> DeleteProjectAsync(int projectId);
     Task<string> RotateApiKeyAsync(int projectId);

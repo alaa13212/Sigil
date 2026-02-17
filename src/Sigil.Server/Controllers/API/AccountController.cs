@@ -33,10 +33,18 @@ public class AccountController(IAuthService authService) : SigilController
     }
 
     [Authorize]
-    [HttpPost("logout")]
+    [HttpPost("/logout")]
     public async Task<IActionResult> Logout()
     {
         await authService.LogoutAsync();
-        return Ok();
+        return Redirect("/login");
+    }
+
+    [Authorize]
+    [HttpGet("users")]
+    public async Task<IActionResult> GetAllUsers()
+    {
+        var users = await authService.GetAllUsersAsync();
+        return Ok(users);
     }
 }

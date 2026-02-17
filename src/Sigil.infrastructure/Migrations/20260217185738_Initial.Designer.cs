@@ -13,7 +13,7 @@ using Sigil.infrastructure.Persistence;
 namespace Sigil.infrastructure.Migrations
 {
     [DbContext(typeof(SigilDbContext))]
-    [Migration("20260216210457_Initial")]
+    [Migration("20260217185738_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -222,7 +222,7 @@ namespace Sigil.infrastructure.Migrations
                     b.Property<int>("Platform")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("ProjectId")
+                    b.Property<int>("ProjectId")
                         .HasColumnType("integer");
 
                     b.Property<byte[]>("RawCompressedJson")
@@ -289,6 +289,49 @@ namespace Sigil.infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("EventUsers");
+                });
+
+            modelBuilder.Entity("Sigil.Domain.Entities.FailedEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ErrorMessage")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ExceptionType")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RawEnvelope")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("Reprocessed")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("ReprocessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Stage")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "Reprocessed");
+
+                    b.ToTable("FailedEvents");
                 });
 
             modelBuilder.Entity("Sigil.Domain.Entities.Issue", b =>
@@ -781,9 +824,11 @@ namespace Sigil.infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Sigil.Domain.Entities.Project", null)
+                    b.HasOne("Sigil.Domain.Entities.Project", "Project")
                         .WithMany("Events")
-                        .HasForeignKey("ProjectId");
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Sigil.Domain.Entities.Release", "Release")
                         .WithMany()
@@ -797,9 +842,22 @@ namespace Sigil.infrastructure.Migrations
 
                     b.Navigation("Issue");
 
+                    b.Navigation("Project");
+
                     b.Navigation("Release");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Sigil.Domain.Entities.FailedEvent", b =>
+                {
+                    b.HasOne("Sigil.Domain.Entities.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("Sigil.Domain.Entities.Issue", b =>

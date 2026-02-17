@@ -1,0 +1,78 @@
+@page "/login"
+@using Sigil.Application.Models.Auth
+@layout SetupLayout
+@attribute [AllowAnonymous]
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Sign In — Sigil</PageTitle>
+
+<div class="flex min-h-screen items-center justify-center">
+    <div class="card w-96 bg-base-200 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title text-2xl justify-center mb-4">Sign in to Sigil</h2>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-error">@errorMessage</div>
+            }
+            <EditForm Model="Model" OnValidSubmit="@LoginUser" FormName="login-form" Enhance>
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Email</legend>
+                    <InputText type="email" class="input" placeholder="you@example.com" @bind-Value="Model!.Email"/>
+                </fieldset>
+                <fieldset class="fieldset mt-4">
+                    <legend class="fieldset-legend">Password</legend>
+                    <InputText type="password" class="input" placeholder="••••••••" @bind-Value="Model.Password"/>
+                </fieldset>
+                <div class="mt-6">
+                    <button class="btn btn-primary w-full" type="submit">
+                        Sign In
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+    [SupplyParameterFromForm] private LoginRequest? Model { get; set; }
+    private string? errorMessage;
+
+    protected override void OnInitialized()
+    {
+        Model ??= new LoginRequest();
+    }
+
+    private async Task LoginUser()
+    {
+        errorMessage = null;
+
+        if (Model == null || string.IsNullOrWhiteSpace(Model.Email) || string.IsNullOrWhiteSpace(Model.Password))
+        {
+            errorMessage = "Email and password are required.";
+            return;
+        }
+
+        try
+        {
+            var result = await AuthService.LoginAsync(Model);
+            if (result.Succeeded)
+            {
+                var target = !string.IsNullOrEmpty(ReturnUrl) && ReturnUrl.StartsWith('/') ? ReturnUrl : "/";
+                Navigation.NavigateTo(target, forceLoad: true);
+            }
+            else
+            {
+                errorMessage = result.Errors.FirstOrDefault() ?? "Invalid email or password.";
+            }
+        }
+        catch
+        {
+            errorMessage = "Unable to connect to the server.";
+        }
+    }
+}

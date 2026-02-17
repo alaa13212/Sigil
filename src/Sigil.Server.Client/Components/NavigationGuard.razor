@@ -1,0 +1,86 @@
+@inject NavigationManager Navigation
+@inject ISetupService SetupService
+@inject AuthenticationStateProvider AuthStateProvider
+@implements IDisposable
+
+@if (_ready)
+{
+    @ChildContent
+}
+else
+{
+    <div class="flex items-center justify-center min-h-screen">
+        <span class="loading loading-spinner loading-lg"></span>
+    </div>
+}
+
+@code {
+    private const string SetupWizardPath = "/setup";
+    private const string LoginPath = "/login";
+    
+    [Parameter] public RenderFragment ChildContent { get; set; } = null!;
+
+    private bool _ready;
+    private IDisposable? _locationHandler;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        _locationHandler = Navigation.RegisterLocationChangingHandler(OnLocationChanging);
+        await GuardInitialAsync();
+    }
+
+    private async ValueTask OnLocationChanging(LocationChangingContext context)
+    {
+        var redirect = await GetRedirectFor(context.TargetLocation);
+        if (redirect is not null)
+        {
+            context.PreventNavigation();
+            Navigation.NavigateTo(redirect);
+        }
+    }
+
+    private async Task GuardInitialAsync()
+    {
+        var redirect = await GetRedirectFor(Navigation.Uri);
+        if (redirect is not null)
+        {
+            Navigation.NavigateTo(redirect, forceLoad: true);
+            return;
+        }
+
+        _ready = true;
+    }
+
+    private async Task<string?> GetRedirectFor(string uri)
+    {
+        var path = "/" + Navigation.ToBaseRelativePath(uri);
+        if(path.StartsWith(SetupWizardPath, StringComparison.OrdinalIgnoreCase))
+            return null;
+        
+        try
+        {
+            var setupStatus = await SetupService.GetSetupStatusAsync();
+            if (!setupStatus.IsComplete)
+                return SetupWizardPath;
+        }
+        catch
+        {
+            return SetupWizardPath;
+        }
+        
+
+        if(path.StartsWith(LoginPath, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated != true)
+        {
+            var returnUrl = path == "/" ? "" : $"?returnUrl={Uri.EscapeDataString(path)}";
+            return $"{LoginPath}{returnUrl}";
+        }
+
+        return null;
+    }
+
+    public void Dispose() => _locationHandler?.Dispose();
+}

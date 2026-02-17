@@ -45,6 +45,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IIssueActivityService, IssueActivityService>();
         services.AddScoped<IAppConfigService, AppConfigService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<ITeamService, TeamService>();
         services.AddScoped<ISetupService, SetupService>();
         services.AddScoped<IFailedEventService, FailedEventService>();
 

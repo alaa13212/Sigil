@@ -1,0 +1,103 @@
+@page "/projects/create"
+@attribute [Authorize]
+@using Sigil.Application.Models.Teams
+@inject IProjectService ProjectService
+@inject ITeamService TeamService
+@inject NavigationManager Navigation
+
+<PageTitle>Create Project — Sigil</PageTitle>
+
+<div class="max-w-lg space-y-6">
+    <h1 class="text-2xl font-bold">Create Project</h1>
+
+    <div class="card bg-base-200">
+        <div class="card-body p-5 space-y-4">
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Project Name</legend>
+                <input type="text" class="input w-full" placeholder="My Project" @bind="name" />
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Platform</legend>
+                <select class="select w-full" @bind="platform">
+                    @foreach (var p in Enum.GetValues<Platform>())
+                    {
+                        <option value="@p">@p</option>
+                    }
+                </select>
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Team (optional)</legend>
+                <select class="select w-full" @bind="selectedTeamId">
+                    <option value="">No team</option>
+                    @if (teams is not null)
+                    {
+                        @foreach (var t in teams)
+                        {
+                            <option value="@t.Id">@t.Name</option>
+                        }
+                    }
+                </select>
+            </fieldset>
+
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <div class="alert alert-error text-sm">@error</div>
+            }
+
+            <button class="btn btn-primary w-full" @onclick="Submit" disabled="@creating">
+                @(creating ? "Creating..." : "Create Project")
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public int? TeamId { get; set; }
+
+    private List<TeamResponse>? teams;
+    private string name = "";
+    private Platform platform = Platform.CSharp;
+    private string selectedTeamId = "";
+    private bool creating;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            teams = await TeamService.GetTeamsAsync();
+        }
+        catch { }
+
+        if (TeamId.HasValue)
+            selectedTeamId = TeamId.Value.ToString();
+    }
+
+    private async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            error = "Project name is required.";
+            return;
+        }
+
+        creating = true;
+        error = null;
+        try
+        {
+            int? teamId = int.TryParse(selectedTeamId, out var tid) ? tid : null;
+            var project = await ProjectService.CreateProjectAsync(name, platform, teamId);
+            Navigation.NavigateTo($"/projects/{project.Id}/settings");
+        }
+        catch
+        {
+            error = "Failed to create project.";
+        }
+        finally
+        {
+            creating = false;
+        }
+    }
+}

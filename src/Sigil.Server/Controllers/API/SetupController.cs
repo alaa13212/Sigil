@@ -8,22 +8,24 @@ namespace Sigil.Server.Controllers.API;
 
 [ApiController]
 [Route("api/setup")]
-[AllowAnonymous]
 public class SetupController(ISetupService setupService) : SigilController
 {
     [HttpGet("status")]
+    [AllowAnonymous]
     public async Task<IActionResult> Status()
     {
         return Ok(await setupService.GetSetupStatusAsync());
     }
 
     [HttpGet("db-status")]
+    [Authorize(Policy = "SetupNotComplete")]
     public async Task<IActionResult> DbStatus()
     {
         return Ok(await setupService.GetDbStatusAsync());
     }
 
     [HttpPost("migrate")]
+    [Authorize(Policy = "SetupNotComplete")]
     public async Task<IActionResult> Migrate()
     {
         var migrated = await setupService.MigrateAsync();
@@ -31,6 +33,7 @@ public class SetupController(ISetupService setupService) : SigilController
     }
 
     [HttpPost("initialize")]
+    [Authorize(Policy = "SetupNotComplete")]
     public async Task<IActionResult> Initialize([FromBody] SetupRequest request)
     {
         var result = await setupService.InitializeAsync(request);

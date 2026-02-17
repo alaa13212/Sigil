@@ -1,4 +1,5 @@
 @page "/issues/{IssueId:int}"
+@attribute [Authorize]
 @using Sigil.Application.Models.Issues
 @using Sigil.Application.Models.Events
 @inject IIssueService IssueService
@@ -184,15 +185,17 @@ else
 
             <!-- Priority -->
             <div class="card bg-base-200">
-                <div class="card-body p-4 space-y-2">
-                    <span class="text-sm font-semibold">Priority</span>
-                    <select class="select select-bordered select-sm w-full" value="@issue.Priority"
-                            @onchange="OnPriorityChanged" disabled="@actionLoading">
-                        @foreach (var p in Enum.GetValues<Priority>())
-                        {
-                            <option value="@p">@p</option>
-                        }
-                    </select>
+                <div class="card-body p-4">
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Priority</legend>
+                        <select class="select select-sm w-full" value="@issue.Priority"
+                                @onchange="OnPriorityChanged" disabled="@actionLoading">
+                            @foreach (var p in Enum.GetValues<Priority>())
+                            {
+                                <option value="@p">@p</option>
+                            }
+                        </select>
+                    </fieldset>
                 </div>
             </div>
 

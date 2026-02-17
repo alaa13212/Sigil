@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Auth;
+using Sigil.Domain;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 
@@ -18,28 +19,33 @@ internal class SetupService(
 {
     public async Task<SetupStatus> GetSetupStatusAsync()
     {
-        var canConnect = await databaseMigrator.CanConnectAsync();
-        if (!canConnect)
+        try
+        {
+            var userCount = await dbContext.Users.CountAsync();
+            return new SetupStatus(IsComplete: userCount > 0, UserCount: userCount);
+        }
+        catch (Exception)
+        {
             return new SetupStatus(IsComplete: false, UserCount: 0);
-        var userCount = await dbContext.Users.CountAsync();
-        return new SetupStatus(IsComplete: userCount > 0, UserCount: userCount);
+        }
     }
 
     public async Task<DbStatusResponse> GetDbStatusAsync()
     {
         try
         {
-            var canConnect = await databaseMigrator.CanConnectAsync();
-            if (!canConnect)
-                return new DbStatusResponse(false, null, [], []);
-
+            var status = await databaseMigrator.CheckConnectionAsync();
             var pending = await databaseMigrator.GetPendingMigrationsAsync();
             var applied = await databaseMigrator.GetAppliedMigrationsAsync();
-            return new DbStatusResponse(true, null, pending, applied);
+            
+            if (status != DbConnectionStatus.Connected)
+                return new DbStatusResponse(status, null, pending, applied);
+
+            return new DbStatusResponse(DbConnectionStatus.Connected, null, pending, applied);
         }
         catch (Exception ex)
         {
-            return new DbStatusResponse(false, ex.Message, [], []);
+            return new DbStatusResponse(DbConnectionStatus.ConnectionFailed, ex.Message, [], []);
         }
     }
 
@@ -98,7 +104,7 @@ internal class SetupService(
         {
             Name = request.ProjectName,
             Platform = request.ProjectPlatform,
-            ApiKey = RandomNumberGenerator.GetHexString(32),
+            ApiKey = RandomNumberGenerator.GetHexString(32).ToLower(),
             TeamId = team.Id
         };
         dbContext.Projects.Add(project);
@@ -106,7 +112,7 @@ internal class SetupService(
 
         // Save host URL config if provided
         if (!string.IsNullOrWhiteSpace(request.HostUrl))
-            await appConfigService.SetAsync("host_url", request.HostUrl);
+            await appConfigService.SetAsync(AppConfigKeys.HostUrl, request.HostUrl);
 
         // Sign in the admin
         await signInManager.SignInAsync(admin, isPersistent: false);

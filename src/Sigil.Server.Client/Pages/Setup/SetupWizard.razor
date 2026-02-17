@@ -1,9 +1,12 @@
 @page "/setup"
+@attribute [Authorize(Policy = "SetupNotComplete")]
 @using Sigil.Application.Models.Auth
 @layout SetupLayout
 @inject ISetupService SetupService
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+
+@rendermode InteractiveWebAssembly
 
 <PageTitle>Setup — Sigil</PageTitle>
 
@@ -20,15 +23,7 @@
                 <li class="step @(step >= 6 ? "step-primary" : "")">Done</li>
             </ul>
 
-            @if (setupAlreadyComplete)
-            {
-                <div class="text-center space-y-4">
-                    <h2 class="text-xl font-bold">Setup Already Complete</h2>
-                    <p class="opacity-70">Sigil has already been configured.</p>
-                    <button class="btn btn-primary" @onclick="GoToDashboard">Go to Dashboard</button>
-                </div>
-            }
-            else if (step == 1)
+            @if (step == 1)
             {
                 <!-- Step 1: Welcome -->
                 <div class="text-center space-y-4">
@@ -50,31 +45,63 @@
                             <span>Checking database connection...</span>
                         </div>
                     }
-                    else if (!dbCanConnect)
+                    else if (dbStatus == DbConnectionStatus.ConnectionFailed)
                     {
                         <div class="alert alert-error">
-                            <span>Cannot connect to the database. Please check your connection string and ensure PostgreSQL is running.</span>
+                            <span>Cannot connect to the database server. Please check your connection string, credentials, and ensure PostgreSQL is running.</span>
                         </div>
                         @if (!string.IsNullOrEmpty(dbError))
                         {
                             <pre class="text-xs opacity-60 bg-base-200 p-2 rounded overflow-x-auto">@dbError</pre>
                         }
-                        <button class="btn btn-outline btn-sm" @onclick="CheckDatabase">Retry</button>
+                        <button class="btn btn-outline btn-sm" @onclick="() => CheckDatabase(true)">Retry</button>
+                    }
+                    else if (dbStatus == DbConnectionStatus.DatabaseNotFound)
+                    {
+                        <div class="alert alert-warning">
+                            <span>PostgreSQL server is reachable but the database does not exist yet. Apply migrations to create it.</span>
+                        </div>
+                        if (dbPending.Count > 0)
+                        {
+                            <div class="alert alert-info text-sm">
+                                <span>This will create or update database tables. Make sure you have a backup if this is an existing database.</span>
+                            </div>
+                            <div class="bg-base-200 rounded p-3 text-sm space-y-1">
+                                <div class="font-semibold mb-1">Pending migrations:</div>
+                                @foreach (var m in dbPending)
+                                {
+                                    <div class="font-mono text-xs"> - @m</div>
+                                }
+                            </div>
+                        }
+                        <div class="flex gap-2">
+                            <button class="btn btn-primary" @onclick="RunMigrations" disabled="@migrating">
+                                @if (migrating)
+                                {
+                                    <span class="loading loading-spinner loading-sm"></span>
+                                }
+                                Create Database &amp; Apply Migrations
+                            </button>
+                        </div>
+                        @if (!string.IsNullOrEmpty(migrateError))
+                        {
+                            <div class="alert alert-error text-sm">@migrateError</div>
+                        }
                     }
                     else if (dbPending.Count > 0)
                     {
                         <div class="alert alert-warning">
                             <span>Database connected but @dbPending.Count migration(s) need to be applied.</span>
                         </div>
+                        <div class="alert alert-info text-sm">
+                            <span>This will create or update database tables. Make sure you have a backup if this is an existing database.</span>
+                        </div>
                         <div class="bg-base-200 rounded p-3 text-sm space-y-1">
                             <div class="font-semibold mb-1">Pending migrations:</div>
                             @foreach (var m in dbPending)
                             {
-                                <div class="font-mono text-xs">@m</div>
+                                <div class="font-mono text-xs"> - @m</div>
                             }
-                        </div>
-                        <div class="alert alert-info text-sm">
-                            <span>This will create or update database tables. Make sure you have a backup if this is an existing database.</span>
                         </div>
                         <div class="flex gap-2">
                             <button class="btn btn-primary" @onclick="RunMigrations" disabled="@migrating">
@@ -108,12 +135,10 @@
                     <h2 class="text-xl font-bold">Configuration</h2>
                     <p class="text-sm opacity-70">Set the public URL where Sigil will be accessible. This is used to generate DSN strings for your SDKs.</p>
 
-                    <div class="form-control">
-                        <label class="label"><span class="label-text">Host URL</span></label>
-                        <input type="url" class="input input-bordered" placeholder="https://sigil.example.com"
-                               @bind="hostUrl" />
-                        <label class="label"><span class="label-text-alt opacity-60">Leave empty to auto-detect from the current URL</span></label>
-                    </div>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Host URL</legend>
+                        <input type="url" class="input w-full" placeholder="https://sigil.example.com" @bind="hostUrl" />
+                    </fieldset>
 
                     <div class="flex justify-between">
                         <button class="btn btn-ghost" @onclick="() => GoTo(2)">Back</button>
@@ -127,25 +152,25 @@
                 <div class="space-y-4">
                     <h2 class="text-xl font-bold">Create Admin Account</h2>
 
-                    <div class="form-control">
-                        <label class="label"><span class="label-text">Display Name</span></label>
-                        <input type="text" class="input input-bordered" placeholder="Admin" @bind="adminDisplayName" />
-                    </div>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Display Name</legend>
+                        <input type="text" class="input" placeholder="Admin" @bind="adminDisplayName" />
+                    </fieldset>
 
-                    <div class="form-control">
-                        <label class="label"><span class="label-text">Email</span></label>
-                        <input type="email" class="input input-bordered" placeholder="admin@example.com" @bind="adminEmail" />
-                    </div>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Email</legend>
+                        <input type="email" class="input" placeholder="admin@example.com" @bind="adminEmail" />
+                    </fieldset>
 
-                    <div class="form-control">
-                        <label class="label"><span class="label-text">Password</span></label>
-                        <input type="password" class="input input-bordered" placeholder="Min 8 characters" @bind="adminPassword" />
-                    </div>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Password</legend>
+                        <input type="password" class="input" placeholder="Min 8 characters" @bind="adminPassword" />
+                    </fieldset>
 
-                    <div class="form-control">
-                        <label class="label"><span class="label-text">Confirm Password</span></label>
-                        <input type="password" class="input input-bordered" @bind="adminPasswordConfirm" />
-                    </div>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Confirm Password</legend>
+                        <input type="password" class="input" @bind="adminPasswordConfirm" />
+                    </fieldset>
 
                     @if (!string.IsNullOrEmpty(adminError))
                     {
@@ -164,25 +189,25 @@
                 <div class="space-y-4">
                     <h2 class="text-xl font-bold">Create Team & Project</h2>
 
-                    <div class="form-control">
-                        <label class="label"><span class="label-text">Team Name</span></label>
-                        <input type="text" class="input input-bordered" @bind="teamName" />
-                    </div>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Team Name</legend>
+                        <input type="text" class="input" @bind="teamName" />
+                    </fieldset>
 
-                    <div class="form-control">
-                        <label class="label"><span class="label-text">Project Name</span></label>
-                        <input type="text" class="input input-bordered" placeholder="My App" @bind="projectName" />
-                    </div>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Project Name</legend>
+                        <input type="text" class="input" placeholder="My App" @bind="projectName" />
+                    </fieldset>
 
-                    <div class="form-control">
-                        <label class="label"><span class="label-text">Platform</span></label>
-                        <select class="select select-bordered w-full" @bind="projectPlatform">
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Platform</legend>
+                        <select class="select w-full" @bind="projectPlatform">
                             @foreach (var p in popularPlatforms)
                             {
                                 <option value="@p">@p</option>
                             }
                         </select>
-                    </div>
+                    </fieldset>
 
                     @if (setupErrors.Count > 0)
                     {
@@ -219,14 +244,14 @@
 
                     @if (!string.IsNullOrEmpty(dsn))
                     {
-                        <div class="form-control">
-                            <label class="label"><span class="label-text font-semibold">Your DSN</span></label>
+                        <fieldset class="fieldset">
+                            <legend class="fieldset-legend">Your DSN</legend>
                             <div class="join w-full">
-                                <input type="text" class="input input-bordered join-item flex-1 font-mono text-sm" value="@dsn" readonly />
+                                <input type="text" class="input join-item flex-1 font-mono text-sm" value="@dsn" readonly />
                                 <button class="btn join-item" @onclick="CopyDsn">@(copied ? "Copied!" : "Copy")</button>
                             </div>
-                            <label class="label"><span class="label-text-alt opacity-60">Use this in your Sentry SDK configuration</span></label>
-                        </div>
+                            <p class="label">Use this in your Sentry SDK configuration</p>
+                        </fieldset>
 
                         <div class="collapse collapse-arrow bg-base-200">
                             <input type="checkbox" />
@@ -263,11 +288,11 @@
 
 @code {
     private int step = 1;
-    private bool setupAlreadyComplete;
 
     // Step 2: Database
+    [PersistentState] public DbStatusResponse? DbSetupResponse { get; set; }
     private bool dbLoading = true;
-    private bool dbCanConnect;
+    private DbConnectionStatus dbStatus = DbConnectionStatus.ConnectionFailed;
     private string? dbError;
     private IReadOnlyList<string> dbPending = [];
     private IReadOnlyList<string> dbApplied = [];
@@ -306,28 +331,30 @@
     {
         try
         {
-            var status = await SetupService.GetSetupStatusAsync();
+            SetupStatus status = await SetupService.GetSetupStatusAsync();
             if (status.IsComplete)
             {
-                setupAlreadyComplete = true;
+                Navigation.NavigateTo("/", forceLoad: true);
                 return;
             }
+
+            hostUrl = Navigation.BaseUri.TrimEnd('/');
         }
         catch { }
 
-        await CheckDatabase();
+        await CheckDatabase(false);
     }
 
     private void GoTo(int target)
     {
         step = target;
-        if (target == 2 && !dbLoading && !dbCanConnect)
-            _ = CheckDatabase();
+        if (target == 2 && !dbLoading && dbStatus != DbConnectionStatus.Connected)
+            _ = CheckDatabase(true);
     }
 
     private void GoToDashboard() => Navigation.NavigateTo("/", forceLoad: true);
 
-    private async Task CheckDatabase()
+    private async Task CheckDatabase(bool force)
     {
         dbLoading = true;
         dbError = null;
@@ -335,21 +362,25 @@
 
         try
         {
-            var result = await SetupService.GetDbStatusAsync();
-            dbCanConnect = result.CanConnect;
-            dbError = result.Error;
-            dbPending = result.Pending;
-            dbApplied = result.Applied;
+            if(DbSetupResponse == null || force)
+                DbSetupResponse = await SetupService.GetDbStatusAsync();
+            
+            dbStatus = DbSetupResponse.Status;
+            dbError = DbSetupResponse.Error;
+            dbPending = DbSetupResponse.Pending;
+            dbApplied = DbSetupResponse.Applied;
         }
         catch (Exception ex)
         {
-            dbCanConnect = false;
+            dbStatus = DbConnectionStatus.ConnectionFailed;
             dbError = ex.Message;
         }
         finally
         {
             dbLoading = false;
         }
+        
+        StateHasChanged();
     }
 
     private async Task RunMigrations()
@@ -363,7 +394,7 @@
             var success = await SetupService.MigrateAsync();
             if (success)
             {
-                await CheckDatabase();
+                await CheckDatabase(true);
             }
             else
             {
@@ -433,7 +464,8 @@
             if (result.Succeeded)
             {
                 var baseUrl = host ?? Navigation.BaseUri.TrimEnd('/');
-                dsn = $"{baseUrl}/api/{result.ProjectId}?key={result.ProjectApiKey}";
+                var uri = new Uri(baseUrl);
+                dsn = $"{uri.Scheme}://{result.ProjectApiKey}@{uri.Authority}/{result.ProjectId}";
                 step = 6;
             }
             else

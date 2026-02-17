@@ -1,4 +1,5 @@
 @page "/projects/{ProjectId:int}/issues"
+@attribute [Authorize]
 @using Sigil.Application.Models.Issues
 @inject IIssueService IssueService
 @inject NavigationManager Navigation
@@ -20,34 +21,41 @@
     <!-- Filters -->
     <div class="flex flex-wrap gap-2 items-center">
         <!-- Status tabs -->
-        <div class="join">
+        <form class="filter">
+            <input class="btn btn-sm btn-square" type="reset" value="x" @onclick="() => SetStatusFilter(null)"/>
             @foreach (var s in statusOptions)
             {
-                var isActive = s.Value == statusFilter;
-                <button class="join-item btn btn-sm @(isActive ? "btn-active" : "")"
-                        @onclick="() => SetStatusFilter(s.Value)">@s.Label</button>
+                <input class="btn btn-sm" type="radio" name="status" @onclick="() => SetStatusFilter(s.Value)" aria-label="@s.Label"/>
             }
-        </div>
+        </form>
 
         <!-- Severity filter -->
-        <select class="select select-bordered select-sm" value="@severityFilter" @onchange="OnSeverityChanged">
-            <option value="">All Severities</option>
-            @foreach (var sev in Enum.GetValues<Severity>())
-            {
-                <option value="@sev">@sev</option>
-            }
-        </select>
+        
+        <label class="select select-sm w-48">
+            <span class="label">Severity</span>
+            <select value="@severityFilter" @onchange="OnSeverityChanged">
+                <option value="">All</option>
+                @foreach (var sev in Enum.GetValues<Severity>())
+                {
+                    <option value="@sev">@sev</option>
+                }
+            </select>
+        </label>
 
         <!-- Sort -->
-        <select class="select select-bordered select-sm" value="@sortBy" @onchange="OnSortChanged">
-            @foreach (var opt in sortOptions)
-            {
-                <option value="@opt.Value">@opt.Label</option>
-            }
-        </select>
+        <label class="select select-sm w-48">
+            <span class="label">Sort</span>
+            
+            <select value="@sortBy" @onchange="OnSortChanged">
+                @foreach (var opt in sortOptions)
+                {
+                    <option value="@opt.Value">@opt.Label</option>
+                }
+            </select>
+        </label>
 
         <!-- Search -->
-        <input type="text" placeholder="Search issues..." class="input input-bordered input-sm w-48"
+        <input type="text" placeholder="Search issues..." class="input input-sm w-48"
                @bind="searchText" @bind:event="oninput" @onkeydown="OnSearchKeyDown" />
     </div>
 
@@ -119,7 +127,6 @@
 
     private static readonly (string Label, IssueStatus? Value)[] statusOptions =
     [
-        ("All", null),
         ("Open", IssueStatus.Open),
         ("Resolved", IssueStatus.Resolved),
         ("Ignored", IssueStatus.Ignored),
