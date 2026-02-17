@@ -5,6 +5,11 @@ riderModule.iml
 /_ReSharper.Caches/
 .idea/.idea.Sigil/.idea/
 
+# Auto Generated
+/**/wwwroot/css/site.css
+/**/Styles/daisyui*.mjs
+
+# Claude Code
 .claude
 claude-plans/
 CLAUDE.md
