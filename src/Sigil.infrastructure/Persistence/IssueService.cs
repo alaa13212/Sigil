@@ -9,59 +9,67 @@ using Sigil.Domain.Ingestion;
 
 namespace Sigil.infrastructure.Persistence;
 
-internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, IDateTime dateTime) : IIssueService
+internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, IDateTime dateTime, IIssueCache issueCache) : IIssueService
 {
     public async Task<List<Issue>> BulkGetOrCreateIssuesAsync(Project project, IEnumerable<IGrouping<string, ParsedEvent>> eventsByFingerprint)
     {
         List<IGrouping<string, ParsedEvent>> groupings = eventsByFingerprint.ToList();
-        List<string> fingerprints = groupings.Select(g => g.Key).ToList();
 
-        List<Issue> results = [];
+        var (results, misses) = issueCache.TryGetMany(groupings, g =>
+        {
+            issueCache.TryGet(project.Id, g.Key, out Issue? cached);
+            if (cached is not null) dbContext.Attach(cached);
+            return cached;
+        });
 
-        // Get existing issues
-        results.AddRange(
-            await dbContext.Issues
+        if (misses.Count > 0)
+        {
+            List<string> missFingerprints = misses.Select(g => g.Key).ToList();
+
+            List<Issue> fromDb = await dbContext.Issues
                 .AsTracking()
                 .Include(i => i.Tags)
                     .ThenInclude(it => it.TagValue)
                     .ThenInclude(tv => tv!.TagKey)
-                .Where(i => i.ProjectId == project.Id && fingerprints.Contains(i.Fingerprint))
-                .ToListAsync());
+                .Where(i => i.ProjectId == project.Id && missFingerprints.Contains(i.Fingerprint))
+                .ToListAsync();
 
-        // Find fingerprints that need new issues
-        List<string> existingFingerprints = results.Select(i => i.Fingerprint).ToList();
-        List<string> newFingerprints = fingerprints.Except(existingFingerprints).ToList();
+            List<string> existingFingerprints = fromDb.Select(i => i.Fingerprint).ToList();
+            List<string> newFingerprints = missFingerprints.Except(existingFingerprints).ToList();
 
-        if (newFingerprints.Any())
-        {
-            // Create new issues for missing fingerprints
-            var newIssues = new List<Issue>();
-            foreach (var fingerprint in newFingerprints)
+            if (newFingerprints.Any())
             {
-                var eventsForFingerprint = groupings.First(g => g.Key == fingerprint);
-                var representativeEvent = eventRanker.GetMostRelevantEvent(eventsForFingerprint);
-
-                var issue = new Issue
+                var newIssues = new List<Issue>();
+                foreach (var fingerprint in newFingerprints)
                 {
-                    ProjectId = project.Id,
-                    Title = representativeEvent.NormalizedMessage ?? "Unknown Error",
-                    ExceptionType = representativeEvent.ExceptionType,
-                    Level = representativeEvent.Level,
-                    Priority = Priority.Low,
-                    Status = IssueStatus.Open,
-                    Fingerprint = fingerprint,
-                    FirstSeen = dateTime.UtcNow,
-                    LastSeen = dateTime.UtcNow,
-                    OccurrenceCount = 0,
-                    Culprit = representativeEvent.Culprit,
-                };
+                    var eventsForFingerprint = misses.First(g => g.Key == fingerprint);
+                    var representativeEvent = eventRanker.GetMostRelevantEvent(eventsForFingerprint);
 
-                newIssues.Add(issue);
+                    newIssues.Add(new Issue
+                    {
+                        ProjectId = project.Id,
+                        Title = representativeEvent.NormalizedMessage ?? "Unknown Error",
+                        ExceptionType = representativeEvent.ExceptionType,
+                        Level = representativeEvent.Level,
+                        Priority = Priority.Low,
+                        Status = IssueStatus.Open,
+                        Fingerprint = fingerprint,
+                        FirstSeen = representativeEvent.Timestamp,
+                        LastSeen = representativeEvent.Timestamp,
+                        OccurrenceCount = 0,
+                        Culprit = representativeEvent.Culprit,
+                    });
+                }
+
+                dbContext.Issues.AddRange(newIssues);
+                await dbContext.SaveChangesAsync();
+                fromDb.AddRange(newIssues);
             }
 
-            dbContext.Issues.AddRange(newIssues);
-            await dbContext.SaveChangesAsync();
-            results.AddRange(newIssues);
+            foreach (Issue issue in fromDb)
+                issueCache.Set(issue);
+
+            results.AddRange(fromDb);
         }
 
         return results;
@@ -73,7 +81,10 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
 
         if (includeTags)
         {
-            query = query.Include(i => i.Tags)
+            query = query
+                .Include(i => i.SuggestedEvent!.Release)
+                .Include(i => i.SuggestedEvent!.User)
+                .Include(i => i.Tags)
                 .ThenInclude(it => it.TagValue)
                 .ThenInclude(tv => tv!.TagKey);
         }
@@ -151,6 +162,7 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
         }
 
         await dbContext.SaveChangesAsync();
+        issueCache.InvalidateAll();
         return issue;
     }
 
@@ -159,6 +171,7 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
         var issue = await dbContext.Issues.AsTracking().FirstAsync(i => i.Id == issueId);
         issue.AssignedToId = assignToUserId;
         await dbContext.SaveChangesAsync();
+        issueCache.InvalidateAll();
         return issue;
     }
 
@@ -167,12 +180,16 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
         var issue = await dbContext.Issues.AsTracking().FirstAsync(i => i.Id == issueId);
         issue.Priority = priority;
         await dbContext.SaveChangesAsync();
+        issueCache.InvalidateAll();
         return issue;
     }
 
     public async Task<bool> DeleteIssueAsync(int issueId)
     {
-        return await dbContext.Issues.Where(i => i.Id == issueId).ExecuteDeleteAsync() > 0;
+        var deleted = await dbContext.Issues.Where(i => i.Id == issueId).ExecuteDeleteAsync() > 0;
+        if (deleted)
+            issueCache.InvalidateAll();
+        return deleted;
     }
 
     public async Task<PagedResponse<IssueSummary>> GetIssueSummariesAsync(int projectId, IssueQueryParams query)
@@ -193,9 +210,19 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
         var issue = await GetIssueByIdAsync(issueId, includeTags: true);
         if (issue is null) return null;
 
-        var tags = issue.Tags
+        var tagGroups = issue.Tags
             .Where(t => t.TagValue?.TagKey != null)
-            .Select(t => new TagSummary(t.TagValue!.TagKey!.Key, t.TagValue.Value))
+            .GroupBy(t => t.TagValue!.TagKey!.Key)
+            .Select(g =>
+            {
+                int totalCount = g.Sum(t => t.OccurrenceCount);
+                var values = g
+                    .OrderByDescending(t => t.OccurrenceCount)
+                    .Select(t => new IssueTagValue(t.TagValue!.Value, t.OccurrenceCount))
+                    .ToList();
+                return new IssueTagGroup(g.Key, values, totalCount);
+            })
+            .OrderBy(g => g.Key)
             .ToList();
 
         EventSummary? suggestedEvent = null;
@@ -207,12 +234,25 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
                 e.Timestamp, e.Release?.RawName, e.User?.Identifier);
         }
 
+        // Query first and last release names for this issue
+        var releaseInfo = await dbContext.Events
+            .Where(e => e.IssueId == issueId)
+            .Select(e => new { e.Timestamp, ReleaseName = e.Release!.RawName })
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                FirstRelease = g.OrderBy(e => e.Timestamp).Select(e => e.ReleaseName).FirstOrDefault(),
+                LastRelease = g.OrderByDescending(e => e.Timestamp).Select(e => e.ReleaseName).FirstOrDefault()
+            })
+            .FirstOrDefaultAsync();
+
         return new IssueDetailResponse(
-            issue.Id, issue.Title, issue.ExceptionType, issue.Culprit,
+            issue.Id, issue.ProjectId, issue.Title, issue.ExceptionType, issue.Culprit,
             issue.Fingerprint, issue.Status, issue.Priority, issue.Level,
             issue.FirstSeen, issue.LastSeen, issue.OccurrenceCount,
             issue.AssignedTo?.DisplayName, issue.AssignedToId,
             issue.ResolvedBy?.DisplayName, issue.ResolvedAt,
-            tags, suggestedEvent);
+            tagGroups, suggestedEvent,
+            releaseInfo?.FirstRelease, releaseInfo?.LastRelease);
     }
 }

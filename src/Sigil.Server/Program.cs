@@ -2,10 +2,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Sigil.Application.DependencyInjection;
-using Sigil.Application.Services;
 using Sigil.Domain.DependencyInjection;
-using Sigil.Domain.Interfaces;
 using Sigil.infrastructure.DependencyInjection;
 using Sigil.Server.Auth;
 using Sigil.Server.Components;
@@ -31,7 +30,6 @@ builder.Services.AddSingleton(new JsonSerializerOptions(JsonSerializerDefaults.W
 });
 
 // Core services
-builder.Services.AddScoped<IIngestionService, IngestionService>();
 builder.Services.AddDomain();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -46,6 +44,17 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.SlidingExpiration = true;
     options.LoginPath = "/login";
     options.LogoutPath = "/logout";
+    options.Events.OnValidatePrincipal = async context =>
+    {
+        try
+        {
+            await SecurityStampValidator.ValidatePrincipalAsync(context);
+        }
+        catch
+        {
+            context.RejectPrincipal();
+        }
+    };
     options.Events.OnRedirectToLogin = context =>
     {
         if (context.Request.Path.StartsWithSegments("/api"))

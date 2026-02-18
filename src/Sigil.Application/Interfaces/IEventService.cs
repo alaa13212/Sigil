@@ -22,4 +22,5 @@ public interface IEventService
     Task<PagedResponse<EventSummary>> GetEventSummariesAsync(int issueId, int page = 1, int pageSize = 50);
     Task<EventDetailResponse?> GetEventDetailAsync(long eventId);
     Task<List<BreadcrumbResponse>> GetBreadcrumbsAsync(long eventId);
+    Task<EventNavigationResponse> GetAdjacentEventIdsAsync(int issueId, long currentEventId);
 }

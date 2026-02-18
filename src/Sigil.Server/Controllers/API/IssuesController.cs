@@ -13,7 +13,8 @@ namespace Sigil.Server.Controllers.API;
 [Authorize]
 public class IssuesController(
     IIssueService issueService,
-    IIssueActivityService activityService) : SigilController
+    IIssueActivityService activityService,
+    IProjectService projectService) : SigilController
 {
     [HttpGet("api/projects/{projectId:int}/issues")]
     public async Task<IActionResult> List(
@@ -28,6 +29,9 @@ public class IssuesController(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50)
     {
+        if (await projectService.GetProjectByIdAsync(projectId) is null)
+            return NotFound();
+
         var query = new IssueQueryParams
         {
             Status = status,

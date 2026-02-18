@@ -20,8 +20,8 @@ public class EnvelopeAuthorizeAttribute : Attribute, IAsyncAuthorizationFilter
             return;
         }
 
-        IProjectCache projectCache = context.HttpContext.RequestServices.GetRequiredService<IProjectCache>();
-        Project? project = await projectCache.GetProjectById(projectId);
+        IProjectService projectService = context.HttpContext.RequestServices.GetRequiredService<IProjectService>();
+        Project? project = await projectService.GetProjectByIdAsync(projectId);
         if (project == null)
         {
             context.Result = new UnauthorizedResult();

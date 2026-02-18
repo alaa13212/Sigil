@@ -1,8 +1,9 @@
 @page "/projects/{ProjectId:int}/settings"
 @attribute [Authorize]
+@rendermode InteractiveWebAssembly
 @using Sigil.Application.Models.Projects
 @inject IProjectService ProjectService
-@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
 
 <PageTitle>Project Settings — Sigil</PageTitle>
 
@@ -12,7 +13,7 @@
         <span class="loading loading-spinner loading-lg"></span>
     </div>
 }
-else if (project is null)
+else if (Project is null)
 {
     <EmptyState Title="Project not found" />
 }
@@ -36,7 +37,7 @@ else
                 </fieldset>
                 <fieldset class="fieldset">
                     <legend class="fieldset-legend">Platform</legend>
-                    <input type="text" class="input" value="@project.Platform" disabled />
+                    <input type="text" class="input" value="@Project.Platform" disabled />
                 </fieldset>
             </div>
         </div>
@@ -50,19 +51,19 @@ else
                     <legend class="fieldset-legend">API Key</legend>
                     <div class="join w-full">
                         <input type="text" class="input join-item flex-1 font-mono text-sm"
-                               value="@project.ApiKey" readonly />
-                        <button class="btn join-item btn-ghost" @onclick="() => CopyToClipboard(project.ApiKey)">Copy</button>
+                               value="@Project.ApiKey" readonly />
+                        <CopyButton Text="@Project.ApiKey" Class="btn join-item btn-ghost" />
                     </div>
                 </fieldset>
 
-                @if (!string.IsNullOrEmpty(project.Dsn))
+                @if (!string.IsNullOrEmpty(Project.Dsn))
                 {
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">DSN</legend>
                         <div class="join w-full">
                             <input type="text" class="input join-item flex-1 font-mono text-sm"
-                                   value="@project.Dsn" readonly />
-                            <button class="btn join-item btn-ghost" @onclick="() => CopyToClipboard(project.Dsn)">Copy</button>
+                                   value="@Project.Dsn" readonly />
+                            <CopyButton Text="@Project.Dsn" Class="btn join-item btn-ghost" />
                         </div>
                     </fieldset>
                 }
@@ -92,15 +93,15 @@ else
                 <div class="space-y-3 text-sm">
                     <div>
                         <div class="font-semibold opacity-70">C# / .NET</div>
-                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>SentrySdk.Init(o =&gt; o.Dsn = "@(project.Dsn)");</code></pre>
+                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>SentrySdk.Init(o =&gt; o.Dsn = "@(Project.Dsn)");</code></pre>
                     </div>
                     <div>
                         <div class="font-semibold opacity-70">JavaScript</div>
-                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>Sentry.init({ dsn: "@(project.Dsn)" });</code></pre>
+                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>Sentry.init({ dsn: "@(Project.Dsn)" });</code></pre>
                     </div>
                     <div>
                         <div class="font-semibold opacity-70">Python</div>
-                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>sentry_sdk.init(dsn="@(project.Dsn)")</code></pre>
+                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>sentry_sdk.init(dsn="@(Project.Dsn)")</code></pre>
                     </div>
                 </div>
             </div>
@@ -111,7 +112,7 @@ else
 @code {
     [Parameter] public int ProjectId { get; set; }
 
-    private ProjectDetailResponse? project;
+    [PersistentState] public ProjectDetailResponse? Project { get; set; }
     private string editName = "";
     private bool loading = true;
     private bool saving;
@@ -120,6 +121,14 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
+        if (Project is not null)
+        {
+            // Restored from persistent state after SSR prerender — skip the fetch
+            editName = Project.Name;
+            loading = false;
+            return;
+        }
+
         loading = true;
         await LoadProject();
         loading = false;
@@ -129,13 +138,13 @@ else
     {
         try
         {
-            project = await ProjectService.GetProjectDetailAsync(ProjectId);
-            if (project is not null)
-                editName = project.Name;
+            Project = await ProjectService.GetProjectDetailAsync(ProjectId);
+            if (Project is not null)
+                editName = Project.Name;
         }
         catch
         {
-            project = null;
+            Project = null;
         }
     }
 
@@ -150,6 +159,10 @@ else
             await ProjectService.UpdateProjectAsync(ProjectId, editName);
             await LoadProject();
             actionMessage = "Project name updated.";
+            StateHasChanged();
+            
+            await Task.Delay(1000);
+            NavigationManager.Refresh(true);
         }
         catch
         {
@@ -181,12 +194,5 @@ else
         }
     }
 
-    private async Task CopyToClipboard(string text)
-    {
-        try
-        {
-            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
-        }
-        catch { }
-    }
+
 }

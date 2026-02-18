@@ -3,38 +3,13 @@ using Sigil.Domain.Entities;
 
 namespace Sigil.infrastructure.Cache;
 
-internal class ReleaseCache(ICacheManager cacheManager, IReleaseService releaseService) : IReleaseCache
+internal class ReleaseCache(ICacheManager cacheManager) : IReleaseCache
 {
     private string Category => this.Category();
 
-    public async Task<List<Release>> BulkGetOrCreateReleaseAsync(int projectId, IEnumerable<string> rawValues)
-    {
-        List<Release> releases = [];
-        List<string> newReleases = [];
-        
-        foreach (string rawValue in rawValues)
-        {
-            if (cacheManager.TryGet(Category, $"{projectId}:{rawValue}", out Release? release))
-            {
-                releases.Add(release);
-            }
-            else
-            {
-                newReleases.Add(rawValue);
-            }
-        }
+    public bool TryGet(int projectId, string rawName, out Release? release) =>
+        cacheManager.TryGet(Category, $"{projectId}:{rawName}", out release);
 
-        if(newReleases.Count > 0)
-        {
-            List<Release> createdReleases = await releaseService.BulkGetOrCreateReleasesAsync(projectId, newReleases);
-            releases.AddRange(createdReleases);
-            
-            foreach (Release release in createdReleases) 
-                cacheManager.Set(Category, $"{projectId}:{release.RawName}", release);
-        }
-
-
-        
-        return releases;
-    }
+    public void Set(int projectId, Release release) =>
+        cacheManager.Set(Category, $"{projectId}:{release.RawName}", release);
 }

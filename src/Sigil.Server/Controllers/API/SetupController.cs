@@ -39,4 +39,27 @@ public class SetupController(ISetupService setupService) : SigilController
         var result = await setupService.InitializeAsync(request);
         return result.Succeeded ? Ok(result) : BadRequest(new { errors = result.Errors });
     }
+
+    [HttpGet("maintenance/has-pending")]
+    [Authorize]
+    public async Task<IActionResult> HasPendingMigrations()
+    {
+        var hasPending = await setupService.HasPendingMigrationsAsync();
+        return Ok(new { hasPending });
+    }
+
+    [HttpGet("maintenance/db-status")]
+    [Authorize]
+    public async Task<IActionResult> MaintenanceDbStatus()
+    {
+        return Ok(await setupService.GetMaintenanceDbStatusAsync());
+    }
+
+    [HttpPost("maintenance/migrate")]
+    [Authorize]
+    public async Task<IActionResult> MaintenanceMigrate()
+    {
+        await setupService.ApplyPendingMigrationsAsync();
+        return Ok(new { success = true });
+    }
 }

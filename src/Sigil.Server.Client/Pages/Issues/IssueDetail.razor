@@ -5,7 +5,7 @@
 @inject IIssueService IssueService
 @inject IEventService EventService
 @inject IIssueActivityService ActivityService
-@inject NavigationManager Navigation
+@rendermode InteractiveWebAssembly
 
 <PageTitle>@(issue?.Title ?? "Issue") — Sigil</PageTitle>
 
@@ -21,7 +21,7 @@ else if (issue is null)
 }
 else
 {
-    <PageBreadcrumb Items="@([ new PageBreadcrumb.BreadcrumbItem("Projects", "/"), new PageBreadcrumb.BreadcrumbItem("Issues", $"/projects/{issue.Id}/issues"), new PageBreadcrumb.BreadcrumbItem(issue.Title) ])" />
+    <PageBreadcrumb Items="@([ new PageBreadcrumb.BreadcrumbItem("Projects", "/"), new PageBreadcrumb.BreadcrumbItem("Issues", $"/projects/{issue.ProjectId}/issues"), new PageBreadcrumb.BreadcrumbItem(issue.Title) ])" />
 
     <div class="flex flex-col lg:flex-row gap-6">
         <!-- Left column: main content -->
@@ -39,46 +39,180 @@ else
                 }
             </div>
 
-            <!-- Suggested event stack trace -->
-            @if (issue.SuggestedEvent is not null && eventDetail is not null && eventDetail.StackFrames.Count > 0)
-            {
-                <div class="collapse collapse-open bg-base-200 rounded-lg">
-                    <div class="collapse-title text-sm font-semibold">Stack Trace</div>
-                    <div class="collapse-content">
-                        <StackTraceViewer Frames="eventDetail.StackFrames" />
-                    </div>
-                </div>
-            }
-
             <!-- Tabs -->
             <div role="tablist" class="tabs tabs-bordered">
-                <button role="tab" class="tab @(activeTab == Tab.Events ? "tab-active" : "")"
-                        @onclick="() => SwitchTab(Tab.Events)">
-                    Events
-                </button>
-                <button role="tab" class="tab @(activeTab == Tab.Activity ? "tab-active" : "")"
-                        @onclick="() => SwitchTab(Tab.Activity)">
-                    Activity
-                </button>
+                @if (issue.SuggestedEvent is not null && eventDetail is not null)
+                {
+                    <a role="tab" href="/issues/@IssueId?tab=event"
+                       class="tab @(activeTab == Tab.SuggestedEvent ? "tab-active" : "")">Event</a>
+                }
+                <a role="tab" href="/issues/@IssueId?tab=events"
+                   class="tab @(activeTab == Tab.Events ? "tab-active" : "")">Events</a>
+                <a role="tab" href="/issues/@IssueId?tab=activity"
+                   class="tab @(activeTab == Tab.Activity ? "tab-active" : "")">Activity</a>
             </div>
+
+            <!-- Suggested Event tab -->
+            @if (activeTab == Tab.SuggestedEvent && eventDetail is not null)
+            {
+                <div class="space-y-4">
+                    <!-- Navigation bar: Prev/Next + View full event -->
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <button class="btn btn-ghost btn-sm" disabled="@(navigation?.PreviousEventId is null || eventNavigating)"
+                                    @onclick="() => NavigateEvent(navigation!.PreviousEventId!.Value)">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+                                Older
+                            </button>
+                            <button class="btn btn-ghost btn-sm" disabled="@(navigation?.NextEventId is null || eventNavigating)"
+                                    @onclick="() => NavigateEvent(navigation!.NextEventId!.Value)">
+                                Newer
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                            </button>
+                        </div>
+                        <a href="/events/@eventDetail.Id" class="btn btn-ghost btn-sm">
+                            View full event
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                        </a>
+                    </div>
+
+                    <div class="flex items-center gap-3 text-sm opacity-60">
+                        <SeverityBadge Level="eventDetail.Level" />
+                        <RelativeTime Value="eventDetail.Timestamp" />
+                        <span>·</span>
+                        <span>@eventDetail.Timestamp.ToString("yyyy-MM-dd HH:mm:ss UTC")</span>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(eventDetail.Message))
+                    {
+                        <div class="alert">
+                            <span class="font-mono text-sm break-words">@eventDetail.Message</span>
+                        </div>
+                    }
+
+                    @if (eventDetail.StackFrames.Count > 0)
+                    {
+                        <div class="card bg-base-200">
+                            <div class="card-body p-4">
+                                <h2 class="card-title text-base">Stack Trace</h2>
+                                <StackTraceViewer Frames="eventDetail.StackFrames" />
+                            </div>
+                        </div>
+                    }
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div class="card bg-base-200">
+                            <div class="card-body p-4">
+                                <h2 class="card-title text-base">Context</h2>
+                                <div class="space-y-1 text-sm">
+                                    <div class="flex justify-between">
+                                        <span class="opacity-60">Platform</span>
+                                        <span>@eventDetail.Platform</span>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(eventDetail.Release))
+                                    {
+                                        <div class="flex justify-between">
+                                            <span class="opacity-60">Release</span>
+                                            <span class="font-mono">@eventDetail.Release</span>
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(eventDetail.Environment))
+                                    {
+                                        <div class="flex justify-between">
+                                            <span class="opacity-60">Environment</span>
+                                            <span>@eventDetail.Environment</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (eventDetail.User is not null)
+                        {
+                            <div class="card bg-base-200">
+                                <div class="card-body p-4">
+                                    <h2 class="card-title text-base">User</h2>
+                                    <div class="space-y-1 text-sm">
+                                        @if (!string.IsNullOrEmpty(eventDetail.User.Username))
+                                        {
+                                            <div class="flex justify-between">
+                                                <span class="opacity-60">Username</span>
+                                                <span>@eventDetail.User.Username</span>
+                                            </div>
+                                        }
+                                        @if (!string.IsNullOrEmpty(eventDetail.User.Email))
+                                        {
+                                            <div class="flex justify-between">
+                                                <span class="opacity-60">Email</span>
+                                                <span>@eventDetail.User.Email</span>
+                                            </div>
+                                        }
+                                        @if (!string.IsNullOrEmpty(eventDetail.User.IpAddress))
+                                        {
+                                            <div class="flex justify-between">
+                                                <span class="opacity-60">IP</span>
+                                                <span class="font-mono">@eventDetail.User.IpAddress</span>
+                                            </div>
+                                        }
+                                        @if (!string.IsNullOrEmpty(eventDetail.User.Identifier))
+                                        {
+                                            <div class="flex justify-between">
+                                                <span class="opacity-60">ID</span>
+                                                <span class="font-mono">@eventDetail.User.Identifier</span>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    @if (eventDetail.Tags.Count > 0)
+                    {
+                        <div class="card bg-base-200">
+                            <div class="card-body p-4">
+                                <h2 class="card-title text-base">Tags</h2>
+                                <div class="overflow-x-auto">
+                                    <table class="table table-sm">
+                                        <tbody>
+                                            @foreach (var tag in eventDetail.Tags)
+                                            {
+                                                <tr>
+                                                    <td class="opacity-60 w-1/3">@tag.Key</td>
+                                                    <td class="font-mono">@tag.Value</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Breadcrumbs -->
+                    @if (breadcrumbs.Count > 0)
+                    {
+                        <div class="card bg-base-200">
+                            <div class="card-body p-4">
+                                <h2 class="card-title text-base">Breadcrumbs</h2>
+                                <BreadcrumbsViewer Breadcrumbs="breadcrumbs" EventTimestamp="eventDetail.Timestamp" />
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
 
             <!-- Events tab -->
             @if (activeTab == Tab.Events)
             {
-                @if (eventsLoading)
-                {
-                    <div class="flex justify-center py-8">
-                        <span class="loading loading-spinner"></span>
-                    </div>
-                }
-                else if (events is null || events.Items.Count == 0)
+                @if (events is null || events.Items.Count == 0)
                 {
                     <EmptyState Title="No events" />
                 }
                 else
                 {
                     <div class="overflow-x-auto">
-                        <table class="table table-sm">
+                        <table class="table table-sebra table-sm">
                             <thead>
                                 <tr>
                                     <th>Time</th>
@@ -91,8 +225,10 @@ else
                             <tbody>
                                 @foreach (var evt in events.Items)
                                 {
-                                    <tr class="hover cursor-pointer" @onclick="() => GoToEvent(evt.Id)">
-                                        <td><RelativeTime Value="evt.Timestamp" /></td>
+                                    <tr class="hover:bg-base-300 relative cursor-pointer">
+                                        <td>
+                                            <a href="/events/@evt.Id" class="stretched-link"><RelativeTime Value="evt.Timestamp"/></a>
+                                        </td>
                                         <td class="max-w-md truncate">@(evt.Message ?? "—")</td>
                                         <td><SeverityBadge Level="evt.Level" /></td>
                                         <td class="text-sm opacity-70">@(evt.UserIdentifier ?? "—")</td>
@@ -111,13 +247,7 @@ else
             <!-- Activity tab -->
             @if (activeTab == Tab.Activity)
             {
-                @if (activityLoading)
-                {
-                    <div class="flex justify-center py-8">
-                        <span class="loading loading-spinner"></span>
-                    </div>
-                }
-                else if (activities is null || activities.Items.Count == 0)
+                @if (activities is null || activities.Items.Count == 0)
                 {
                     <EmptyState Title="No activity yet" />
                 }
@@ -212,11 +342,23 @@ else
                     </div>
                     <div class="flex justify-between">
                         <span class="opacity-60">First Seen</span>
-                        <RelativeTime Value="issue.FirstSeen" />
+                        <div class="text-right">
+                            <RelativeTime Value="issue.FirstSeen" />
+                            @if (!string.IsNullOrEmpty(issue.FirstRelease))
+                            {
+                                <div class="text-xs opacity-50 font-mono">@issue.FirstRelease</div>
+                            }
+                        </div>
                     </div>
                     <div class="flex justify-between">
                         <span class="opacity-60">Last Seen</span>
-                        <RelativeTime Value="issue.LastSeen" />
+                        <div class="text-right">
+                            <RelativeTime Value="issue.LastSeen" />
+                            @if (!string.IsNullOrEmpty(issue.LastRelease))
+                            {
+                                <div class="text-xs opacity-50 font-mono">@issue.LastRelease</div>
+                            }
+                        </div>
                     </div>
                     <div class="flex justify-between">
                         <span class="opacity-60">Events</span>
@@ -225,29 +367,48 @@ else
                 </div>
             </div>
 
-            <!-- Fingerprint -->
-            <div class="card bg-base-200">
-                <div class="card-body p-4 space-y-1">
-                    <span class="text-sm font-semibold">Fingerprint</span>
-                    <code class="text-xs break-all opacity-70">@issue.Fingerprint</code>
-                </div>
-            </div>
-
-            <!-- Tags -->
+            <!-- Tags grouped with frequency -->
             @if (issue.Tags.Count > 0)
             {
                 <div class="card bg-base-200">
-                    <div class="card-body p-4 space-y-2">
+                    <div class="card-body p-4 space-y-3">
                         <span class="text-sm font-semibold">Tags</span>
-                        <div class="space-y-1">
-                            @foreach (var tag in issue.Tags)
-                            {
-                                <div class="flex justify-between text-xs">
-                                    <span class="opacity-60">@tag.Key</span>
-                                    <span class="font-mono">@tag.Value</span>
-                                </div>
-                            }
-                        </div>
+                        @foreach (var group in issue.Tags)
+                        {
+                            <div class="space-y-1">
+                                <div class="text-xs font-semibold opacity-70">@group.Key</div>
+                                @{
+                                    var topValues = group.Values.Take(4).ToList();
+                                    int othersCount = group.TotalCount - topValues.Sum(v => v.Count);
+                                }
+                                @foreach (var tagVal in topValues)
+                                {
+                                    var pct = group.TotalCount > 0 ? (double)tagVal.Count / group.TotalCount * 100 : 0;
+                                    <div class="space-y-0.5">
+                                        <div class="flex justify-between text-xs">
+                                            <span class="font-mono truncate max-w-[210px]" title="@tagVal.Value">@tagVal.Value</span>
+                                            <span class="opacity-50 shrink-0 ml-2">@pct.ToString("F0")%</span>
+                                        </div>
+                                        <div class="w-full bg-base-300 rounded-full h-1">
+                                            <div class="bg-primary rounded-full h-1" style="width: @pct.ToString("F1")%"></div>
+                                        </div>
+                                    </div>
+                                }
+                                @if (othersCount > 0)
+                                {
+                                    var othersPct = (double)othersCount / group.TotalCount * 100;
+                                    <div class="space-y-0.5">
+                                        <div class="flex justify-between text-xs">
+                                            <span class="opacity-50 italic">others</span>
+                                            <span class="opacity-50 shrink-0 ml-2">@othersPct.ToString("F0")%</span>
+                                        </div>
+                                        <div class="w-full bg-base-300 rounded-full h-1">
+                                            <div class="bg-base-content/20 rounded-full h-1" style="width: @othersPct.ToString("F1")%"></div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
                     </div>
                 </div>
             }
@@ -257,27 +418,47 @@ else
 
 @code {
     [Parameter] public int IssueId { get; set; }
+    [SupplyParameterFromQuery(Name = "tab")] public string? TabParam { get; set; }
 
     private IssueDetailResponse? issue;
     private EventDetailResponse? eventDetail;
+    private EventNavigationResponse? navigation;
+    private List<BreadcrumbResponse> breadcrumbs = [];
     private PagedResponse<EventSummary>? events;
     private PagedResponse<ActivityResponse>? activities;
     private bool loading = true;
-    private bool eventsLoading;
-    private bool activityLoading;
     private bool actionLoading;
+    private bool eventNavigating;
     private Tab activeTab = Tab.Events;
     private int eventsPage = 1;
     private const int EventsPageSize = 50;
 
-    private enum Tab { Events, Activity }
+    private enum Tab { SuggestedEvent, Events, Activity }
 
     protected override async Task OnParametersSetAsync()
     {
         loading = true;
+        events = null;
+        activities = null;
+        breadcrumbs = [];
+        navigation = null;
+
         await LoadIssue();
+
+        activeTab = TabParam?.ToLower() switch
+        {
+            "event"    => issue?.SuggestedEvent is not null ? Tab.SuggestedEvent : Tab.Events,
+            "events"   => Tab.Events,
+            "activity" => Tab.Activity,
+            _          => issue?.SuggestedEvent is not null ? Tab.SuggestedEvent : Tab.Events
+        };
+
         loading = false;
-        await LoadEvents();
+
+        if (activeTab == Tab.Events)
+            await LoadEvents();
+        else if (activeTab == Tab.Activity)
+            await LoadActivity();
     }
 
     private async Task LoadIssue()
@@ -288,17 +469,52 @@ else
             if (issue?.SuggestedEvent is not null)
             {
                 eventDetail = await EventService.GetEventDetailAsync(issue.SuggestedEvent.Id);
+                if (eventDetail is not null)
+                {
+                    navigation = await EventService.GetAdjacentEventIdsAsync(IssueId, eventDetail.Id);
+                    breadcrumbs = await EventService.GetBreadcrumbsAsync(eventDetail.Id);
+                }
+            }
+            else
+            {
+                eventDetail = null;
+                navigation = null;
+                breadcrumbs = [];
             }
         }
         catch
         {
             issue = null;
+            eventDetail = null;
+            navigation = null;
+            breadcrumbs = [];
+        }
+    }
+
+    private async Task NavigateEvent(long eventId)
+    {
+        eventNavigating = true;
+        try
+        {
+            eventDetail = await EventService.GetEventDetailAsync(eventId);
+            if (eventDetail is not null)
+            {
+                navigation = await EventService.GetAdjacentEventIdsAsync(IssueId, eventDetail.Id);
+                breadcrumbs = await EventService.GetBreadcrumbsAsync(eventDetail.Id);
+            }
+        }
+        catch
+        {
+            // Keep current event on navigation failure
+        }
+        finally
+        {
+            eventNavigating = false;
         }
     }
 
     private async Task LoadEvents()
     {
-        eventsLoading = true;
         try
         {
             events = await EventService.GetEventSummariesAsync(IssueId, eventsPage, EventsPageSize);
@@ -307,15 +523,10 @@ else
         {
             events = null;
         }
-        finally
-        {
-            eventsLoading = false;
-        }
     }
 
     private async Task LoadActivity()
     {
-        activityLoading = true;
         try
         {
             activities = await ActivityService.GetActivitySummariesAsync(IssueId);
@@ -324,17 +535,6 @@ else
         {
             activities = null;
         }
-        finally
-        {
-            activityLoading = false;
-        }
-    }
-
-    private async Task SwitchTab(Tab tab)
-    {
-        activeTab = tab;
-        if (tab == Tab.Activity && activities is null)
-            await LoadActivity();
     }
 
     private async Task UpdateStatus(IssueStatus status)
@@ -374,17 +574,15 @@ else
         await LoadEvents();
     }
 
-    private void GoToEvent(long eventId) => Navigation.NavigateTo($"/events/{eventId}");
-
     private static string FormatAction(IssueActivityAction action) => action switch
     {
-        IssueActivityAction.Created => "Issue created",
-        IssueActivityAction.Resolved => "Resolved",
+        IssueActivityAction.Created    => "Issue created",
+        IssueActivityAction.Resolved   => "Resolved",
         IssueActivityAction.Unresolved => "Reopened",
-        IssueActivityAction.Ignored => "Ignored",
-        IssueActivityAction.Assigned => "Assigned",
+        IssueActivityAction.Ignored    => "Ignored",
+        IssueActivityAction.Assigned   => "Assigned",
         IssueActivityAction.Unassigned => "Unassigned",
-        IssueActivityAction.Commented => "Commented",
-        _ => action.ToString()
+        IssueActivityAction.Commented  => "Commented",
+        _                              => action.ToString()
     };
 }

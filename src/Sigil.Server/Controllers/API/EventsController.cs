@@ -50,4 +50,10 @@ public class EventsController(
     {
         return Ok(await eventService.GetBreadcrumbsAsync(id));
     }
+
+    [HttpGet("api/issues/{issueId:int}/events/{eventId:long}/adjacent")]
+    public async Task<IActionResult> Adjacent(int issueId, long eventId)
+    {
+        return Ok(await eventService.GetAdjacentEventIdsAsync(issueId, eventId));
+    }
 }

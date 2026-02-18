@@ -1,6 +1,6 @@
 namespace Sigil.Application.Models.Auth;
 
-public record SetupStatus(bool IsComplete, int UserCount);
+public record SetupStatus(bool IsComplete);
 
 public enum DbConnectionStatus
 {

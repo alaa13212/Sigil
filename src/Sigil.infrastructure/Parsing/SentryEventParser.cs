@@ -9,11 +9,11 @@ namespace Sigil.infrastructure.Parsing;
 
 internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSerializerOptions jsonSerializerOptions) : IEventParser
 {
-    public List<ParsedEvent> Parse(string rawEnvelope)
+    public List<ParsedEvent> Parse(string rawEnvelope, DateTime receivedAt)
     {
         using var reader = new StringReader(rawEnvelope);
         string envelopeHeaderLine = reader.ReadLine()!;
-        
+
         // Envelope header is not needed
         _ = JsonSerializer.Deserialize<SentryEnvelopeHeader>(envelopeHeaderLine, jsonSerializerOptions);
 
@@ -27,10 +27,11 @@ internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSeri
             {
                 var eventData = JsonSerializer.Deserialize<SentryEvent>(payloadLine, jsonSerializerOptions)!;
                 ParsedEvent parsedEvent = ConvertToParsedEvent(eventData, payloadLine);
-                
-                foreach (var enricher in enrichers) 
+                parsedEvent.ReceivedAt = receivedAt;
+
+                foreach (var enricher in enrichers)
                     enricher.Enrich(parsedEvent);
-                
+
                 events.Add(parsedEvent);
             }
         }

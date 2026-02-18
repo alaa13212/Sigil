@@ -1,89 +1,108 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Extensions;
 
 namespace Sigil.infrastructure.Persistence;
 
-internal class TagService(SigilDbContext dbContext) : ITagService
+internal class TagService(SigilDbContext dbContext, ITagCache tagCache) : ITagService
 {
     public async Task<IReadOnlyCollection<TagKey>> BulkGetOrCreateTagKeysAsync(IReadOnlyCollection<string> keys)
     {
         if (keys.IsEmpty())
             return [];
         
-        var results = new List<TagKey>(keys.Count);
-        results.AddRange(
-            await dbContext.TagKeys
+        var (results, misses) = tagCache.TryGetMany(keys, k =>
+        {
+            tagCache.TryGetKey(k, out var v);
+            if (v is not null) dbContext.Attach(v);
+            return v;
+        });
+
+        if (misses.Count > 0)
+        {
+            var fromDb = await dbContext.TagKeys
                 .AsTracking()
                 .Include(tk => tk.Values)
-                .Where(tk => keys.Contains(tk.Key))
-                .ToListAsync()
-        );
-        
-        var existingKeys = results.Select(tk => tk.Key).ToList();
-        var newKeys = keys
-            .Where(k => !existingKeys.Contains(k))
-            .Select(k => new TagKey { Key = k })
-            .ToList();
-        
-        if (newKeys.Any())
-        {
-            dbContext.TagKeys.AddRange(newKeys);
-            await dbContext.SaveChangesAsync();
-            results.AddRange(newKeys);
+                .Where(tk => misses.Contains(tk.Key))
+                .ToListAsync();
+
+            var existingKeys = fromDb.Select(tk => tk.Key).ToList();
+            var newKeys = misses
+                .Where(k => !existingKeys.Contains(k))
+                .Select(k => new TagKey { Key = k })
+                .ToList();
+
+            if (newKeys.Any())
+            {
+                dbContext.TagKeys.AddRange(newKeys);
+                await dbContext.SaveChangesAsync();
+                fromDb.AddRange(newKeys);
+            }
+
+            foreach (TagKey tagKey in fromDb)
+                tagCache.SetKey(tagKey);
+
+            results.AddRange(fromDb);
         }
-        
+
         return results;
     }
 
-    
+    public async Task<IReadOnlyCollection<TagValue>> BulkGetOrCreateTagsAsync(IReadOnlyCollection<KeyValuePair<string, string>> tags)
+        => await BulkGetOrCreateTagsAsync([], tags);
+
     public async Task<IReadOnlyCollection<TagValue>> BulkGetOrCreateTagsAsync(IReadOnlyCollection<TagKey> tagKeys, IReadOnlyCollection<KeyValuePair<string, string>> tags)
     {
         if (tags.IsEmpty())
             return [];
 
-        List<TagValue> results = [];
-        Dictionary<string, TagKey> allTagKeys = tagKeys.ToDictionary(key => key.Key);
-        List<string> tagsWithoutKeys = tags.Select(pair => pair.Key).Where(key => tagKeys.All(tk => tk.Key != key)).Distinct().ToList();
-        if (tagsWithoutKeys.Any())
+        var (results, misses) = tagCache.TryGetMany(tags, tag =>
         {
-            IReadOnlyCollection<TagKey> newKeys = await BulkGetOrCreateTagKeysAsync(tagsWithoutKeys);
-            foreach (var tagKey in newKeys) 
-                allTagKeys.Add(tagKey.Key, tagKey);
-        }
+            tagCache.TryGetValue(tag.Key, tag.Value, out var v);
+            return v;
+        });
 
-        // Get all existing tag values in one query
-        // Fetch all tag values with matching keys, then filter for exact key-value pairs
-        var keys = tags.Select(t => t.Key).Distinct().ToList();
-
-        var candidateTagValues = await dbContext.TagValues
-            .AsTracking()
-            .Include(tv => tv.TagKey)
-            .Where(tv => keys.Contains(tv.TagKey.Key))
-            .ToListAsync();
-
-        // Filter to only the exact key-value pairs we need (in memory)
-        List<TagValue> existingTagValues = candidateTagValues
-            .Where(tv => tags.Any(t => t.Key == tv.TagKey.Key && t.Value == tv.Value))
-            .ToList();
-        
-        List<TagValue> newTagValues = tags
-            .Where(t => !existingTagValues.Any(tv => tv.TagKey.Key == t.Key && tv.Value == t.Value))
-            .Select(t => new TagValue { TagKey = allTagKeys[t.Key], Value = t.Value})
-            .ToList();
-        
-        if (newTagValues.Any())
+        if (misses.Count > 0)
         {
-            dbContext.TagValues.AddRange(newTagValues);
-            await dbContext.SaveChangesAsync();
-            existingTagValues.AddRange(newTagValues);
-        }
+            Dictionary<string, TagKey> allTagKeys = tagKeys.ToDictionary(k => k.Key);
+            List<string> tagsWithoutKeys = misses.Select(t => t.Key).Where(k => allTagKeys.All(tk => tk.Key != k)).Distinct().ToList();
+            if (tagsWithoutKeys.Any())
+            {
+                IReadOnlyCollection<TagKey> newKeys = await BulkGetOrCreateTagKeysAsync(tagsWithoutKeys);
+                foreach (var tagKey in newKeys)
+                    allTagKeys.TryAdd(tagKey.Key, tagKey);
+            }
 
-        // Return all tag values in the order they were requested
-        results.AddRange(tags.Select(tag =>
-            existingTagValues.First(tv =>
-                tv.TagKey.Key == tag.Key && tv.Value == tag.Value)));
+            var keys = misses.Select(t => t.Key).Distinct().ToList();
+            var candidates = await dbContext.TagValues
+                .AsTracking()
+                .Include(tv => tv.TagKey)
+                .Where(tv => keys.Contains(tv.TagKey!.Key))
+                .ToListAsync();
+
+            List<TagValue> existing = candidates
+                .Where(tv => misses.Any(t => t.Key == tv.TagKey!.Key && t.Value == tv.Value))
+                .ToList();
+
+            List<TagValue> newTagValues = misses
+                .Where(t => !existing.Any(tv => tv.TagKey!.Key == t.Key && tv.Value == t.Value))
+                .Select(t => new TagValue { TagKey = allTagKeys[t.Key], Value = t.Value })
+                .ToList();
+
+            if (newTagValues.Any())
+            {
+                dbContext.TagValues.AddRange(newTagValues);
+                await dbContext.SaveChangesAsync();
+                existing.AddRange(newTagValues);
+            }
+
+            foreach (TagValue tagValue in existing)
+                tagCache.SetValue(tagValue);
+
+            results.AddRange(misses.Select(tag =>
+                existing.First(tv => tv.TagKey!.Key == tag.Key && tv.Value == tag.Value)));
+        }
 
         return results;
     }

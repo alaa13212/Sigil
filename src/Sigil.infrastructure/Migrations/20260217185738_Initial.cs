@@ -43,6 +43,23 @@ namespace Sigil.infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "RawEnvelopes",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ProjectId = table.Column<int>(type: "integer", nullable: false),
+                    RawData = table.Column<string>(type: "text", nullable: false),
+                    ReceivedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ProcessedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    Error = table.Column<string>(type: "text", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RawEnvelopes", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Roles",
                 columns: table => new
                 {
@@ -361,6 +378,7 @@ namespace Sigil.infrastructure.Migrations
                     EventId = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                     Timestamp = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     ReceivedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ProcessedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     Message = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
                     Level = table.Column<int>(type: "integer", nullable: false),
                     Logger = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
@@ -738,6 +756,9 @@ namespace Sigil.infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "IssueTags");
+
+            migrationBuilder.DropTable(
+                name: "RawEnvelopes");
 
             migrationBuilder.DropTable(
                 name: "RoleClaims");

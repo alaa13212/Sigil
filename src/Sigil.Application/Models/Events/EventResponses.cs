@@ -46,3 +46,5 @@ public record BreadcrumbResponse(
     string? Level,
     string? Type,
     Dictionary<string, object>? Data);
+
+public record EventNavigationResponse(long? PreviousEventId, long? NextEventId);

@@ -12,20 +12,10 @@ public class ApiAuthService(HttpClient http, AuthenticationStateProvider authSta
     {
         var response = await http.PostAsJsonAsync("api/account/login", request);
         if (!response.IsSuccessStatusCode)
-            return AuthResult.Failure("Invalid email or password.");
-
-        var user = await response.Content.ReadFromJsonAsync<UserInfo>();
-        if (authStateProvider is CookieAuthenticationStateProvider cookie)
-            cookie.NotifyAuthStateChanged();
-
-        return AuthResult.Success(user!);
-    }
-
-    public async Task<AuthResult> RegisterAsync(RegisterRequest request)
-    {
-        var response = await http.PostAsJsonAsync("api/account/register", request);
-        if (!response.IsSuccessStatusCode)
-            return AuthResult.Failure("Registration failed.");
+        {
+            var body = await response.Content.ReadFromJsonAsync<ErrorBody>();
+            return AuthResult.Failure(body?.Errors ?? ["Invalid email or password."]);
+        }
 
         var user = await response.Content.ReadFromJsonAsync<UserInfo>();
         if (authStateProvider is CookieAuthenticationStateProvider cookie)
@@ -45,4 +35,32 @@ public class ApiAuthService(HttpClient http, AuthenticationStateProvider authSta
     {
         return await http.GetFromJsonAsync<List<UserInfo>>("api/account/users") ?? [];
     }
+
+    public async Task<InviteResult> InviteUserAsync(InviteRequest request)
+    {
+        var response = await http.PostAsJsonAsync("api/account/invite", request);
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadFromJsonAsync<ErrorBody>();
+            return InviteResult.Failure(body?.Errors ?? ["Failed to invite user."]);
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<InviteBody>();
+        return InviteResult.Success(result!.Email, result.ActivationToken);
+    }
+
+    public async Task<AuthResult> ActivateAccountAsync(ActivateRequest request)
+    {
+        var response = await http.PostAsJsonAsync("api/account/activate", request);
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadFromJsonAsync<ErrorBody>();
+            return AuthResult.Failure(body?.Errors ?? ["Activation failed."]);
+        }
+
+        return AuthResult.Success((await response.Content.ReadFromJsonAsync<UserInfo>())!);
+    }
+
+    private record ErrorBody(IReadOnlyList<string> Errors);
+    private record InviteBody(string Email, string ActivationToken);
 }

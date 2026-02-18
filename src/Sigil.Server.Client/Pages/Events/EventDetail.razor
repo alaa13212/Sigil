@@ -2,7 +2,6 @@
 @attribute [Authorize]
 @using Sigil.Application.Models.Events
 @inject IEventService EventService
-@inject NavigationManager Navigation
 
 <PageTitle>Event — Sigil</PageTitle>
 
@@ -21,7 +20,7 @@ else
     <!-- Header -->
     <div class="mb-6 space-y-2">
         <div class="text-sm opacity-60">
-            <a href="javascript:void(0)" class="link link-hover" @onclick="GoBackToIssue">&larr; Back to issue</a>
+            <a href="/issues/@evt.IssueId" class="link link-hover">&larr; Back to issue</a>
         </div>
         <div class="flex items-center gap-3 flex-wrap">
             <h1 class="text-2xl font-bold">Event</h1>
@@ -45,12 +44,12 @@ else
 
     <!-- Tabs -->
     <div role="tablist" class="tabs tabs-bordered mb-4">
-        <button role="tab" class="tab @(activeTab == Tab.Details ? "tab-active" : "")"
-                @onclick="() => SwitchTab(Tab.Details)">Details</button>
-        <button role="tab" class="tab @(activeTab == Tab.Breadcrumbs ? "tab-active" : "")"
-                @onclick="() => SwitchTab(Tab.Breadcrumbs)">Breadcrumbs</button>
-        <button role="tab" class="tab @(activeTab == Tab.Raw ? "tab-active" : "")"
-                @onclick="() => SwitchTab(Tab.Raw)">Raw JSON</button>
+        <a role="tab" href="/events/@EventId?tab=details"
+           class="tab @(activeTab == Tab.Details ? "tab-active" : "")">Details</a>
+        <a role="tab" href="/events/@EventId?tab=breadcrumbs"
+           class="tab @(activeTab == Tab.Breadcrumbs ? "tab-active" : "")">Breadcrumbs</a>
+        <a role="tab" href="/events/@EventId?tab=raw"
+           class="tab @(activeTab == Tab.Raw ? "tab-active" : "")">Raw JSON</a>
     </div>
 
     @if (activeTab == Tab.Details)
@@ -168,20 +167,11 @@ else
     }
     else if (activeTab == Tab.Breadcrumbs)
     {
-        @if (breadcrumbsLoading)
-        {
-            <div class="flex justify-center py-8">
-                <span class="loading loading-spinner"></span>
+        <div class="card bg-base-200">
+            <div class="card-body p-4">
+                <BreadcrumbsViewer Breadcrumbs="breadcrumbs" EventTimestamp="evt.Timestamp" />
             </div>
-        }
-        else
-        {
-            <div class="card bg-base-200">
-                <div class="card-body p-4">
-                    <BreadcrumbsViewer Breadcrumbs="breadcrumbs" EventTimestamp="evt.Timestamp" />
-                </div>
-            </div>
-        }
+        </div>
     }
     else if (activeTab == Tab.Raw)
     {
@@ -191,23 +181,36 @@ else
 
 @code {
     [Parameter] public long EventId { get; set; }
+    [SupplyParameterFromQuery(Name = "tab")] public string? TabParam { get; set; }
 
     private EventDetailResponse? evt;
     private List<BreadcrumbResponse> breadcrumbs = [];
     private bool loading = true;
-    private bool breadcrumbsLoading;
-    private Tab activeTab = Tab.Details;
 
+    private Tab activeTab = Tab.Details;
     private enum Tab { Details, Breadcrumbs, Raw }
 
     protected override async Task OnParametersSetAsync()
     {
         loading = true;
-        activeTab = Tab.Details;
         breadcrumbs = [];
+
+        activeTab = TabParam?.ToLower() switch
+        {
+            "breadcrumbs" => Tab.Breadcrumbs,
+            "raw"         => Tab.Raw,
+            _             => Tab.Details
+        };
+
         try
         {
             evt = await EventService.GetEventDetailAsync(EventId);
+
+            if (activeTab == Tab.Breadcrumbs)
+            {
+                try { breadcrumbs = await EventService.GetBreadcrumbsAsync(EventId); }
+                catch { breadcrumbs = []; }
+            }
         }
         catch
         {
@@ -217,35 +220,5 @@ else
         {
             loading = false;
         }
-    }
-
-    private async Task SwitchTab(Tab tab)
-    {
-        activeTab = tab;
-        if (tab == Tab.Breadcrumbs && breadcrumbs.Count == 0)
-            await LoadBreadcrumbs();
-    }
-
-    private async Task LoadBreadcrumbs()
-    {
-        breadcrumbsLoading = true;
-        try
-        {
-            breadcrumbs = await EventService.GetBreadcrumbsAsync(EventId);
-        }
-        catch
-        {
-            breadcrumbs = [];
-        }
-        finally
-        {
-            breadcrumbsLoading = false;
-        }
-    }
-
-    private void GoBackToIssue()
-    {
-        if (evt is not null)
-            Navigation.NavigateTo($"/issues/{evt.IssueId}");
     }
 }

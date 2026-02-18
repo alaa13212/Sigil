@@ -14,6 +14,7 @@ public class CapturedEvent
 
     public required DateTime Timestamp { get; set; }
     public required DateTime ReceivedAt { get; set; }
+    public DateTime? ProcessedAt { get; set; }
 
     [MaxLength(1000)]
     public string? Message { get; set; }

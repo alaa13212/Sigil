@@ -1,0 +1,88 @@
+@page "/admin/users/register"
+@attribute [Authorize]
+@rendermode InteractiveWebAssembly
+@using Sigil.Application.Models.Auth
+@inject IAuthService AuthService
+@inject NavigationManager Nav
+
+<PageTitle>Invite User — Sigil</PageTitle>
+
+<div class="max-w-lg space-y-6 mx-auto">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold">Invite User</h1>
+        @if (inviteLink is null)
+        {
+            <a href="/admin/users" class="btn btn-ghost btn-sm">Cancel</a>
+        }
+    </div>
+
+    @if (inviteLink is not null)
+    {
+        <div class="alert alert-success flex flex-col items-start mb-2">
+            <p class="font-semibold">Invitation created. Share this link with the user:</p>
+        </div>
+        <div class="join w-full">
+            <input readonly  value="@inviteLink" class="input join-item flex-1 font-mono text-sm" />
+            <CopyButton Text="@inviteLink" Class="btn join-item" />
+        </div>
+        <a href="/admin/users" class="btn btn-primary">Back to Users</a>
+    }
+    else
+    {
+        <div class="card bg-base-200">
+            <div class="card-body p-5 space-y-3">
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Email</legend>
+                    <input type="email" class="input w-full" @bind="email" placeholder="user@example.com" />
+                </fieldset>
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Display Name</legend>
+                    <input type="text" class="input w-full" @bind="displayName" placeholder="John Doe" />
+                </fieldset>
+                @if (!string.IsNullOrEmpty(error))
+                {
+                    <div class="alert alert-error text-sm">@error</div>
+                }
+                <button class="btn btn-primary" @onclick="Invite" disabled="@submitting">
+                    @(submitting ? "Creating invite..." : "Create Invite")
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string email = "";
+    private string displayName = "";
+    private string? error;
+    private string? inviteLink;
+    private bool submitting;
+
+    private async Task Invite()
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            error = "Email is required.";
+            return;
+        }
+
+        submitting = true;
+        error = null;
+        try
+        {
+            var result = await AuthService.InviteUserAsync(new InviteRequest(email, displayName));
+            if (result.Succeeded)
+                inviteLink = $"{Nav.BaseUri}activate?email={Uri.EscapeDataString(result.Email!)}&token={Uri.EscapeDataString(result.ActivationToken!)}";
+            else
+                error = string.Join(", ", result.Errors);
+        }
+        catch
+        {
+            error = "Failed to create invite.";
+        }
+        finally
+        {
+            submitting = false;
+        }
+    }
+}

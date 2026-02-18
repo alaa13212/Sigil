@@ -1,12 +1,11 @@
 @page "/setup"
-@attribute [Authorize(Policy = "SetupNotComplete")]
+@attribute [AllowAnonymous]
 @using Sigil.Application.Models.Auth
 @layout SetupLayout
 @inject ISetupService SetupService
 @inject NavigationManager Navigation
-@inject IJSRuntime JS
 
-@rendermode InteractiveWebAssembly
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 
 <PageTitle>Setup — Sigil</PageTitle>
 
@@ -27,7 +26,7 @@
             {
                 <!-- Step 1: Welcome -->
                 <div class="text-center space-y-4">
-                    <h2 class="text-2xl font-bold">Welcome to Sigil</h2>
+                    <h2 class="text-2xl font-bold">Welcome to Sigil سجل</h2>
                     <p class="opacity-70">Self-hosted error monitoring for your applications. Let's get you set up in a few steps.</p>
                     <button class="btn btn-primary" @onclick="() => GoTo(2)">Get Started</button>
                 </div>
@@ -149,27 +148,27 @@
             else if (step == 4)
             {
                 <!-- Step 4: Admin -->
-                <div class="space-y-4">
+                <form class="space-y-4" @onsubmit="ValidateAdmin">
                     <h2 class="text-xl font-bold">Create Admin Account</h2>
 
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Display Name</legend>
-                        <input type="text" class="input" placeholder="Admin" @bind="adminDisplayName" />
+                        <input type="text" class="input w-full" placeholder="Admin" @bind="adminDisplayName" />
                     </fieldset>
 
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Email</legend>
-                        <input type="email" class="input" placeholder="admin@example.com" @bind="adminEmail" />
+                        <input type="email" class="input w-full" placeholder="admin@example.com" @bind="adminEmail" />
                     </fieldset>
 
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Password</legend>
-                        <input type="password" class="input" placeholder="Min 8 characters" @bind="adminPassword" />
+                        <input type="password" class="input w-full" placeholder="Min 8 characters" @bind="adminPassword" />
                     </fieldset>
 
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Confirm Password</legend>
-                        <input type="password" class="input" @bind="adminPasswordConfirm" />
+                        <input type="password" class="input w-full" placeholder="Repeat Password" @bind="adminPasswordConfirm" />
                     </fieldset>
 
                     @if (!string.IsNullOrEmpty(adminError))
@@ -178,25 +177,25 @@
                     }
 
                     <div class="flex justify-between">
-                        <button class="btn btn-ghost" @onclick="() => GoTo(3)">Back</button>
-                        <button class="btn btn-primary" @onclick="ValidateAdmin">Next</button>
+                        <button class="btn btn-ghost" type="reset" @onclick="() => GoTo(3)">Back</button>
+                        <button class="btn btn-primary" type="submit">Next</button>
                     </div>
-                </div>
+                </form>
             }
             else if (step == 5)
             {
                 <!-- Step 5: Project -->
-                <div class="space-y-4">
+                <form class="space-y-4" @onsubmit="RunSetup">
                     <h2 class="text-xl font-bold">Create Team & Project</h2>
 
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Team Name</legend>
-                        <input type="text" class="input" @bind="teamName" />
+                        <input type="text" class="input w-full" @bind="teamName" />
                     </fieldset>
 
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Project Name</legend>
-                        <input type="text" class="input" placeholder="My App" @bind="projectName" />
+                        <input type="text" class="input w-full" placeholder="My App" @bind="projectName" />
                     </fieldset>
 
                     <fieldset class="fieldset">
@@ -222,8 +221,8 @@
                     }
 
                     <div class="flex justify-between">
-                        <button class="btn btn-ghost" @onclick="() => GoTo(4)">Back</button>
-                        <button class="btn btn-primary" @onclick="RunSetup" disabled="@initializing">
+                        <button class="btn btn-ghost" type="reset" @onclick="() => GoTo(4)">Back</button>
+                        <button class="btn btn-primary" type="submit" disabled="@initializing">
                             @if (initializing)
                             {
                                 <span class="loading loading-spinner loading-sm"></span>
@@ -231,7 +230,7 @@
                             Create
                         </button>
                     </div>
-                </div>
+                </form>
             }
             else if (step == 6)
             {
@@ -248,7 +247,7 @@
                             <legend class="fieldset-legend">Your DSN</legend>
                             <div class="join w-full">
                                 <input type="text" class="input join-item flex-1 font-mono text-sm" value="@dsn" readonly />
-                                <button class="btn join-item" @onclick="CopyDsn">@(copied ? "Copied!" : "Copy")</button>
+                                <CopyButton Text="@dsn" Class="btn join-item" />
                             </div>
                             <p class="label">Use this in your Sentry SDK configuration</p>
                         </fieldset>
@@ -287,7 +286,10 @@
 </div>
 
 @code {
+    [SupplyParameterFromQuery(Name = "step")] public int StepParam { get; set; } = 1;
+
     private int step = 1;
+    private bool _initialized;
 
     // Step 2: Database
     [PersistentState] public DbStatusResponse? DbSetupResponse { get; set; }
@@ -318,7 +320,6 @@
 
     // Step 6: Done
     private string? dsn;
-    private bool copied;
 
     private static readonly Platform[] popularPlatforms =
     [
@@ -334,7 +335,7 @@
             SetupStatus status = await SetupService.GetSetupStatusAsync();
             if (status.IsComplete)
             {
-                Navigation.NavigateTo("/", forceLoad: true);
+                step = 6;
                 return;
             }
 
@@ -342,12 +343,20 @@
         }
         catch { }
 
+        step = StepParam >= 1 && StepParam <= 6 ? StepParam : 1;
+        _initialized = true;
         await CheckDatabase(false);
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (_initialized && StepParam >= 1 && StepParam <= 6)
+            step = StepParam;
     }
 
     private void GoTo(int target)
     {
-        step = target;
+        Navigation.NavigateTo($"/setup?step={target}");
         if (target == 2 && !dbLoading && dbStatus != DbConnectionStatus.Connected)
             _ = CheckDatabase(true);
     }
@@ -436,7 +445,7 @@
             return;
         }
 
-        step = 5;
+        GoTo(5);
     }
 
     private async Task RunSetup()
@@ -483,17 +492,5 @@
         }
     }
 
-    private async Task CopyDsn()
-    {
-        if (!string.IsNullOrEmpty(dsn))
-        {
-            try
-            {
-                await JS.InvokeVoidAsync("navigator.clipboard.writeText", dsn);
-            }
-            catch { }
-        }
-        copied = true;
-        StateHasChanged();
-    }
+
 }

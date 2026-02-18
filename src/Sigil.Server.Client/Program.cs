@@ -20,5 +20,6 @@ builder.Services.AddScoped<IProjectService, ApiProjectService>();
 builder.Services.AddScoped<IIssueService, ApiIssueService>();
 builder.Services.AddScoped<IEventService, ApiEventService>();
 builder.Services.AddScoped<IIssueActivityService, ApiIssueActivityService>();
+builder.Services.AddScoped<IDigestionMonitorService, ApiDigestionMonitorService>();
 
 await builder.Build().RunAsync();

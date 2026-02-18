@@ -21,6 +21,7 @@ internal class SigilDbContext(DbContextOptions<SigilDbContext> options) : SaveSu
     public DbSet<IssueActivity> IssueActivities => Set<IssueActivity>();
     public DbSet<AppConfig> AppConfigs => Set<AppConfig>();
     public DbSet<FailedEvent> FailedEvents => Set<FailedEvent>();
+    public DbSet<RawEnvelope> RawEnvelopes => Set<RawEnvelope>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

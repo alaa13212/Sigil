@@ -8,4 +8,9 @@ public interface ISetupService
     Task<DbStatusResponse> GetDbStatusAsync();
     Task<bool> MigrateAsync();
     Task<SetupResult> InitializeAsync(SetupRequest request);
+
+    // Post-setup maintenance — no setup-complete guard
+    Task<DbStatusResponse> GetMaintenanceDbStatusAsync();
+    Task<bool> HasPendingMigrationsAsync();
+    Task ApplyPendingMigrationsAsync();
 }

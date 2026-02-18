@@ -66,7 +66,7 @@ internal class FailedEventService(
             return false;
 
         bool enqueued = ingestionWorker.TryEnqueue(
-            new IngestionJobItem(failedEvent.ProjectId, failedEvent.RawEnvelope));
+            new IngestionJobItem(failedEvent.ProjectId, failedEvent.RawEnvelope, DateTime.UtcNow));
 
         if (!enqueued)
             return false;
@@ -89,7 +89,7 @@ internal class FailedEventService(
         foreach (var failedEvent in failedEvents)
         {
             bool enqueued = ingestionWorker.TryEnqueue(
-                new IngestionJobItem(failedEvent.ProjectId, failedEvent.RawEnvelope));
+                new IngestionJobItem(failedEvent.ProjectId, failedEvent.RawEnvelope, DateTime.UtcNow));
 
             if (!enqueued)
                 continue;

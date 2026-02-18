@@ -25,17 +25,5 @@
         <AdditionalFiles Include="PublicAPI.Shipped.txt" IsPublic="false"/>
         <AdditionalFiles Include="PublicAPI.Unshipped.txt" IsPublic="false"/>
     </ItemGroup>
-    
-    <ItemGroup>
-      <Folder Include="Extensions\" />
-      <Folder Include="Migrations\" />
-    </ItemGroup>
-
-    
-    <ItemGroup>
-      <EditorConfigFiles Remove=".editorconfig" />
-      <EditorConfigFiles Remove="Migrations\.editorconfig" />
-    </ItemGroup>
-
 
 </Project>

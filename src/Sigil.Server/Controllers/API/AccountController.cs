@@ -21,17 +21,6 @@ public class AccountController(IAuthService authService) : SigilController
         return Ok(result.User);
     }
 
-    [AllowAnonymous]
-    [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
-    {
-        var result = await authService.RegisterAsync(request);
-        if (!result.Succeeded)
-            return BadRequest(new { errors = result.Errors });
-
-        return Ok(result.User);
-    }
-
     [Authorize]
     [HttpPost("/logout")]
     public async Task<IActionResult> Logout()
@@ -46,5 +35,27 @@ public class AccountController(IAuthService authService) : SigilController
     {
         var users = await authService.GetAllUsersAsync();
         return Ok(users);
+    }
+
+    [Authorize]
+    [HttpPost("invite")]
+    public async Task<IActionResult> Invite([FromBody] InviteRequest request)
+    {
+        var result = await authService.InviteUserAsync(request);
+        if (!result.Succeeded)
+            return BadRequest(new { errors = result.Errors });
+
+        return Ok(new { result.Email, result.ActivationToken });
+    }
+
+    [AllowAnonymous]
+    [HttpPost("activate")]
+    public async Task<IActionResult> Activate([FromBody] ActivateRequest request)
+    {
+        var result = await authService.ActivateAccountAsync(request);
+        if (!result.Succeeded)
+            return BadRequest(new { errors = result.Errors });
+
+        return Ok(result.User);
     }
 }

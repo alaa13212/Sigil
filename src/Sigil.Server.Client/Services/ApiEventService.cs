@@ -40,6 +40,19 @@ public class ApiEventService(HttpClient http) : IEventService
         }
     }
 
+    public async Task<EventNavigationResponse> GetAdjacentEventIdsAsync(int issueId, long currentEventId)
+    {
+        try
+        {
+            return await http.GetFromJsonAsync<EventNavigationResponse>(
+                $"api/issues/{issueId}/events/{currentEventId}/adjacent") ?? new EventNavigationResponse(null, null);
+        }
+        catch (HttpRequestException)
+        {
+            return new EventNavigationResponse(null, null);
+        }
+    }
+
     public async Task<(List<CapturedEvent> Items, int TotalCount)> GetEventsForIssueAsync(int issueId, int page = 1, int pageSize = 50)
     {
         var response = await GetEventSummariesAsync(issueId, page, pageSize);

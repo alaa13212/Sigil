@@ -8,7 +8,7 @@ using Sigil.Domain.Enums;
 
 namespace Sigil.infrastructure.Persistence;
 
-internal class ProjectService(SigilDbContext dbContext, IAppConfigService appConfigService) : IProjectService
+internal class ProjectService(SigilDbContext dbContext, IAppConfigService appConfigService, IProjectCache projectCache) : IProjectService
 {
     public async Task<Project> CreateProjectAsync(string name, Platform platform, int? teamId = null)
     {
@@ -22,12 +22,20 @@ internal class ProjectService(SigilDbContext dbContext, IAppConfigService appCon
 
         dbContext.Projects.Add(project);
         await dbContext.SaveChangesAsync();
+        projectCache.Set(project);
+        projectCache.InvalidateList();
         return project;
     }
 
     public async Task<Project?> GetProjectByIdAsync(int id)
     {
-        return await dbContext.Projects.FindAsync(id);
+        if (projectCache.TryGet(id, out var cached))
+            return cached;
+
+        var project = await dbContext.Projects.FindAsync(id);
+        if (project is not null)
+            projectCache.Set(project);
+        return project;
     }
 
     public async Task<Project> UpdateProjectAsync(int projectId, string name)
@@ -35,12 +43,20 @@ internal class ProjectService(SigilDbContext dbContext, IAppConfigService appCon
         var project = await dbContext.Projects.AsTracking().FirstAsync(p => p.Id == projectId);
         project.Name = name;
         await dbContext.SaveChangesAsync();
+        projectCache.Invalidate(projectId);
+        projectCache.InvalidateList();
         return project;
     }
 
     public async Task<bool> DeleteProjectAsync(int projectId)
     {
-        return await dbContext.Projects.Where(p => p.Id == projectId).ExecuteDeleteAsync() > 0;
+        var deleted = await dbContext.Projects.Where(p => p.Id == projectId).ExecuteDeleteAsync() > 0;
+        if (deleted)
+        {
+            projectCache.Invalidate(projectId);
+            projectCache.InvalidateList();
+        }
+        return deleted;
     }
 
     public async Task<string> RotateApiKeyAsync(int projectId)
@@ -48,12 +64,18 @@ internal class ProjectService(SigilDbContext dbContext, IAppConfigService appCon
         var project = await dbContext.Projects.AsTracking().FirstAsync(p => p.Id == projectId);
         project.ApiKey = RandomNumberGenerator.GetHexString(32).ToLower();
         await dbContext.SaveChangesAsync();
+        projectCache.Invalidate(projectId);
+        projectCache.InvalidateList();
         return project.ApiKey;
     }
 
     public async Task<List<ProjectResponse>> GetProjectListAsync()
     {
+        if (projectCache.TryGetList(out var cached) && cached is not null)
+            return cached.Select(p => new ProjectResponse(p.Id, p.Name, p.Platform, p.ApiKey)).ToList();
+
         var projects = await dbContext.Projects.OrderBy(p => p.Name).ToListAsync();
+        projectCache.SetList(projects);
         return projects.Select(p => new ProjectResponse(p.Id, p.Name, p.Platform, p.ApiKey)).ToList();
     }
 

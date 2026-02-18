@@ -1,5 +1,6 @@
 @page "/teams/{TeamId:int}"
 @attribute [Authorize]
+@rendermode InteractiveWebAssembly
 @using Sigil.Application.Models.Auth
 @using Sigil.Application.Models.Teams
 @inject ITeamService TeamService
@@ -14,7 +15,7 @@
         <span class="loading loading-spinner loading-lg"></span>
     </div>
 }
-else if (team is null)
+else if (Team is null)
 {
     <EmptyState Title="Team not found" />
 }
@@ -34,7 +35,7 @@ else
                 }
                 else
                 {
-                    <h1 class="text-2xl font-bold">@team.Name</h1>
+                    <h1 class="text-2xl font-bold">@Team.Name</h1>
                     <button class="btn btn-ghost btn-xs" @onclick="StartEditName">Edit</button>
                 }
             </div>
@@ -65,9 +66,9 @@ else
                             <legend class="fieldset-legend">User</legend>
                             <select class="select w-full" @bind="selectedUserId">
                                 <option value="">Select a user...</option>
-                                @if (allUsers is not null)
+                                @if (AllUsers is not null)
                                 {
-                                    @foreach (var user in allUsers.Where(u => team.Members.All(m => m.UserId != u.Id)))
+                                    @foreach (var user in AllUsers.Where(u => Team.Members.All(m => m.UserId != u.Id)))
                                     {
                                         <option value="@user.Id">@(user.DisplayName ?? user.Email)</option>
                                     }
@@ -98,7 +99,7 @@ else
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var member in team.Members)
+                            @foreach (var member in Team.Members)
                             {
                                 <tr>
                                     <td>@(member.DisplayName ?? "—")</td>
@@ -128,7 +129,7 @@ else
                     <a href="/projects/create?teamId=@TeamId" class="btn btn-ghost btn-xs">Create Project</a>
                 </div>
 
-                @if (team.Projects.Count == 0)
+                @if (Team.Projects.Count == 0)
                 {
                     <p class="text-sm opacity-60">No projects in this team yet.</p>
                 }
@@ -144,7 +145,7 @@ else
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var project in team.Projects)
+                                @foreach (var project in Team.Projects)
                                 {
                                     <tr>
                                         <td>@project.Name</td>
@@ -168,8 +169,8 @@ else
 @code {
     [Parameter] public int TeamId { get; set; }
 
-    private TeamDetailResponse? team;
-    private List<UserInfo>? allUsers;
+    [PersistentState] public TeamDetailResponse? Team { get; set; }
+    [PersistentState] public List<UserInfo>? AllUsers { get; set; }
     private bool loading = true;
     private bool saving;
     private bool deleting;
@@ -183,6 +184,12 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
+        if (Team is not null)
+        {
+            loading = false;
+            return;
+        }
+
         loading = true;
         await LoadTeam();
         loading = false;
@@ -192,18 +199,18 @@ else
     {
         try
         {
-            team = await TeamService.GetTeamDetailAsync(TeamId);
-            allUsers = await AuthService.GetAllUsersAsync();
+            Team = await TeamService.GetTeamDetailAsync(TeamId);
+            AllUsers = await AuthService.GetAllUsersAsync();
         }
         catch
         {
-            team = null;
+            Team = null;
         }
     }
 
     private void StartEditName()
     {
-        editName = team?.Name ?? "";
+        editName = Team?.Name ?? "";
         editingName = true;
     }
 

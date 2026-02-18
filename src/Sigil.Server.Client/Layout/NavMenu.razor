@@ -1,39 +1,38 @@
 @using Sigil.Application.Models.Projects
-@inject IProjectService ProjectService
+@inject IServiceScopeFactory ScopeFactory
 
 <div class="p-4 border-b border-base-300">
-    <a href="/" class="text-xl font-bold">Sigil</a>
+    <a href="/" class="text-xl font-bold">سجل</a>
 </div>
 
 <AuthorizeView>
     <Authorized>
 
-
         <ul class="menu flex-1 w-full">
-            <!-- Project selector -->
-            @if (Projects is not null)
+
+            <li class="menu-title mt-4">Projects</li>
+            @if (_projects is not null)
             {
-                @foreach (var p in Projects)
+                @foreach (var p in _projects)
                 {
                     <li>
-                        <NavLink href="@($"/projects/{p.Id}/issues")" Match="NavLinkMatch.Prefix" ActiveClass="menu-active">@p.Name</NavLink>
+                        <NavLink href="@($"/projects/{p.Id}")" Match="NavLinkMatch.Prefix" class="menu-dropdown-toggle" ActiveClass="menu-dropdown-show">@p.Name</NavLink>
+                        <ul class="menu-dropdown">
+                            <li>
+                                <NavLink href="@($"/projects/{p.Id}/issues")" Match="NavLinkMatch.Prefix" ActiveClass="menu-active">
+                                    Issues
+                                </NavLink>
+                            </li>
+                            <li>
+                                <NavLink href="@($"/projects/{p.Id}/settings")" Match="NavLinkMatch.All" ActiveClass="menu-active">
+                                    Settings
+                                </NavLink>
+                            </li>
+                        </ul>
                     </li>
                 }
             }
-            <div class="divider"></div>
-            @if (_projectId > 0)
-            {
-                <li>
-                    <NavLink href="@($"/projects/{_projectId}/issues")" Match="NavLinkMatch.Prefix" ActiveClass="menu-active">
-                        Issues
-                    </NavLink>
-                </li>
-                <li>
-                    <NavLink href="@($"/projects/{_projectId}/settings")" Match="NavLinkMatch.All" ActiveClass="menu-active">
-                        Settings
-                    </NavLink>
-                </li>
-            }
+            <div class="flex-1"></div>
 
             <li class="menu-title mt-4">Organization</li>
             <li>
@@ -53,6 +52,16 @@
                     Users
                 </NavLink>
             </li>
+            <li>
+                <NavLink href="/admin/migrations" Match="NavLinkMatch.All" ActiveClass="menu-active">
+                    Migrations
+                </NavLink>
+            </li>
+            <li>
+                <NavLink href="/admin/digestion" Match="NavLinkMatch.All" ActiveClass="menu-active">
+                    Digestion
+                </NavLink>
+            </li>
         </ul>
 
         <form action="/logout" method="post" class="p-3 border-t border-base-300">
@@ -63,29 +72,19 @@
 </AuthorizeView>
 
 @code {
-    [PersistentState] public List<ProjectResponse>? Projects { get; set; }
-
-    [CascadingParameter] public RouteData? RouteData { get; set; }
-
-    private int _projectId;
+    private List<ProjectResponse>? _projects;
     
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            Projects ??= await ProjectService.GetProjectListAsync();
+            using var scope = ScopeFactory.CreateScope();
+            var service = scope.ServiceProvider.GetRequiredService<IProjectService>();
+            _projects = await service.GetProjectListAsync();
         }
         catch
         {
             // Not authenticated or server error
-        }
-    }
-    
-    protected override void OnParametersSet()
-    {
-        if (RouteData?.RouteValues.TryGetValue("ProjectId", out var projectId) == true)
-        {
-            _projectId = int.TryParse(projectId?.ToString(), out int id) ? id : 0;
         }
     }
 }

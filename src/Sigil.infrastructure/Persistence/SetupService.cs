@@ -17,16 +17,19 @@ internal class SetupService(
     IAppConfigService appConfigService,
     IDatabaseMigrator databaseMigrator) : ISetupService
 {
+    // Cached per process lifetime; null = unchecked, false = up to date, true = pending
+    private static bool? _hasPendingMigrationsCache;
+    
     public async Task<SetupStatus> GetSetupStatusAsync()
     {
         try
         {
-            var userCount = await dbContext.Users.CountAsync();
-            return new SetupStatus(IsComplete: userCount > 0, UserCount: userCount);
+            var value = await appConfigService.GetAsync(AppConfigKeys.SetupComplete);
+            return new SetupStatus(IsComplete: value == "true");
         }
-        catch (Exception)
+        catch
         {
-            return new SetupStatus(IsComplete: false, UserCount: 0);
+            return new SetupStatus(IsComplete: false);
         }
     }
 
@@ -58,6 +61,24 @@ internal class SetupService(
         return true;
     }
 
+    public Task<DbStatusResponse> GetMaintenanceDbStatusAsync() => GetDbStatusAsync();
+
+    public async Task<bool> HasPendingMigrationsAsync()
+    {
+        if (_hasPendingMigrationsCache.HasValue)
+            return _hasPendingMigrationsCache.Value;
+
+        var pending = await databaseMigrator.GetPendingMigrationsAsync();
+        _hasPendingMigrationsCache = pending.Count > 0;
+        return _hasPendingMigrationsCache.Value;
+    }
+
+    public async Task ApplyPendingMigrationsAsync()
+    {
+        await databaseMigrator.MigrateAsync();
+        _hasPendingMigrationsCache = false;
+    }
+
     public async Task<SetupResult> InitializeAsync(SetupRequest request)
     {
         // Guard against re-initialization
@@ -71,7 +92,8 @@ internal class SetupService(
             UserName = request.AdminEmail,
             Email = request.AdminEmail,
             DisplayName = request.AdminDisplayName,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            EmailConfirmed = true
         };
 
         var createResult = await userManager.CreateAsync(admin, request.AdminPassword);
@@ -114,10 +136,12 @@ internal class SetupService(
         if (!string.IsNullOrWhiteSpace(request.HostUrl))
             await appConfigService.SetAsync(AppConfigKeys.HostUrl, request.HostUrl);
 
+        await appConfigService.SetAsync(AppConfigKeys.SetupComplete, "true");
+
         // Sign in the admin
         await signInManager.SignInAsync(admin, isPersistent: false);
 
-        var userInfo = new UserInfo(admin.Id, admin.Email, admin.DisplayName, admin.CreatedAt, admin.LastLogin, ["Admin"]);
+        var userInfo = new UserInfo(admin.Id, admin.Email, admin.DisplayName, admin.CreatedAt, admin.LastLogin, ["Admin"], IsActivated: true);
         return SetupResult.Success(userInfo, project.ApiKey, project.Id);
     }
 }

@@ -10,7 +10,7 @@ using Sigil.Domain.Ingestion;
 
 namespace Sigil.infrastructure.Persistence;
 
-internal class EventService(SigilDbContext dbContext, ICompressionService compressionService, IDateTime dateTime) : IEventService
+internal class EventService(SigilDbContext dbContext, ICompressionService compressionService) : IEventService
 {
     public async Task<HashSet<string>> FindExistingEventIdsAsync(IEnumerable<string> eventIds)
     {
@@ -31,7 +31,8 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         {
             EventId = e.EventId,
             Timestamp = e.Timestamp,
-            ReceivedAt = dateTime.UtcNow,
+            ReceivedAt = e.ReceivedAt,
+            ProcessedAt = DateTime.UtcNow,
             Message = e.Message,
             Level = e.Level,
             Logger = e.Logger,
@@ -229,6 +230,30 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
             e.Id, e.EventId, e.IssueId, e.Message, e.Level,
             e.Timestamp, e.Platform, e.Release?.RawName,
             environment, user, stackFrames, tags);
+    }
+
+    public async Task<EventNavigationResponse> GetAdjacentEventIdsAsync(int issueId, long currentEventId)
+    {
+        var currentTimestamp = await dbContext.Events
+            .Where(e => e.Id == currentEventId)
+            .Select(e => e.Timestamp)
+            .FirstOrDefaultAsync();
+
+        // Previous = newer event (ordered by timestamp desc, the one before current)
+        var nextId = await dbContext.Events
+            .Where(e => e.IssueId == issueId && (e.Timestamp > currentTimestamp || (e.Timestamp == currentTimestamp && e.Id > currentEventId)))
+            .OrderBy(e => e.Timestamp).ThenBy(e => e.Id)
+            .Select(e => (long?)e.Id)
+            .FirstOrDefaultAsync();
+
+        // Next = older event (ordered by timestamp desc, the one after current)
+        var previousId = await dbContext.Events
+            .Where(e => e.IssueId == issueId && (e.Timestamp < currentTimestamp || (e.Timestamp == currentTimestamp && e.Id < currentEventId)))
+            .OrderByDescending(e => e.Timestamp).ThenByDescending(e => e.Id)
+            .Select(e => (long?)e.Id)
+            .FirstOrDefaultAsync();
+
+        return new EventNavigationResponse(previousId, nextId);
     }
 
     public async Task<List<BreadcrumbResponse>> GetBreadcrumbsAsync(long eventId)

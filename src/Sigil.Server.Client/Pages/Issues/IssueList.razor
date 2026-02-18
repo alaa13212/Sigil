@@ -1,8 +1,10 @@
 @page "/projects/{ProjectId:int}/issues"
 @attribute [Authorize]
+@rendermode InteractiveWebAssembly
 @using Sigil.Application.Models.Issues
 @inject IIssueService IssueService
 @inject NavigationManager Navigation
+@using System.Net
 
 <PageTitle>Issues — Sigil</PageTitle>
 
@@ -12,9 +14,9 @@
     <!-- Header -->
     <div class="flex items-center justify-between">
         <h1 class="text-2xl font-bold">Issues</h1>
-        @if (response is not null)
+        @if (Response is not null)
         {
-            <span class="text-sm opacity-60">@response.TotalCount total</span>
+            <span class="text-sm opacity-60">@Response.TotalCount total</span>
         }
     </div>
 
@@ -66,14 +68,18 @@
             <span class="loading loading-spinner loading-lg"></span>
         </div>
     }
-    else if (response is null || response.Items.Count == 0)
+    else if (projectNotFound)
+    {
+        <EmptyState Title="Project not found" Description="This project does not exist or you do not have access to it." />
+    }
+    else if (Response is null || Response.Items.Count == 0)
     {
         <EmptyState Title="No issues found" Description="Try adjusting your filters or wait for events to come in." />
     }
     else
     {
         <div class="overflow-x-auto">
-            <table class="table table-sm">
+            <table class="table table-zebra table-sm">
                 <thead>
                     <tr>
                         <th>Issue</th>
@@ -85,14 +91,21 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var issue in response.Items)
+                    @foreach (var issue in Response.Items)
                     {
-                        <tr class="hover cursor-pointer" @onclick="() => GoToIssue(issue.Id)">
+                        <tr class="hover:bg-base-300 relative cursor-pointer">
                             <td>
-                                <div class="font-semibold">@issue.Title</div>
-                                @if (!string.IsNullOrEmpty(issue.ExceptionType))
+                                <a href="/issues/@issue.Id" class="stretched-link" ></a>
+                                <div class="font-semibold">
+                                    @if (!string.IsNullOrEmpty(issue.ExceptionType))
+                                    {
+                                        <span class="opacity-80">@issue.ExceptionType: </span>
+                                    }
+                                    @issue.Title
+                                </div>
+                                @if (!string.IsNullOrEmpty(issue.Culprit))
                                 {
-                                    <div class="text-xs opacity-60">@issue.ExceptionType</div>
+                                    <div class="text-xs opacity-60">@issue.Culprit</div>
                                 }
                             </td>
                             <td><SeverityBadge Level="issue.Level" /></td>
@@ -106,17 +119,19 @@
             </table>
         </div>
 
-        <Pagination Page="currentPage" TotalCount="response.TotalCount" PageSize="PageSize"
+        <Pagination Page="currentPage" TotalCount="Response.TotalCount" PageSize="PageSize"
                     OnPageChanged="OnPageChanged" />
     }
 </div>
 
 @code {
     [Parameter] public int ProjectId { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] public int PageParam { get; set; } = 1;
 
     private const int PageSize = 50;
-    private PagedResponse<IssueSummary>? response;
+    [PersistentState] public PagedResponse<IssueSummary>? Response { get; set; }
     private bool loading = true;
+    private bool projectNotFound;
     private int currentPage = 1;
 
     // Filters
@@ -142,7 +157,17 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        currentPage = 1;
+        var targetPage = Math.Max(1, PageParam);
+
+        // Restored from SSR with the same page — skip re-fetch
+        if (Response is not null && Response.Page == targetPage)
+        {
+            currentPage = targetPage;
+            loading = false;
+            return;
+        }
+
+        currentPage = targetPage;
         await LoadIssues();
     }
 
@@ -166,11 +191,17 @@
                 PageSize = PageSize
             };
 
-            response = await IssueService.GetIssueSummariesAsync(ProjectId, query);
+            Response = await IssueService.GetIssueSummariesAsync(ProjectId, query);
+            projectNotFound = false;
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            projectNotFound = true;
+            Response = null;
         }
         catch
         {
-            response = null;
+            Response = null;
         }
         finally
         {
@@ -211,11 +242,6 @@
         }
     }
 
-    private async Task OnPageChanged(int newPage)
-    {
-        currentPage = newPage;
-        await LoadIssues();
-    }
-
-    private void GoToIssue(int issueId) => Navigation.NavigateTo($"/issues/{issueId}");
+    private void OnPageChanged(int newPage) =>
+        Navigation.NavigateTo($"/projects/{ProjectId}/issues?page={newPage}");
 }

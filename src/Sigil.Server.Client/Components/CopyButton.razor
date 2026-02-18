@@ -1,0 +1,23 @@
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@inject IJSRuntime JS
+
+<button class="@Class" @onclick="Copy">@(_copied ? "Copied!" : Label)</button>
+
+@code {
+    [Parameter, EditorRequired] public string? Text { get; set; }
+    [Parameter] public string Label { get; set; } = "Copy";
+    [Parameter] public string Class { get; set; } = "btn btn-ghost btn-xs";
+
+    private bool _copied;
+
+    private async Task Copy()
+    {
+        if (!string.IsNullOrEmpty(Text))
+        {
+            try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", Text); }
+            catch { }
+        }
+        _copied = true;
+        StateHasChanged();
+    }
+}

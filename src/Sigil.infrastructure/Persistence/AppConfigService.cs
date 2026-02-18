@@ -4,12 +4,17 @@ using Sigil.Domain.Entities;
 
 namespace Sigil.infrastructure.Persistence;
 
-internal class AppConfigService(SigilDbContext dbContext) : IAppConfigService
+internal class AppConfigService(SigilDbContext dbContext, IAppConfigCache cache) : IAppConfigService
 {
     public async Task<string?> GetAsync(string key)
     {
+        if (cache.TryGet(key, out string? cached))
+            return cached;
+
         var config = await dbContext.AppConfigs.FindAsync(key);
-        return config?.Value;
+        var value = config?.Value;
+        cache.Set(key, value);
+        return value;
     }
 
     public async Task SetAsync(string key, string? value)
@@ -31,6 +36,7 @@ internal class AppConfigService(SigilDbContext dbContext) : IAppConfigService
         }
 
         await dbContext.SaveChangesAsync();
+        cache.Invalidate(key);
     }
 
     public async Task<Dictionary<string, string?>> GetAllAsync()

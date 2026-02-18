@@ -36,19 +36,13 @@ internal class TeamService(SigilDbContext dbContext) : ITeamService
 
     public async Task<TeamResponse> CreateTeamAsync(string name, Guid creatorUserId)
     {
-        var user = await dbContext.Users.FindAsync(creatorUserId)
-            ?? throw new InvalidOperationException("User not found.");
-
         var team = new Team { Name = name };
         dbContext.Teams.Add(team);
-        await dbContext.SaveChangesAsync();
 
         var membership = new TeamMembership
         {
-            TeamId = team.Id,
             Team = team,
             UserId = creatorUserId,
-            User = user,
             Role = TeamRole.Owner
         };
         dbContext.TeamMemberships.Add(membership);

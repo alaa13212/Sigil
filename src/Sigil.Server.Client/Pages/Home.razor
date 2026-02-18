@@ -7,7 +7,7 @@
 @inject IHttpContextAccessor HttpContextAccessor
 
 
-<PageTitle>Sigil</PageTitle>
+<PageTitle>سجل</PageTitle>
 
 @if (loading)
 {
@@ -49,8 +49,7 @@ else if (Projects.Count > 1)
             
             <a href="/projects/create" class="card hover:bg-base-300 transition-colors cursor-pointer border-dashed border-2 border-base-300/50">
                 <div class="card-body p-5">
-                    <h2 class="card-title text-base">Create New Project</h2>
-                    <p class="text-6xl text-center">+</p>
+                    <h2 class="card-title text-base items-center"> <span class="text-4xl font-mono">+</span> <span>Create New Project</span></h2>
                 </div>
             </a>
 

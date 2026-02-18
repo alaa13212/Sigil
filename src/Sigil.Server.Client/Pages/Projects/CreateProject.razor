@@ -1,5 +1,6 @@
 @page "/projects/create"
 @attribute [Authorize]
+@rendermode InteractiveWebAssembly
 @using Sigil.Application.Models.Teams
 @inject IProjectService ProjectService
 @inject ITeamService TeamService
@@ -31,9 +32,9 @@
                 <legend class="fieldset-legend">Team (optional)</legend>
                 <select class="select w-full" @bind="selectedTeamId">
                     <option value="">No team</option>
-                    @if (teams is not null)
+                    @if (Teams is not null)
                     {
-                        @foreach (var t in teams)
+                        @foreach (var t in Teams)
                         {
                             <option value="@t.Id">@t.Name</option>
                         }
@@ -56,7 +57,7 @@
 @code {
     [SupplyParameterFromQuery] public int? TeamId { get; set; }
 
-    private List<TeamResponse>? teams;
+    [PersistentState] public List<TeamResponse>? Teams { get; set; }
     private string name = "";
     private Platform platform = Platform.CSharp;
     private string selectedTeamId = "";
@@ -65,11 +66,14 @@
 
     protected override async Task OnInitializedAsync()
     {
-        try
+        if (Teams is null)
         {
-            teams = await TeamService.GetTeamsAsync();
+            try
+            {
+                Teams = await TeamService.GetTeamsAsync();
+            }
+            catch { }
         }
-        catch { }
 
         if (TeamId.HasValue)
             selectedTeamId = TeamId.Value.ToString();

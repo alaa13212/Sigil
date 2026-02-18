@@ -1,9 +1,11 @@
 @page "/login"
+@using Microsoft.AspNetCore.Http
 @using Sigil.Application.Models.Auth
 @layout SetupLayout
 @attribute [AllowAnonymous]
 @inject IAuthService AuthService
 @inject NavigationManager Navigation
+@inject IHttpContextAccessor HttpContextAccessor
 
 <PageTitle>Sign In — Sigil</PageTitle>
 
@@ -63,6 +65,14 @@
             if (result.Succeeded)
             {
                 var target = !string.IsNullOrEmpty(ReturnUrl) && ReturnUrl.StartsWith('/') ? ReturnUrl : "/";
+                
+                var http = HttpContextAccessor.HttpContext;
+                if (http is not null && !http.Response.HasStarted)
+                {
+                    http.Response.Redirect(target);
+                    return;
+                }
+                
                 Navigation.NavigateTo(target, forceLoad: true);
             }
             else

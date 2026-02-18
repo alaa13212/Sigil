@@ -1,11 +1,11 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
 
 namespace Sigil.infrastructure.Persistence;
 
-internal partial class ReleaseService(SigilDbContext dbContext, IDateTime dateTime) : IReleaseService
+internal partial class ReleaseService(SigilDbContext dbContext, IDateTime dateTime, IReleaseCache releaseCache) : IReleaseService
 {
     public async Task<Release> CreateReleaseAsync(int projectId, string rawValue)
     {
@@ -17,32 +17,51 @@ internal partial class ReleaseService(SigilDbContext dbContext, IDateTime dateTi
 
         Release release = ParseAndCreateReleaseAsync(projectId, rawValue);
         await dbContext.SaveChangesAsync();
+        releaseCache.Set(projectId, release);
         return release;
     }
 
     public async Task<List<Release>> BulkGetOrCreateReleasesAsync(int projectId, IEnumerable<string> rawValues)
     {
         List<Release> results = [];
+        List<string> misses = [];
 
-        results.AddRange(
-            await dbContext.Releases
-                .Where(r => r.ProjectId == projectId && rawValues.Contains(r.RawName))
-                .ToListAsync());
-        
-        List<string> existingRawValues = results.Select(r => r.RawName).ToList();
-        List<string> newRawValues = rawValues.Except(existingRawValues).ToList();
-        
-        if (newRawValues.Any())
+        foreach (string rawValue in rawValues)
         {
-            List<Release> newReleases = newRawValues.Select(rawValue => ParseAndCreateReleaseAsync(projectId, rawValue)).ToList();
-            dbContext.Releases.AddRange(newReleases);
-            await dbContext.SaveChangesAsync();
-            results.AddRange(newReleases);
-            
-            foreach (Release newRelease in newReleases)
-                dbContext.Entry(newRelease).State = EntityState.Detached;
+            if (releaseCache.TryGet(projectId, rawValue, out Release? cached))
+                results.Add(cached!);
+            else
+                misses.Add(rawValue);
         }
-        
+
+        if (misses.Count > 0)
+        {
+            var fromDb = new List<Release>();
+            fromDb.AddRange(
+                await dbContext.Releases
+                    .Where(r => r.ProjectId == projectId && misses.Contains(r.RawName))
+                    .ToListAsync());
+
+            List<string> existingRawValues = fromDb.Select(r => r.RawName).ToList();
+            List<string> newRawValues = misses.Except(existingRawValues).ToList();
+
+            if (newRawValues.Any())
+            {
+                List<Release> newReleases = newRawValues.Select(rawValue => ParseAndCreateReleaseAsync(projectId, rawValue)).ToList();
+                dbContext.Releases.AddRange(newReleases);
+                await dbContext.SaveChangesAsync();
+                fromDb.AddRange(newReleases);
+
+                foreach (Release newRelease in newReleases)
+                    dbContext.Entry(newRelease).State = EntityState.Detached;
+            }
+
+            foreach (Release release in fromDb)
+                releaseCache.Set(projectId, release);
+
+            results.AddRange(fromDb);
+        }
+
         return results;
     }
 
@@ -79,34 +98,29 @@ internal partial class ReleaseService(SigilDbContext dbContext, IDateTime dateTi
 
     private static (string? package, string? version, int? build, string? commitSha) ParseReleaseComponents(string rawValue)
     {
-        // Extract components from the raw value
         string? package = null;
         string? version = null;
         int? build = null;
         string? commitSha = null;
 
-        // Try to extract package name
         var packageMatch = PackageRegex().Match(rawValue);
         if (packageMatch.Success)
         {
             package = packageMatch.Groups["package"].Value;
         }
 
-        // Try to extract semantic version
         var semVerMatch = SemVerRegex().Match(rawValue);
         if (semVerMatch.Success)
         {
             version = semVerMatch.Value;
         }
 
-        // Try to extract build number
         var buildMatch = BuildNumberRegex().Match(rawValue);
         if (buildMatch.Success && int.TryParse(buildMatch.Groups["build"].Value, out var buildNum))
         {
             build = buildNum;
         }
 
-        // Try to extract commit SHA
         var commitMatch = CommitShaRegex().Match(rawValue);
         if (commitMatch.Success)
         {

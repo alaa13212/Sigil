@@ -1,0 +1,169 @@
+@page "/admin/migrations"
+@attribute [Authorize]
+@rendermode InteractiveWebAssembly
+@using Sigil.Application.Models.Auth
+@inject ISetupService SetupService
+
+<PageTitle>Database Migrations — Sigil</PageTitle>
+
+<div class="max-w-2xl space-y-6 mx-auto">
+    <h1 class="text-2xl font-bold">Database Migrations</h1>
+
+    @if (loading)
+    {
+        <div class="flex items-center gap-2 py-8">
+            <span class="loading loading-spinner loading-sm"></span>
+            <span>Checking database...</span>
+        </div>
+    }
+    else if (status is null)
+    {
+        <div class="alert alert-error">Failed to connect to the database.</div>
+        <button class="btn btn-outline btn-sm" @onclick="Load">Retry</button>
+    }
+    else
+    {
+        <!-- Connection status -->
+        <div class="card bg-base-200">
+            <div class="card-body p-4 space-y-3">
+                <h2 class="font-semibold">Connection</h2>
+
+                @if (status.Status == DbConnectionStatus.Connected)
+                {
+                    <div class="flex items-center gap-2 text-success text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                        </svg>
+                        Connected — @status.Applied.Count migration(s) applied
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-error text-sm">Cannot reach the database.</div>
+                    @if (!string.IsNullOrEmpty(status.Error))
+                    {
+                        <pre class="text-xs opacity-60 bg-base-300 p-2 rounded overflow-x-auto">@status.Error</pre>
+                    }
+                }
+            </div>
+        </div>
+
+        <!-- Pending migrations -->
+        @if (status.Status == DbConnectionStatus.Connected)
+        {
+            <div class="card bg-base-200">
+                <div class="card-body p-4 space-y-3">
+                    <h2 class="font-semibold">Pending Migrations</h2>
+
+                    @if (status.Pending.Count == 0)
+                    {
+                        <div class="text-sm opacity-60">Database is up to date. No pending migrations.</div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning text-sm">
+                            @status.Pending.Count migration(s) are pending. Back up your database before applying.
+                        </div>
+                        <div class="bg-base-300 rounded p-3 space-y-1">
+                            @foreach (var m in status.Pending)
+                            {
+                                <div class="font-mono text-xs"> - @m</div>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(migrateError))
+                        {
+                            <div class="alert alert-error text-sm">@migrateError</div>
+                        }
+                        @if (migrateSuccess)
+                        {
+                            <div class="alert alert-success text-sm">Migrations applied successfully.</div>
+                        }
+
+                        <button class="btn btn-primary btn-sm" @onclick="ApplyMigrations" disabled="@migrating">
+                            @if (migrating)
+                            {
+                                <span class="loading loading-spinner loading-xs"></span>
+                            }
+                            Apply Migrations
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Applied migrations -->
+            @if (status.Applied.Count > 0)
+            {
+                <div class="collapse collapse-arrow bg-base-200">
+                    <input type="checkbox" />
+                    <div class="collapse-title font-semibold text-sm">Applied Migrations (@status.Applied.Count)</div>
+                    <div class="collapse-content space-y-1">
+                        @foreach (var m in status.Applied)
+                        {
+                            <div class="font-mono text-xs opacity-70"> - @m</div>
+                        }
+                    </div>
+                </div>
+            }
+        }
+
+        <div class="flex justify-end">
+            <button class="btn btn-ghost btn-sm" @onclick="Load">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.898.632 5.002 5.002 0 00-9.208-1.318V9a1 1 0 01-2 0V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+                </svg>
+                Refresh
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private DbStatusResponse? status;
+    private bool loading = true;
+    private bool migrating;
+    private bool migrateSuccess;
+    private string? migrateError;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        loading = true;
+        migrateSuccess = false;
+        migrateError = null;
+        try
+        {
+            status = await SetupService.GetMaintenanceDbStatusAsync();
+        }
+        catch
+        {
+            status = null;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task ApplyMigrations()
+    {
+        migrating = true;
+        migrateError = null;
+        migrateSuccess = false;
+        try
+        {
+            await SetupService.ApplyPendingMigrationsAsync();
+            migrateSuccess = true;
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            migrateError = ex.Message;
+        }
+        finally
+        {
+            migrating = false;
+        }
+    }
+}

@@ -13,6 +13,7 @@ public class ParsedEvent
     public string? ExceptionType { get; init; }
     public string? Message { get; init; }
     public string? NormalizedMessage { get; set; }
+    public DateTime ReceivedAt { get; set; }
     
     public string? Culprit { get; init; }
     public string? Environment { get; init; }

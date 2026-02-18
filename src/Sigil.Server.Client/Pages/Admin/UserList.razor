@@ -1,49 +1,17 @@
 @page "/admin/users"
 @attribute [Authorize]
+@rendermode InteractiveWebAssembly
 @using Sigil.Application.Models.Auth
 @inject IAuthService AuthService
+@inject NavigationManager Nav
 
 <PageTitle>Users — Sigil</PageTitle>
 
 <div class="max-w-4xl space-y-6 mx-auto">
     <div class="flex items-center justify-between">
         <h1 class="text-2xl font-bold">Users</h1>
-        <button class="btn btn-primary btn-sm" @onclick="() => showRegister = !showRegister">
-            @(showRegister ? "Cancel" : "Register User")
-        </button>
+        <a href="/admin/users/register" class="btn btn-primary btn-sm">Invite User</a>
     </div>
-
-    @if (showRegister)
-    {
-        <div class="card bg-base-200">
-            <div class="card-body p-5 space-y-3">
-                <h2 class="font-semibold">Register New User</h2>
-                <fieldset class="fieldset">
-                    <legend class="fieldset-legend">Email</legend>
-                    <input type="email" class="input w-full" @bind="regEmail" placeholder="user@example.com" />
-                </fieldset>
-                <fieldset class="fieldset">
-                    <legend class="fieldset-legend">Display Name</legend>
-                    <input type="text" class="input w-full" @bind="regDisplayName" placeholder="John Doe" />
-                </fieldset>
-                <fieldset class="fieldset">
-                    <legend class="fieldset-legend">Password</legend>
-                    <input type="password" class="input w-full" @bind="regPassword" />
-                </fieldset>
-                @if (!string.IsNullOrEmpty(regError))
-                {
-                    <div class="alert alert-error text-sm">@regError</div>
-                }
-                @if (!string.IsNullOrEmpty(regSuccess))
-                {
-                    <div class="alert alert-success text-sm">@regSuccess</div>
-                }
-                <button class="btn btn-primary" @onclick="RegisterUser" disabled="@registering">
-                    @(registering ? "Registering..." : "Register")
-                </button>
-            </div>
-        </div>
-    }
 
     @if (loading)
     {
@@ -51,7 +19,7 @@
             <span class="loading loading-spinner loading-lg"></span>
         </div>
     }
-    else if (users is null || users.Count == 0)
+    else if (Users is null || Users.Count == 0)
     {
         <EmptyState Title="No users found" />
     }
@@ -67,16 +35,33 @@
                                 <th>Email</th>
                                 <th>Created</th>
                                 <th>Last Login</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var user in users)
+                            @foreach (var user in Users)
                             {
                                 <tr>
                                     <td>@(user.DisplayName ?? "—")</td>
-                                    <td>@user.Email</td>
+                                    <td>
+                                        @user.Email
+                                        @if (!user.IsActivated)
+                                        {
+                                            <span class="badge badge-warning badge-sm ml-2">Pending</span>
+                                        }
+                                    </td>
                                     <td>@user.CreatedAt.ToString("yyyy-MM-dd")</td>
                                     <td>@(user.LastLogin?.ToString("yyyy-MM-dd HH:mm") ?? "Never")</td>
+                                    <td>
+                                        @if (!user.IsActivated && user.ActivationToken is not null)
+                                        {
+                                            var link = $"{Nav.BaseUri}activate?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(user.ActivationToken)}";
+                                            <div class="flex items-center gap-1">
+                                                <span class="text-xs opacity-60">Invite link</span>
+                                                <CopyButton Text="@link" />
+                                            </div>
+                                        }
+                                    </td>
                                 </tr>
                             }
                         </tbody>
@@ -88,72 +73,29 @@
 </div>
 
 @code {
-    private List<UserInfo>? users;
+    [PersistentState] public List<UserInfo>? Users { get; set; }
     private bool loading = true;
-    private bool showRegister;
-    private bool registering;
-    private string regEmail = "";
-    private string regDisplayName = "";
-    private string regPassword = "";
-    private string? regError;
-    private string? regSuccess;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadUsers();
-    }
+        if (Users is not null)
+        {
+            loading = false;
+            return;
+        }
 
-    private async Task LoadUsers()
-    {
         loading = true;
         try
         {
-            users = await AuthService.GetAllUsersAsync();
+            Users = await AuthService.GetAllUsersAsync();
         }
         catch
         {
-            users = null;
+            Users = null;
         }
         finally
         {
             loading = false;
-        }
-    }
-
-    private async Task RegisterUser()
-    {
-        if (string.IsNullOrWhiteSpace(regEmail) || string.IsNullOrWhiteSpace(regPassword))
-        {
-            regError = "Email and password are required.";
-            return;
-        }
-
-        registering = true;
-        regError = null;
-        regSuccess = null;
-        try
-        {
-            var result = await AuthService.RegisterAsync(new RegisterRequest(regEmail, regPassword, regDisplayName));
-            if (result.Succeeded)
-            {
-                regSuccess = $"User {regEmail} registered successfully.";
-                regEmail = "";
-                regDisplayName = "";
-                regPassword = "";
-                await LoadUsers();
-            }
-            else
-            {
-                regError = string.Join(", ", result.Errors);
-            }
-        }
-        catch
-        {
-            regError = "Failed to register user.";
-        }
-        finally
-        {
-            registering = false;
         }
     }
 }

@@ -48,6 +48,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITeamService, TeamService>();
         services.AddScoped<ISetupService, SetupService>();
         services.AddScoped<IFailedEventService, FailedEventService>();
+        services.AddScoped<IRawEnvelopeService, RawEnvelopeService>();
+        services.AddScoped<IDigestionService, DigestionService>();
+        services.AddScoped<IDigestionMonitorService, DigestionMonitorService>();
 
         services.AddIdentityServices();
         services.AddCaches();
@@ -59,6 +62,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ICacheManager, CacheManager>();
         services.Configure<CacheManagerOptions>(options =>
         {
+            options.Add<IAppConfigCache>(50, TimeSpan.FromHours(1));
             options.Add<IProjectCache>(100, TimeSpan.FromMinutes(30));
             options.Add<IReleaseCache>(5_000, TimeSpan.FromMinutes(5));
             options.Add<ITagCache>(20_000, TimeSpan.FromMinutes(3));
@@ -66,6 +70,7 @@ public static class ServiceCollectionExtensions
             options.Add<IEventUserCache>(20_000, TimeSpan.FromMinutes(5));
         });
 
+        services.AddScoped<IAppConfigCache, AppConfigCache>();
         services.AddScoped<IProjectCache, ProjectCache>();
         services.AddScoped<IReleaseCache, ReleaseCache>();
         services.AddScoped<ITagCache, TagCache>();
@@ -87,7 +92,10 @@ public static class ServiceCollectionExtensions
     private static void AddWorkers(this IServiceCollection services, IConfigurationManager configuration)
     {
         services.AddHostedService<WorkersHost>();
+        services.AddSingleton<IDigestionSignal, DigestionSignal>();
         services.AddWorker<IEventIngestionWorker, EventIngestionWorker>();
+        services.AddSingleton<DigestionWorker>();
+        services.AddSingleton<IWorker>(sp => sp.GetRequiredService<DigestionWorker>());
 
         services.Configure<BatchWorkersConfig>(configuration.GetSection("BatchWorkers"));
     }

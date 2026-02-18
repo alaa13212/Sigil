@@ -1,5 +1,4 @@
 @inject IEventService EventService
-@inject IJSRuntime JS
 
 @if (loading)
 {
@@ -15,7 +14,7 @@ else if (rawJson is not null)
 {
     <div class="space-y-2">
         <div class="flex gap-2">
-            <button class="btn btn-ghost btn-xs" @onclick="CopyJson">@(copied ? "Copied!" : "Copy")</button>
+            <CopyButton Text="@rawJson" />
             <a href="@($"events/{EventId}/download")" class="btn btn-ghost btn-xs">Download</a>
             <a href="@($"events/{EventId}/raw")" class="btn btn-ghost btn-xs">Raw</a>
             <a href="@($"events/{EventId}/md")" class="btn btn-ghost btn-xs">Markdown</a>
@@ -35,7 +34,6 @@ else if (rawJson is not null)
     private string? error;
     private bool loading;
     private bool loaded;
-    private bool copied;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -70,19 +68,5 @@ else if (rawJson is not null)
         {
             loading = false;
         }
-    }
-
-    private async Task CopyJson()
-    {
-        if (rawJson is not null)
-        {
-            try
-            {
-                await JS.InvokeVoidAsync("navigator.clipboard.writeText", rawJson);
-            }
-            catch { }
-        }
-        copied = true;
-        StateHasChanged();
     }
 }

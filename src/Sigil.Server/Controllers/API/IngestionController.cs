@@ -15,7 +15,7 @@ public class IngestionController(IEventIngestionWorker ingestionWorker) : SigilC
     public async Task<IActionResult> IngestEnvelope(int projectId)
     {
         string rawEnvelope = await Request.Body.ReadAsStringAsync();
-        if(ingestionWorker.TryEnqueue(new IngestionJobItem(projectId, rawEnvelope)))
+        if(ingestionWorker.TryEnqueue(new IngestionJobItem(projectId, rawEnvelope, DateTime.UtcNow)))
             return Accepted();
         
         return TooManyRequests(TimeSpan.FromSeconds(30));

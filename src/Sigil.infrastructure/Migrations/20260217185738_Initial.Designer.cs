@@ -13,7 +13,7 @@ using Sigil.infrastructure.Persistence;
 namespace Sigil.infrastructure.Migrations
 {
     [DbContext(typeof(SigilDbContext))]
-    [Migration("20260217185738_Initial")]
+    [Migration("20260218224627_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -221,6 +221,9 @@ namespace Sigil.infrastructure.Migrations
 
                     b.Property<int>("Platform")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("ProjectId")
                         .HasColumnType("integer");
@@ -500,6 +503,35 @@ namespace Sigil.infrastructure.Migrations
                     b.HasIndex("TeamId");
 
                     b.ToTable("Projects");
+                });
+
+            modelBuilder.Entity("Sigil.Domain.Entities.RawEnvelope", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Error")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RawData")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("RawEnvelopes");
                 });
 
             modelBuilder.Entity("Sigil.Domain.Entities.Release", b =>

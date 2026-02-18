@@ -1,0 +1,189 @@
+@page "/admin/digestion"
+@attribute [Authorize]
+@rendermode InteractiveWebAssembly
+@using Sigil.Application.Models.Digestion
+@inject IDigestionMonitorService MonitorService
+
+<PageTitle>Digestion Monitor — Sigil</PageTitle>
+
+<div class="space-y-6">
+
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold">Digestion Monitor</h1>
+        <button class="btn btn-ghost btn-sm gap-2" @onclick="Load" disabled="@loading">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 @(loading ? "animate-spin" : "")" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.898.632 5.002 5.002 0 00-9.208-1.318V9a1 1 0 01-2 0V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+            </svg>
+            Refresh
+        </button>
+    </div>
+
+    @if (loading && stats is null)
+    {
+        <div class="flex justify-center py-16">
+            <span class="loading loading-spinner loading-lg"></span>
+        </div>
+    }
+    else if (stats is not null)
+    {
+        <!-- Summary stats -->
+        <div class="stats shadow w-full bg-base-200">
+            <div class="stat">
+                <div class="stat-title">Pending</div>
+                <div class="stat-value @(stats.PendingCount > 0 ? "text-warning" : "text-success")">@stats.PendingCount</div>
+                <div class="stat-desc">envelopes awaiting digestion</div>
+            </div>
+            <div class="stat">
+                <div class="stat-title">Batches Remaining</div>
+                <div class="stat-value @(stats.PendingCount > 0 ? "text-warning" : "text-success")">@BatchesRemaining</div>
+                <div class="stat-desc">at @stats.BatchSize per batch</div>
+            </div>
+            <div class="stat">
+                <div class="stat-title">Failed</div>
+                <div class="stat-value @(stats.FailedCount > 0 ? "text-error" : "text-success")">@stats.FailedCount</div>
+                <div class="stat-desc">parse errors (manual review needed)</div>
+            </div>
+            <div class="stat">
+                <div class="stat-title">Oldest Pending</div>
+                @if (stats.OldestPendingAt.HasValue)
+                {
+                    <div class="stat-value text-base font-mono">@OldestPendingAge</div>
+                    <div class="stat-desc">@stats.OldestPendingAt.Value.ToString("yyyy-MM-dd HH:mm") UTC</div>
+                }
+                else
+                {
+                    <div class="stat-value text-base text-success">—</div>
+                    <div class="stat-desc">queue is empty</div>
+                }
+            </div>
+        </div>
+
+        <!-- Per-project breakdown -->
+        @if (stats.ByProject.Count > 0)
+        {
+            <div class="card bg-base-200">
+                <div class="card-body p-4">
+                    <h2 class="font-semibold mb-3">By Project</h2>
+                    <div class="overflow-x-auto">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Project</th>
+                                    <th class="text-right">Pending</th>
+                                    <th class="text-right">Failed</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var p in stats.ByProject.OrderByDescending(x => x.PendingCount + x.FailedCount))
+                                {
+                                    <tr>
+                                        <td>@p.ProjectName</td>
+                                        <td class="text-right @(p.PendingCount > 0 ? "text-warning" : "")">@p.PendingCount</td>
+                                        <td class="text-right @(p.FailedCount > 0 ? "text-error" : "")">@p.FailedCount</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Recent parse failures -->
+        @if (failures.Count > 0)
+        {
+            <div class="card bg-base-200">
+                <div class="card-body p-4">
+                    <h2 class="font-semibold mb-3">
+                        Recent Parse Failures
+                        <span class="badge badge-error badge-sm ml-2">@failures.Count</span>
+                    </h2>
+                    <div class="overflow-x-auto">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Project</th>
+                                    <th>Received</th>
+                                    <th>Error</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var f in failures)
+                                {
+                                    <tr>
+                                        <td class="font-mono text-xs opacity-60">@f.Id</td>
+                                        <td>@f.ProjectName</td>
+                                        <td class="text-xs opacity-70 whitespace-nowrap">@f.ReceivedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                        <td class="text-xs text-error">
+                                            <div class="max-w-sm truncate" title="@f.Error">@f.Error</div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (stats.FailedCount == 0)
+        {
+            <div class="alert alert-success text-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+                No parse failures. All envelopes processed successfully.
+            </div>
+        }
+
+        <div class="text-xs opacity-40 text-right">Last refreshed: @lastRefreshed.ToString("HH:mm:ss") UTC</div>
+    }
+
+</div>
+
+@code {
+    private DigestionStats? stats;
+    private List<FailedEnvelopeSummary> failures = [];
+    private bool loading = true;
+    private DateTime lastRefreshed;
+
+    private int BatchesRemaining => stats?.PendingCount is > 0
+        ? (int)Math.Ceiling(stats.PendingCount / (double)stats.BatchSize)
+        : 0;
+
+    private string OldestPendingAge
+    {
+        get
+        {
+            if (stats?.OldestPendingAt is not { } oldest) return "—";
+            var age = DateTime.UtcNow - oldest;
+            return age switch
+            {
+                { TotalSeconds: < 60 } => $"{(int)age.TotalSeconds}s",
+                { TotalMinutes: < 60 } => $"{(int)age.TotalMinutes}m",
+                _ => $"{(int)age.TotalHours}h {age.Minutes}m",
+            };
+        }
+    }
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        loading = true;
+        try
+        {
+            stats = await MonitorService.GetStatsAsync();
+            lastRefreshed = DateTime.UtcNow;
+            StateHasChanged();
+            
+            failures = await MonitorService.GetRecentFailuresAsync();
+            lastRefreshed = DateTime.UtcNow;
+            StateHasChanged();
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

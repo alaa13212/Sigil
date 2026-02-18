@@ -1,0 +1,99 @@
+@page "/activate"
+@attribute [AllowAnonymous]
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using Sigil.Application.Models.Auth
+@inject IAuthService AuthService
+
+<PageTitle>Activate Account — Sigil</PageTitle>
+
+<div class="min-h-screen flex items-center justify-center bg-base-300">
+    <div class="card w-full max-w-md bg-base-200 shadow-xl">
+        <div class="card-body gap-4">
+            <h1 class="text-2xl font-bold">Activate Your Account</h1>
+
+            @if (activated)
+            {
+                <div class="alert alert-success">Account activated. You can now sign in.</div>
+                <a href="/login" class="btn btn-primary w-full">Go to Login</a>
+            }
+            else
+            {
+                <p class="text-sm opacity-70">Set a password to activate your account.</p>
+
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Email</legend>
+                    <input type="email" class="input w-full" value="@Email" disabled />
+                </fieldset>
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Password</legend>
+                    <input type="password" class="input w-full" @bind="password" placeholder="Choose a password" />
+                </fieldset>
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Confirm Password</legend>
+                    <input type="password" class="input w-full" @bind="confirmPassword" placeholder="Repeat password" />
+                </fieldset>
+
+                @if (!string.IsNullOrEmpty(error))
+                {
+                    <div class="alert alert-error text-sm">@error</div>
+                }
+
+                @if (string.IsNullOrWhiteSpace(Email) || string.IsNullOrWhiteSpace(Token))
+                {
+                    <div class="alert alert-warning text-sm">Invalid or missing activation link.</div>
+                }
+                else
+                {
+                    <button class="btn btn-primary w-full" @onclick="Activate" disabled="@submitting">
+                        @(submitting ? "Activating..." : "Activate Account")
+                    </button>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? Email { get; set; }
+    [SupplyParameterFromQuery] public string? Token { get; set; }
+
+    private string password = "";
+    private string confirmPassword = "";
+    private string? error;
+    private bool submitting;
+    private bool activated;
+
+    private async Task Activate()
+    {
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            error = "Password is required.";
+            return;
+        }
+
+        if (password != confirmPassword)
+        {
+            error = "Passwords do not match.";
+            return;
+        }
+
+        submitting = true;
+        error = null;
+        try
+        {
+            var result = await AuthService.ActivateAccountAsync(new ActivateRequest(Email!, Token!, password));
+            if (result.Succeeded)
+                activated = true;
+            else
+                error = string.Join(", ", result.Errors);
+        }
+        catch
+        {
+            error = "Activation failed. The link may have expired.";
+        }
+        finally
+        {
+            submitting = false;
+        }
+    }
+}

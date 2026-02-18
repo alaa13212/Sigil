@@ -17,6 +17,8 @@ else
 @code {
     private const string SetupWizardPath = "/setup";
     private const string LoginPath = "/login";
+    private const string ActivatePath = "/activate";
+    private const string MigrationsPath = "/admin/migrations";
     
     [Parameter] public RenderFragment ChildContent { get; set; } = null!;
 
@@ -69,7 +71,10 @@ else
         }
         
 
-        if(path.StartsWith(LoginPath, StringComparison.OrdinalIgnoreCase))
+        if (path.StartsWith(LoginPath, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        if (path.StartsWith(ActivatePath, StringComparison.OrdinalIgnoreCase))
             return null;
 
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
@@ -77,6 +82,12 @@ else
         {
             var returnUrl = path == "/" ? "" : $"?returnUrl={Uri.EscapeDataString(path)}";
             return $"{LoginPath}{returnUrl}";
+        }
+
+        if (!path.StartsWith(MigrationsPath, StringComparison.OrdinalIgnoreCase))
+        {
+            if (await SetupService.HasPendingMigrationsAsync())
+                return MigrationsPath;
         }
 
         return null;

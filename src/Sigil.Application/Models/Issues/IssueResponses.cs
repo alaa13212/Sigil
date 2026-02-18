@@ -18,6 +18,7 @@ public record IssueSummary(
 
 public record IssueDetailResponse(
     int Id,
+    int ProjectId,
     string Title,
     string? ExceptionType,
     string? Culprit,
@@ -32,8 +33,14 @@ public record IssueDetailResponse(
     Guid? AssignedToId,
     string? ResolvedByName,
     DateTime? ResolvedAt,
-    List<TagSummary> Tags,
-    EventSummary? SuggestedEvent);
+    List<IssueTagGroup> Tags,
+    EventSummary? SuggestedEvent,
+    string? FirstRelease,
+    string? LastRelease);
+
+public record IssueTagGroup(string Key, List<IssueTagValue> Values, int TotalCount);
+
+public record IssueTagValue(string Value, int Count);
 
 public record UpdateStatusRequest(IssueStatus Status);
 

@@ -1,52 +1,57 @@
 @page "/teams"
 @attribute [Authorize]
+@rendermode InteractiveWebAssembly
 @using Sigil.Application.Models.Teams
 @inject ITeamService TeamService
 @inject NavigationManager Navigation
 
 <PageTitle>Teams — Sigil</PageTitle>
 
-<div class="max-w-4xl space-y-6">
+<div class="space-y-6">
     <div class="flex items-center justify-between">
         <h1 class="text-2xl font-bold">Teams</h1>
-        <button class="btn btn-primary btn-sm" @onclick="() => showCreate = !showCreate">
-            @(showCreate ? "Cancel" : "Create Team")
-        </button>
     </div>
-
-    @if (showCreate)
-    {
-        <div class="card bg-base-200">
-            <div class="card-body p-5">
-                <div class="join w-full">
-                    <input type="text" class="input join-item flex-1" placeholder="Team name"
-                           @bind="newTeamName" @onkeydown="OnCreateKeyDown" />
-                    <button class="btn join-item btn-primary" @onclick="CreateTeam" disabled="@creating">
-                        @(creating ? "Creating..." : "Create")
-                    </button>
-                </div>
-                @if (!string.IsNullOrEmpty(error))
-                {
-                    <div class="alert alert-error text-sm mt-2">@error</div>
-                }
-            </div>
-        </div>
-    }
-
+    
     @if (loading)
     {
         <div class="flex justify-center py-16">
             <span class="loading loading-spinner loading-lg"></span>
         </div>
     }
-    else if (teams is null || teams.Count == 0)
+    else if (Teams is null || Teams.Count == 0)
     {
         <EmptyState Title="No teams yet" Description="Create a team to organize your projects and members." />
+        
+        <button class="btn btn-primary btn-lg mx-auto p5">
+            @(showCreate ? "Cancel" : "Create Team")
+        </button>
+        @if (showCreate)
+        {
+            <form class="card bg-base-200 mx-auto" @onsubmit="CreateTeam">
+                <div class="card-body p-5">
+                    <div class="join w-full">
+                        <input type="text" class="input join-item flex-1" placeholder="Team name"
+                               @bind="newTeamName" @onkeydown="OnCreateKeyDown" />
+                            
+                        <button class="btn join-item btn-error" @onclick="@(() => showCreate = false)">
+                            Cancel
+                        </button>
+                        <button class="btn join-item btn-primary" type="submit" disabled="@creating">
+                            @(creating ? "Creating..." : "Create")
+                        </button>
+                    </div>
+                    @if (!string.IsNullOrEmpty(error))
+                    {
+                        <div class="alert alert-error text-sm mt-2">@error</div>
+                    }
+                </div>
+            </form>
+        }
     }
     else
     {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            @foreach (var team in teams)
+            @foreach (var team in Teams)
             {
                 <a href="/teams/@team.Id" class="card bg-base-200 hover:bg-base-300 transition-colors cursor-pointer">
                     <div class="card-body p-5">
@@ -58,12 +63,43 @@
                     </div>
                 </a>
             }
+            
+            @if (showCreate)
+            {
+                <form class="card bg-base-200" @onsubmit="CreateTeam">
+                    <div class="card-body p-5">
+                        <div class="join w-full">
+                            <input type="text" class="input join-item flex-1" placeholder="Team name"
+                                   @bind="newTeamName" @onkeydown="OnCreateKeyDown" />
+                            
+                            <button class="btn join-item btn-error" @onclick="@(() => showCreate = false)">
+                                Cancel
+                            </button>
+                            <button class="btn join-item btn-primary" type="submit" disabled="@creating">
+                                @(creating ? "Creating..." : "Create")
+                            </button>
+                        </div>
+                        @if (!string.IsNullOrEmpty(error))
+                        {
+                            <div class="alert alert-error text-sm mt-2">@error</div>
+                        }
+                    </div>
+                </form>
+            }
+            else
+            {
+                <button  @onclick="() => showCreate = !showCreate" class="card hover:bg-base-300 transition-colors cursor-pointer border-dashed border-2 border-base-300/50">
+                    <div class="card-body p-5">
+                        <h2 class="card-title text-base items-center"> <span class="text-4xl font-mono">+</span> <span>Create New Team</span></h2>
+                    </div>
+                </button>
+            }
         </div>
     }
 </div>
 
 @code {
-    private List<TeamResponse>? teams;
+    [PersistentState] public List<TeamResponse>? Teams { get; set; }
     private bool loading = true;
     private bool showCreate;
     private bool creating;
@@ -72,6 +108,12 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (Teams is not null)
+        {
+            loading = false;
+            return;
+        }
+
         await LoadTeams();
     }
 
@@ -80,11 +122,11 @@
         loading = true;
         try
         {
-            teams = await TeamService.GetTeamsAsync();
+            Teams = await TeamService.GetTeamsAsync();
         }
         catch
         {
-            teams = null;
+            Teams = null;
         }
         finally
         {
@@ -103,7 +145,7 @@
             var team = await TeamService.CreateTeamAsync(newTeamName, Guid.Empty);
             Navigation.NavigateTo($"/teams/{team.Id}");
         }
-        catch
+        catch(Exception)
         {
             error = "Failed to create team.";
         }
