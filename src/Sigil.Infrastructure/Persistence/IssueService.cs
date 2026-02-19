@@ -204,7 +204,7 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
 
         return new PagedResponse<IssueSummary>(summaries, totalCount, query.Page, query.PageSize);
     }
-
+    
     public async Task<IssueDetailResponse?> GetIssueDetailAsync(int issueId)
     {
         var issue = await GetIssueByIdAsync(issueId, includeTags: true);
@@ -224,6 +224,22 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
             })
             .OrderBy(g => g.Key)
             .ToList();
+        
+        IssueTagGroup? releaseTags = tagGroups.FirstOrDefault(t => t.Key == "release");
+        if (releaseTags != null)
+        {
+            string value = releaseTags.Values.First().Value;
+            if(value.Contains('@'))
+            {
+                string prefix = value[..(value.IndexOf('@')+1)];
+                if (releaseTags.Values.All(t => t.Value.StartsWith(prefix)))
+                {
+                    tagGroups.Remove(releaseTags);
+                    tagGroups.Add(releaseTags with { Values = releaseTags.Values.Select(rt => rt with { Value = rt.Value[(rt.Value.IndexOf('@') + 1)..] }).ToList() });
+                    
+                }
+            }
+        }
 
         EventSummary? suggestedEvent = null;
         if (issue.SuggestedEvent is not null)
@@ -239,13 +255,17 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
             .Where(e => e.IssueId == issueId)
             .Select(e => new { e.Timestamp, ReleaseName = e.Release!.RawName })
             .GroupBy(_ => 1)
-            .Select(g => new
-            {
-                FirstRelease = g.OrderBy(e => e.Timestamp).Select(e => e.ReleaseName).FirstOrDefault(),
-                LastRelease = g.OrderByDescending(e => e.Timestamp).Select(e => e.ReleaseName).FirstOrDefault()
-            })
+            .Select(g => new IssueReleaseRange { FirstRelease = g.OrderBy(e => e.Timestamp).Select(e => e.ReleaseName).FirstOrDefault(), LastRelease = g.OrderByDescending(e => e.Timestamp).Select(e => e.ReleaseName).FirstOrDefault() })
             .FirstOrDefaultAsync();
 
+        if (releaseInfo != null)
+        {
+            if (releaseInfo.FirstRelease?.Contains('@') == true)
+                releaseInfo.FirstRelease = releaseInfo.FirstRelease[(releaseInfo.FirstRelease.IndexOf('@') + 1)..];
+            if (releaseInfo.LastRelease?.Contains('@') == true)
+                releaseInfo.LastRelease = releaseInfo.LastRelease[(releaseInfo.LastRelease.IndexOf('@') + 1)..];
+        }
+        
         return new IssueDetailResponse(
             issue.Id, issue.ProjectId, issue.Title, issue.ExceptionType, issue.Culprit,
             issue.Fingerprint, issue.Status, issue.Priority, issue.Level,
@@ -254,5 +274,11 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
             issue.ResolvedBy?.DisplayName, issue.ResolvedAt,
             tagGroups, suggestedEvent,
             releaseInfo?.FirstRelease, releaseInfo?.LastRelease);
+    }
+    
+    internal class IssueReleaseRange
+    {
+        public string? FirstRelease { get; set; }
+        public string? LastRelease { get; set; }
     }
 }

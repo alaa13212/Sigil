@@ -29,4 +29,15 @@ internal class ApiDigestionMonitorService(HttpClient http) : IDigestionMonitorSe
             return [];
         }
     }
+
+    public async Task<int> RetryFailedAsync(IEnumerable<long>? ids = null)
+    {
+        var idList = ids?.ToList();
+        var response = await http.PostAsJsonAsync("api/admin/digestion/retry", new { ids = idList });
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<RetryResponse>();
+        return result?.RetriedCount ?? 0;
+    }
+
+    private record RetryResponse(int RetriedCount);
 }

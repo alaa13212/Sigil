@@ -8,7 +8,9 @@ namespace Sigil.infrastructure.Persistence;
 
 internal class DigestionMonitorService(
     SigilDbContext context,
-    IOptions<BatchWorkersConfig> options
+    IOptions<BatchWorkersConfig> options,
+    IRawEnvelopeService rawEnvelopeService,
+    IDigestionSignal digestionSignal
     ) : IDigestionMonitorService
 {
     public async Task<DigestionStats> GetStatsAsync()
@@ -71,5 +73,13 @@ internal class DigestionMonitorService(
             .ToListAsync();
 
         return failures;
+    }
+
+    public async Task<int> RetryFailedAsync(IEnumerable<long>? ids = null)
+    {
+        var count = await rawEnvelopeService.RetryFailedAsync(ids);
+        if (count > 0)
+            digestionSignal.Signal();
+        return count;
     }
 }

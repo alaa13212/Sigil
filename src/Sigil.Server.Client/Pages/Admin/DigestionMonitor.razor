@@ -94,10 +94,19 @@
         {
             <div class="card bg-base-200">
                 <div class="card-body p-4">
-                    <h2 class="font-semibold mb-3">
-                        Recent Parse Failures
-                        <span class="badge badge-error badge-sm ml-2">@failures.Count</span>
-                    </h2>
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="font-semibold">
+                            Recent Parse Failures
+                            <span class="badge badge-error badge-sm ml-2">@failures.Count</span>
+                        </h2>
+                        <button class="btn btn-warning btn-sm gap-1" @onclick="RetryAll" disabled="@retryingAll">
+                            @if (retryingAll)
+                            {
+                                <span class="loading loading-spinner loading-xs"></span>
+                            }
+                            Retry All
+                        </button>
+                    </div>
                     <div class="overflow-x-auto">
                         <table class="table table-sm">
                             <thead>
@@ -106,6 +115,7 @@
                                     <th>Project</th>
                                     <th>Received</th>
                                     <th>Error</th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -117,6 +127,18 @@
                                         <td class="text-xs opacity-70 whitespace-nowrap">@f.ReceivedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
                                         <td class="text-xs text-error">
                                             <div class="max-w-sm truncate" title="@f.Error">@f.Error</div>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-warning btn-xs" @onclick="() => RetrySingle(f.Id)" disabled="@retryingIds.Contains(f.Id)">
+                                                @if (retryingIds.Contains(f.Id))
+                                                {
+                                                    <span class="loading loading-spinner loading-xs"></span>
+                                                }
+                                                else
+                                                {
+                                                    <span>Retry</span>
+                                                }
+                                            </button>
                                         </td>
                                     </tr>
                                 }
@@ -145,6 +167,8 @@
     private DigestionStats? stats;
     private List<FailedEnvelopeSummary> failures = [];
     private bool loading = true;
+    private bool retryingAll;
+    private HashSet<long> retryingIds = [];
     private DateTime lastRefreshed;
 
     private int BatchesRemaining => stats?.PendingCount is > 0
@@ -184,6 +208,34 @@
         finally
         {
             loading = false;
+        }
+    }
+
+    private async Task RetryAll()
+    {
+        retryingAll = true;
+        try
+        {
+            await MonitorService.RetryFailedAsync();
+            await Load();
+        }
+        finally
+        {
+            retryingAll = false;
+        }
+    }
+
+    private async Task RetrySingle(long id)
+    {
+        retryingIds.Add(id);
+        try
+        {
+            await MonitorService.RetryFailedAsync([id]);
+            await Load();
+        }
+        finally
+        {
+            retryingIds.Remove(id);
         }
     }
 }

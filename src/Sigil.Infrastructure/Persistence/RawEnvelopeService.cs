@@ -27,6 +27,7 @@ internal class RawEnvelopeService(SigilDbContext context) : IRawEnvelopeService
     public async Task<List<RawEnvelope>> FetchUnprocessedAsync(int batchSize)
     {
         return await context.RawEnvelopes
+            .AsTracking()
             .Where(e => e.Error == null)
             .OrderBy(e => e.ReceivedAt)
             .Take(batchSize)
@@ -39,6 +40,19 @@ internal class RawEnvelopeService(SigilDbContext context) : IRawEnvelopeService
         await context.RawEnvelopes
             .Where(e => idList.Contains(e.Id))
             .ExecuteDeleteAsync();
+    }
+
+    public async Task<int> RetryFailedAsync(IEnumerable<long>? ids = null)
+    {
+        var idList = ids?.ToList();
+        var query = context.RawEnvelopes.Where(e => e.Error != null);
+
+        if (idList is { Count: > 0 })
+            query = query.Where(e => idList.Contains(e.Id));
+
+        return await query.ExecuteUpdateAsync(s => s
+            .SetProperty(e => e.Error, (string?)null)
+            .SetProperty(e => e.ProcessedAt, (DateTime?)null));
     }
 
     public async Task BulkMarkFailedAsync(IEnumerable<(long Id, string Error)> failures)

@@ -216,6 +216,16 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
             .Select(tv => new TagSummary(tv.TagKey!.Key, tv.Value))
             .ToList();
 
+        TagSummary releaseTag = tags.SingleOrDefault(t => t.Key == "release");
+        if (releaseTag is not null)
+        {
+            if(releaseTag.Value.Contains('@'))
+            {
+                tags.Remove(releaseTag);
+                tags.Add(new TagSummary("release", releaseTag.Value[(releaseTag.Value.IndexOf('@') + 1)..]));
+            }
+        }
+        
         var stackFrames = e.StackFrames
             .Select(f => new StackFrameResponse(f.Function, f.Filename, f.LineNumber, f.ColumnNumber, f.Module, f.InApp))
             .ToList();

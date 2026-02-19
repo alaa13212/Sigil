@@ -2,15 +2,14 @@
 @inject IServiceScopeFactory ScopeFactory
 
 <div class="p-4 border-b border-base-300">
-    <a href="/" class="text-xl font-bold">سجل</a>
+    <a href="/" class="text-2xl text-center font-bold block">سجل</a>
 </div>
 
 <AuthorizeView>
     <Authorized>
 
         <ul class="menu flex-1 w-full">
-
-            <li class="menu-title mt-4">Projects</li>
+            <li class="menu-title">Projects</li>
             @if (_projects is not null)
             {
                 @foreach (var p in _projects)

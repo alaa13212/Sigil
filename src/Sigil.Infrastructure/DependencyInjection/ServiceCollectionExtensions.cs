@@ -27,6 +27,7 @@ public static class ServiceCollectionExtensions
         {
             options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
             options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
+            options.EnableSensitiveDataLogging(true);
         });
         
         services.AddScoped<IDatabaseMigrator, EfDatabaseMigrator>();
@@ -47,7 +48,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ITeamService, TeamService>();
         services.AddScoped<ISetupService, SetupService>();
-        services.AddScoped<IFailedEventService, FailedEventService>();
         services.AddScoped<IRawEnvelopeService, RawEnvelopeService>();
         services.AddScoped<IDigestionService, DigestionService>();
         services.AddScoped<IDigestionMonitorService, DigestionMonitorService>();

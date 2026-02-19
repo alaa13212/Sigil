@@ -46,20 +46,23 @@ internal class DigestionWorker(
     {
         using var scope = services.CreateScope();
         var rawEnvelopeService = scope.ServiceProvider.GetRequiredService<IRawEnvelopeService>();
-        var parser = scope.ServiceProvider.GetRequiredService<IEventParser>();
-        var digestionService = scope.ServiceProvider.GetRequiredService<IDigestionService>();
-        var dbContext = scope.ServiceProvider.GetRequiredService<SigilDbContext>();
 
         List<RawEnvelope> batch = await rawEnvelopeService.FetchUnprocessedAsync(_batchSize);
         while (batch.Count > 0)
         {
-            await ProcessBatch(ct, batch, parser, rawEnvelopeService, digestionService, dbContext);
+            await ProcessBatch(ct, batch);
             batch = await rawEnvelopeService.FetchUnprocessedAsync(_batchSize);
         }
     }
 
-    private async Task ProcessBatch(CancellationToken ct, List<RawEnvelope> batch, IEventParser parser, IRawEnvelopeService rawEnvelopeService, IDigestionService digestionService, SigilDbContext dbContext)
+    private async Task ProcessBatch(CancellationToken ct, List<RawEnvelope> batch)
     {
+        using var scope = services.CreateScope();
+        var parser = scope.ServiceProvider.GetRequiredService<IEventParser>();
+        var rawEnvelopeService = scope.ServiceProvider.GetRequiredService<IRawEnvelopeService>();
+        var digestionService = scope.ServiceProvider.GetRequiredService<IDigestionService>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<SigilDbContext>();
+        
         foreach (var group in batch.GroupBy(r => r.ProjectId))
         {
             var successIds = new List<long>();
@@ -95,8 +98,8 @@ internal class DigestionWorker(
                     logger.LogError(ex, "Digestion failed for project {ProjectId}. {Count} envelopes left unprocessed",
                         group.Key, successIds.Count);
                     
-                    await rawEnvelopeService.BulkMarkFailedAsync(successIds.Select(id => (id, ex.Message)));
                     // Leave unprocessed — will be retried on next wake
+                    await rawEnvelopeService.BulkMarkFailedAsync(successIds.Select(id => (id, ex.Message)));
                 }
                 finally
                 {

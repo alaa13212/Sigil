@@ -15,4 +15,16 @@ public class DigestionController(IDigestionMonitorService monitorService) : Sigi
     [HttpGet("api/admin/digestion/failures")]
     public async Task<IActionResult> GetRecentFailures([FromQuery] int limit = 50)
         => Ok(await monitorService.GetRecentFailuresAsync(limit));
+
+    [HttpPost("api/admin/digestion/retry")]
+    public async Task<IActionResult> RetryFailed([FromBody] RetryRequest? request = null)
+    {
+        var count = await monitorService.RetryFailedAsync(request?.Ids);
+        return Ok(new { retriedCount = count });
+    }
+
+    public class RetryRequest
+    {
+        public List<long>? Ids { get; set; }
+    }
 }

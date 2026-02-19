@@ -9,4 +9,5 @@ public interface IRawEnvelopeService
     Task<List<RawEnvelope>> FetchUnprocessedAsync(int batchSize);
     Task DeleteAsync(IEnumerable<long> ids);
     Task BulkMarkFailedAsync(IEnumerable<(long Id, string Error)> failures);
+    Task<int> RetryFailedAsync(IEnumerable<long>? ids = null);
 }

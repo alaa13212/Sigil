@@ -291,49 +291,6 @@ namespace Sigil.infrastructure.Migrations
                     b.ToTable("EventUsers");
                 });
 
-            modelBuilder.Entity("Sigil.Domain.Entities.FailedEvent", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ErrorMessage")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("ExceptionType")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<int>("ProjectId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("RawEnvelope")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<bool>("Reprocessed")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("ReprocessedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Stage")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId", "Reprocessed");
-
-                    b.ToTable("FailedEvents");
-                });
-
             modelBuilder.Entity("Sigil.Domain.Entities.Issue", b =>
                 {
                     b.Property<int>("Id")
@@ -876,17 +833,6 @@ namespace Sigil.infrastructure.Migrations
                     b.Navigation("Release");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Sigil.Domain.Entities.FailedEvent", b =>
-                {
-                    b.HasOne("Sigil.Domain.Entities.Project", "Project")
-                        .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("Sigil.Domain.Entities.Issue", b =>

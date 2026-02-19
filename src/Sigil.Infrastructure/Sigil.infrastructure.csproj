@@ -25,5 +25,9 @@
         <AdditionalFiles Include="PublicAPI.Shipped.txt" IsPublic="false"/>
         <AdditionalFiles Include="PublicAPI.Unshipped.txt" IsPublic="false"/>
     </ItemGroup>
+    
+    <ItemGroup>
+      <Folder Include="Migrations\" />
+    </ItemGroup>
 
 </Project>
