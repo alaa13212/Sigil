@@ -23,7 +23,13 @@ public record EventDetailResponse(
     string? Environment,
     EventUserResponse? User,
     List<StackFrameResponse> StackFrames,
-    List<TagSummary> Tags);
+    List<TagSummary> Tags,
+    Dictionary<string, string>? Extra);
+
+public record IssueEventDetailResponse(
+    EventDetailResponse Event,
+    List<BreadcrumbResponse> Breadcrumbs,
+    EventNavigationResponse Navigation);
 
 public record StackFrameResponse(
     string? Function,

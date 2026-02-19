@@ -1,10 +1,8 @@
 @page "/"
 @attribute [Authorize]
-@using Microsoft.AspNetCore.Http
 @using Sigil.Application.Models.Projects
 @inject IProjectService ProjectService
 @inject NavigationManager Navigation
-@inject IHttpContextAccessor HttpContextAccessor
 
 
 <PageTitle>سجل</PageTitle>
@@ -71,17 +69,7 @@ else if (Projects.Count > 1)
 
             if (Projects is { Count: 1 })
             {
-                var url = $"/projects/{Projects[0].Id}/issues";
-                
-                var http = HttpContextAccessor.HttpContext;
-                if (http is not null && !http.Response.HasStarted)
-                {
-                    http.Response.Redirect(url);
-                    return;
-                }
-                
-                // Fallback for interactive client mode
-                Navigation.NavigateTo(url, replace: true);
+                Navigation.NavigateTo($"/projects/{Projects[0].Id}/issues", replace: true);
             }
         }
         catch

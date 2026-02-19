@@ -239,7 +239,18 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         return new EventDetailResponse(
             e.Id, e.EventId, e.IssueId, e.Message, e.Level,
             e.Timestamp, e.Platform, e.Release?.RawName,
-            environment, user, stackFrames, tags);
+            environment, user, stackFrames, tags, e.Extra);
+    }
+
+    public async Task<IssueEventDetailResponse?> GetIssueEventDetailAsync(int issueId, long eventId)
+    {
+        var detail = await GetEventDetailAsync(eventId);
+        if (detail is null) return null;
+
+        var breadcrumbs = await GetBreadcrumbsAsync(eventId);
+        var navigation = await GetAdjacentEventIdsAsync(issueId, eventId);
+
+        return new IssueEventDetailResponse(detail, breadcrumbs, navigation);
     }
 
     public async Task<EventNavigationResponse> GetAdjacentEventIdsAsync(int issueId, long currentEventId)

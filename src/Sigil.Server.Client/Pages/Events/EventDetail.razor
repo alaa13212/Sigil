@@ -162,6 +162,24 @@ else
                         </div>
                     </div>
                 </div>
+
+                @if (evt.Extra is { Count: > 0 })
+                {
+                    <div class="card bg-base-200">
+                        <div class="card-body p-4">
+                            <h2 class="card-title text-base">Extra</h2>
+                            <div class="space-y-1 text-sm">
+                                @foreach (var (key, value) in evt.Extra)
+                                {
+                                    <div class="flex justify-between gap-4">
+                                        <span class="opacity-60 font-mono shrink-0">@key</span>
+                                        <span class="font-mono text-right break-all">@value</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
             </div>
         </div>
     }

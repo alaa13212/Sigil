@@ -1,6 +1,5 @@
 @page "/projects/{ProjectId:int}/issues"
 @attribute [Authorize]
-@rendermode InteractiveWebAssembly
 @using Sigil.Application.Models.Issues
 @inject IIssueService IssueService
 @inject NavigationManager Navigation
@@ -57,7 +56,7 @@
         </label>
 
         <!-- Search -->
-        <input type="text" placeholder="Search issues..." class="input input-sm w-48"
+        <input type="text" placeholder="Search issues..." class="input input-sm flex-1 min-w-48"
                @bind="searchText" @bind:event="oninput" @onkeydown="OnSearchKeyDown" />
     </div>
 
@@ -242,6 +241,9 @@
         }
     }
 
-    private void OnPageChanged(int newPage) =>
-        Navigation.NavigateTo($"/projects/{ProjectId}/issues?page={newPage}");
+    private void OnPageChanged(int newPage)
+    {
+        Navigation.NavigateTo($"projects/{ProjectId}/issues/?page={newPage}");
+    }
+
 }

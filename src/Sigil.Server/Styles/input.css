@@ -12,6 +12,12 @@
 
 @plugin "./daisyui-theme.mjs";
 
+@utility grid-cols-fill-* {
+    grid-template-columns: repeat(auto-fill, minmax(--value([length]), 1fr));
+}
+@utility grid-cols-fit-* {
+    grid-template-columns: repeat(auto-fit, minmax(--value([length]), 1fr));
+}
 
 .menu-dropdown-show + .menu-dropdown {
     display: block;

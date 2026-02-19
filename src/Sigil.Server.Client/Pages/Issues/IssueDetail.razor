@@ -5,7 +5,6 @@
 @inject IIssueService IssueService
 @inject IEventService EventService
 @inject IIssueActivityService ActivityService
-@rendermode InteractiveWebAssembly
 
 <PageTitle>@(issue?.Title ?? "Issue") — Sigil</PageTitle>
 
@@ -100,7 +99,7 @@ else
                         </div>
                     }
 
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-fit-[400px] gap-4">
                         <div class="card bg-base-200">
                             <div class="card-body p-4">
                                 <h2 class="card-title text-base">Context</h2>
@@ -165,16 +164,15 @@ else
                                 </div>
                             </div>
                         }
-                    </div>
 
-                    @if (eventDetail.Tags.Count > 0)
-                    {
-                        <div class="card bg-base-200">
-                            <div class="card-body p-4">
-                                <h2 class="card-title text-base">Tags</h2>
-                                <div class="overflow-x-auto">
-                                    <table class="table table-sm">
-                                        <tbody>
+                        @if (eventDetail.Tags.Count > 0)
+                        {
+                            <div class="card bg-base-200">
+                                <div class="card-body p-4">
+                                    <h2 class="card-title text-base">Tags</h2>
+                                    <div class="overflow-x-auto">
+                                        <table class="table table-sm">
+                                            <tbody>
                                             @foreach (var tag in eventDetail.Tags.OrderBy(t => t.Key))
                                             {
                                                 <tr>
@@ -182,12 +180,31 @@ else
                                                     <td class="font-mono">@tag.Value</td>
                                                 </tr>
                                             }
-                                        </tbody>
-                                    </table>
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    }
+                        }
+
+                        @if (eventDetail.Extra is { Count: > 0 })
+                        {
+                            <div class="card bg-base-200">
+                                <div class="card-body p-4">
+                                    <h2 class="card-title text-base">Extra</h2>
+                                    <div class="space-y-1 text-sm">
+                                        @foreach (var (key, value) in eventDetail.Extra)
+                                        {
+                                            <div class="flex justify-between gap-4">
+                                                <span class="opacity-60 font-mono shrink-0">@key</span>
+                                                <span class="font-mono text-right break-all">@value</span>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
 
                     <!-- Breadcrumbs -->
                     @if (breadcrumbs.Count > 0)
@@ -469,12 +486,10 @@ else
             issue = await IssueService.GetIssueDetailAsync(IssueId);
             if (issue?.SuggestedEvent is not null)
             {
-                eventDetail = await EventService.GetEventDetailAsync(issue.SuggestedEvent.Id);
-                if (eventDetail is not null)
-                {
-                    navigation = await EventService.GetAdjacentEventIdsAsync(IssueId, eventDetail.Id);
-                    breadcrumbs = await EventService.GetBreadcrumbsAsync(eventDetail.Id);
-                }
+                var combined = await EventService.GetIssueEventDetailAsync(IssueId, issue.SuggestedEvent.Id);
+                eventDetail = combined?.Event;
+                navigation = combined?.Navigation;
+                breadcrumbs = combined?.Breadcrumbs ?? [];
             }
             else
             {
@@ -497,11 +512,12 @@ else
         eventNavigating = true;
         try
         {
-            eventDetail = await EventService.GetEventDetailAsync(eventId);
-            if (eventDetail is not null)
+            var combined = await EventService.GetIssueEventDetailAsync(IssueId, eventId);
+            if (combined is not null)
             {
-                navigation = await EventService.GetAdjacentEventIdsAsync(IssueId, eventDetail.Id);
-                breadcrumbs = await EventService.GetBreadcrumbsAsync(eventDetail.Id);
+                eventDetail = combined.Event;
+                navigation = combined.Navigation;
+                breadcrumbs = combined.Breadcrumbs;
             }
         }
         catch

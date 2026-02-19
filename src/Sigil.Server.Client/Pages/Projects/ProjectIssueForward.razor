@@ -1,6 +1,4 @@
 ﻿@page "/projects/{ProjectId:int}"
-@using Microsoft.AspNetCore.Http
-@inject IHttpContextAccessor HttpContextAccessor
 @inject NavigationManager Navigation
 
 @code {
@@ -8,16 +6,6 @@
     
     protected override void OnInitialized()
     {
-        var url = $"/projects/{ProjectId}/issues";
-                
-        var http = HttpContextAccessor.HttpContext;
-        if (http is not null && !http.Response.HasStarted)
-        {
-            http.Response.Redirect(url);
-            return;
-        }
-                
-        // Fallback for interactive client mode
-        Navigation.NavigateTo(url, replace: true);
+        Navigation.NavigateTo($"/projects/{ProjectId}/issues", replace: true);
     }
 }

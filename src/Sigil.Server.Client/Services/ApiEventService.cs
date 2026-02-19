@@ -53,6 +53,18 @@ public class ApiEventService(HttpClient http) : IEventService
         }
     }
 
+    public async Task<IssueEventDetailResponse?> GetIssueEventDetailAsync(int issueId, long eventId)
+    {
+        try
+        {
+            return await http.GetFromJsonAsync<IssueEventDetailResponse>($"api/issues/{issueId}/events/{eventId}/detail");
+        }
+        catch (HttpRequestException)
+        {
+            return null;
+        }
+    }
+
     public async Task<(List<CapturedEvent> Items, int TotalCount)> GetEventsForIssueAsync(int issueId, int page = 1, int pageSize = 50)
     {
         var response = await GetEventSummariesAsync(issueId, page, pageSize);

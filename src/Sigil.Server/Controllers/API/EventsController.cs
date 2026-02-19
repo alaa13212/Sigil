@@ -56,4 +56,11 @@ public class EventsController(
     {
         return Ok(await eventService.GetAdjacentEventIdsAsync(issueId, eventId));
     }
+
+    [HttpGet("api/issues/{issueId:int}/events/{eventId:long}/detail")]
+    public async Task<IActionResult> IssueEventDetail(int issueId, long eventId)
+    {
+        var detail = await eventService.GetIssueEventDetailAsync(issueId, eventId);
+        return detail is not null ? Ok(detail) : NotFound();
+    }
 }

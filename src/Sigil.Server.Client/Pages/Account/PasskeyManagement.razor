@@ -1,8 +1,6 @@
 @page "/account/passkeys"
-@rendermode InteractiveWebAssembly
 @implements IAsyncDisposable
 @attribute [Authorize]
-@using Microsoft.AspNetCore.Authorization
 @using Sigil.Application.Models.Auth
 @inject IPasskeyService PasskeyService
 @inject IJSRuntime JS
