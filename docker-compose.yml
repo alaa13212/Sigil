@@ -1,0 +1,42 @@
+services:
+  sigil-db:
+    container_name: sigil-db
+    image: postgres:17
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-sigil}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-sigil_dev_password}
+      - POSTGRES_DB=${POSTGRES_DB:-sigil}
+    volumes:
+      - sigil-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sigil"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  sigil:
+    container_name: sigil
+    build: .
+    ports:
+      - "${SIGIL_PORT:-8080}:8080"
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=sigil-db;Database=sigil;Username=sigil;Password=${POSTGRES_PASSWORD:-sigil_dev_password}
+      - ASPNETCORE_ENVIRONMENT=Production
+    depends_on:
+      sigil-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    pull_policy: always
+    volumes:
+      - sigil-keys:/root/.aspnet/DataProtection-Keys
+    restart: unless-stopped
+
+
+volumes:
+  sigil-db:
+  sigil-keys:

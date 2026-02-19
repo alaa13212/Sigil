@@ -22,7 +22,22 @@ internal class DigestionWorker(
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            await ProcessPendingAsync(stoppingToken);
+            try
+            {
+                await ProcessPendingAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "DigestionWorker encountered an error. Retrying after delay");
+                try { await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); }
+                catch (OperationCanceledException) { break; }
+                continue;
+            }
+
             await signal.WaitAsync(_maxSignalWaitTime, stoppingToken);
         }
     }
@@ -79,6 +94,8 @@ internal class DigestionWorker(
                 {
                     logger.LogError(ex, "Digestion failed for project {ProjectId}. {Count} envelopes left unprocessed",
                         group.Key, successIds.Count);
+                    
+                    await rawEnvelopeService.BulkMarkFailedAsync(successIds.Select(id => (id, ex.Message)));
                     // Leave unprocessed — will be retried on next wake
                 }
                 finally

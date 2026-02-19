@@ -2,7 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Sigil.Application/Sigil.Application.csproj" />
     <Project Path="src/Sigil.Domain/Sigil.Domain.csproj" />
-    <Project Path="src/Sigil.infrastructure/Sigil.infrastructure.csproj" />
+    <Project Path="src/Sigil.Infrastructure/Sigil.Infrastructure.csproj" />
     <Project Path="src/Sigil.Server.Client/Sigil.Server.Client.csproj" />
     <Project Path="src/Sigil.Server/Sigil.Server.csproj" />
   </Folder>

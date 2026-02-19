@@ -18,8 +18,8 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         var existing = await dbContext.Events
             .Where(e => ids.Contains(e.EventId))
             .Select(e => e.EventId)
-            .ToListAsync();
-        return existing.ToHashSet();
+            .ToHashSetAsync();
+        return existing;
     }
 
     public IEnumerable<CapturedEvent> BulkCreateEventsEntities(IEnumerable<ParsedEvent> capturedEvent, Project project,

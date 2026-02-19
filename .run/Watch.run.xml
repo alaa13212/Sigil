@@ -6,7 +6,6 @@
     <option name="projectTfm" value="net10.0" />
     <option name="restartOnRudeEditEditor" value="true" />
     <option name="terminalMode" value="Auto" />
-    <option name="trackProjectWorkingDirectory" value="false" />
     <option name="watchParameters" value="" />
     <option name="workingDirectory" value="$PROJECT_DIR$/src/Sigil.Server" />
     <method v="2" />

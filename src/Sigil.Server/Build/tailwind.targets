@@ -1,12 +1,6 @@
 ﻿<Project>
-    <PropertyGroup>
-        <!-- Disable Tailwind when building inside Docker -->
-        <RunTailwind Condition="'$(DOTNET_RUNNING_IN_CONTAINER)' == 'true'">false</RunTailwind>
-    </PropertyGroup>
-    
     <!-- Make sure Tailwind CLI exists -->
-    <Target Name="EnsureTailwind" BeforeTargets="Build"
-            Condition="'$(RunTailwind)' != 'false'">
+    <Target Name="EnsureTailwind" BeforeTargets="Build">
         <Message Text="Checking Tailwind CLI..." Importance="high" />
 
         <!-- Windows -->

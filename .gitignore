@@ -8,6 +8,10 @@ riderModule.iml
 # Auto Generated
 /**/wwwroot/css/site.css
 /**/Styles/daisyui*.mjs
+/**/Tools/tailwindcss*
+
+# Docker
+.env
 
 # Claude Code
 .claude

@@ -85,6 +85,7 @@ builder.Services.AddScoped<IAuthorizationHandler, SetupNotCompleteHandler>();
 builder.Services.AddScoped<AuthenticationStateProvider, PersistingServerAuthenticationStateProvider>();
 builder.Services.AddCascadingAuthenticationState();
 
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
@@ -98,7 +99,6 @@ else
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
-    app.UseHttpsRedirection();
 }
 app.UseAuthentication();
 app.UseAuthorization();
@@ -111,5 +111,6 @@ app.MapRazorComponents<App>()
     .AddAdditionalAssemblies(typeof(Sigil.Server.Client._Imports).Assembly);
 
 app.MapControllers();
+app.MapHealthChecks("/health");
 
 app.Run();
