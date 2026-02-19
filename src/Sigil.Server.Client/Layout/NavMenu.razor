@@ -63,10 +63,13 @@
             </li>
         </ul>
 
-        <form action="/logout" method="post" class="p-3 border-t border-base-300">
+        <div class="p-3 border-t border-base-300">
             <div class="text-sm opacity-70 mb-2">@context.User.Identity?.Name</div>
-            <button type="submit" class="btn btn-ghost btn-sm w-full">Sign Out</button>
-        </form>
+            <a href="/account/passkeys" class="btn btn-ghost btn-sm w-full mb-1">Passkeys</a>
+            <form action="/logout" method="post">
+                <button type="submit" class="btn btn-ghost btn-sm w-full">Sign Out</button>
+            </form>
+        </div>
     </Authorized>
 </AuthorizeView>
 

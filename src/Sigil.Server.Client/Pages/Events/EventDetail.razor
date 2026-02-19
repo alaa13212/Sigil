@@ -1,4 +1,4 @@
-@page "/events/{EventId:long}"
+@page "/projects/{ProjectId:int}/issues/{IssueId:int}/events/{EventId:long}"
 @attribute [Authorize]
 @using Sigil.Application.Models.Events
 @inject IEventService EventService
@@ -20,7 +20,7 @@ else
     <!-- Header -->
     <div class="mb-6 space-y-2">
         <div class="text-sm opacity-60">
-            <a href="/issues/@evt.IssueId" class="link link-hover">&larr; Back to issue</a>
+            <a href="/projects/@ProjectId/issues/@IssueId" class="link link-hover">&larr; Back to issue</a>
         </div>
         <div class="flex items-center gap-3 flex-wrap">
             <h1 class="text-2xl font-bold">Event</h1>
@@ -44,11 +44,11 @@ else
 
     <!-- Tabs -->
     <div role="tablist" class="tabs tabs-bordered mb-4">
-        <a role="tab" href="/events/@EventId?tab=details"
+        <a role="tab" href="/projects/@ProjectId/issues/@IssueId/events/@EventId?tab=details"
            class="tab @(activeTab == Tab.Details ? "tab-active" : "")">Details</a>
-        <a role="tab" href="/events/@EventId?tab=breadcrumbs"
+        <a role="tab" href="/projects/@ProjectId/issues/@IssueId/events/@EventId?tab=breadcrumbs"
            class="tab @(activeTab == Tab.Breadcrumbs ? "tab-active" : "")">Breadcrumbs</a>
-        <a role="tab" href="/events/@EventId?tab=raw"
+        <a role="tab" href="/projects/@ProjectId/issues/@IssueId/events/@EventId?tab=raw"
            class="tab @(activeTab == Tab.Raw ? "tab-active" : "")">Raw JSON</a>
     </div>
 
@@ -59,7 +59,7 @@ else
             @if (evt.StackFrames.Count > 0)
             {
                 <div class="card bg-base-200 mb-4 flex-1">
-                    <div class="card-body p-4">
+                    <div class="card-body p-4 overflow-auto">
                         <h2 class="card-title text-base">Stack Trace</h2>
                         <StackTraceViewer Frames="evt.StackFrames" />
                     </div>
@@ -180,6 +180,8 @@ else
 }
 
 @code {
+    [Parameter] public int ProjectId { get; set; }
+    [Parameter] public int IssueId { get; set; }
     [Parameter] public long EventId { get; set; }
     [SupplyParameterFromQuery(Name = "tab")] public string? TabParam { get; set; }
 

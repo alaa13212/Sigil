@@ -1,0 +1,104 @@
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@implements IAsyncDisposable
+@using Sigil.Application.Models.Auth
+@inject IPasskeyService PasskeyService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<button class="btn btn-outline w-full" @onclick="LoginWithPasskey" disabled="@_loading">
+    @if (_loading)
+    {
+        <span class="loading loading-spinner loading-sm"></span>
+    }
+    Sign in with Passkey
+</button>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="text-error text-sm mt-2">@_error</div>
+}
+
+@code {
+    [Parameter] public string? ReturnUrl { get; set; }
+
+    private bool _loading;
+    private string? _error;
+    private IJSObjectReference? _module;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/webauthn.js");
+        }
+    }
+
+    private async Task LoginWithPasskey()
+    {
+        _error = null;
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            if (_module is null)
+            {
+                _error = "WebAuthn module not loaded.";
+                return;
+            }
+
+            var supported = await _module.InvokeAsync<bool>("isWebAuthnSupported");
+            if (!supported)
+            {
+                _error = "Passkeys are not supported by your browser.";
+                return;
+            }
+
+            var options = await PasskeyService.GetAssertionOptionsAsync();
+
+            string assertionJson;
+            try
+            {
+                assertionJson = await _module.InvokeAsync<string>("getCredential", options.OptionsJson);
+            }
+            catch (JSException)
+            {
+                _error = "Passkey authentication was cancelled or failed.";
+                return;
+            }
+
+            var result = await PasskeyService.CompleteAssertionAsync(new PasskeyAssertionResponse
+            {
+                AssertionResponseJson = assertionJson,
+                ChallengeId = options.ChallengeId
+            });
+
+            if (result.Succeeded)
+            {
+                var target = !string.IsNullOrEmpty(ReturnUrl) && ReturnUrl.StartsWith('/') ? ReturnUrl : "/";
+                Navigation.NavigateTo(target, forceLoad: true);
+            }
+            else
+            {
+                _error = result.Errors.FirstOrDefault() ?? "Passkey authentication failed.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            await _module.DisposeAsync();
+        }
+    }
+}

@@ -21,5 +21,6 @@ builder.Services.AddScoped<IIssueService, ApiIssueService>();
 builder.Services.AddScoped<IEventService, ApiEventService>();
 builder.Services.AddScoped<IIssueActivityService, ApiIssueActivityService>();
 builder.Services.AddScoped<IDigestionMonitorService, ApiDigestionMonitorService>();
+builder.Services.AddScoped<IPasskeyService, ApiPasskeyService>();
 
 await builder.Build().RunAsync();

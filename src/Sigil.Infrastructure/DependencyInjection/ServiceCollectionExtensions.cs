@@ -51,8 +51,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IRawEnvelopeService, RawEnvelopeService>();
         services.AddScoped<IDigestionService, DigestionService>();
         services.AddScoped<IDigestionMonitorService, DigestionMonitorService>();
+        services.AddScoped<IPasskeyService, PasskeyService>();
 
         services.AddIdentityServices();
+        services.AddPasskeyServices();
         services.AddCaches();
         services.AddWorkers(configuration);
     }
@@ -87,6 +89,11 @@ public static class ServiceCollectionExtensions
             })
             .AddEntityFrameworkStores<SigilDbContext>()
             .AddDefaultTokenProviders();
+    }
+
+    private static void AddPasskeyServices(this IServiceCollection services)
+    {
+        services.AddSingleton<PasskeyChallengeStore>();
     }
 
     private static void AddWorkers(this IServiceCollection services, IConfigurationManager configuration)

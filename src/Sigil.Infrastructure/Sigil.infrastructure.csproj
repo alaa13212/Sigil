@@ -12,9 +12,10 @@
     </ItemGroup>
 
     <ItemGroup>
+        <PackageReference Include="Fido2" Version="4.0.0" />
         <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="10.0.2" />
         <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.2" />
-        <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="4.14.0" PrivateAssets="all"/>
+        <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="4.14.0" PrivateAssets="all" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.2" />
         <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.2" />
         <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.2" />
@@ -22,8 +23,8 @@
     </ItemGroup>
     
     <ItemGroup>
-        <AdditionalFiles Include="PublicAPI.Shipped.txt" IsPublic="false"/>
-        <AdditionalFiles Include="PublicAPI.Unshipped.txt" IsPublic="false"/>
+        <AdditionalFiles Include="PublicAPI.Shipped.txt" IsPublic="false" />
+        <AdditionalFiles Include="PublicAPI.Unshipped.txt" IsPublic="false" />
     </ItemGroup>
     
     <ItemGroup>

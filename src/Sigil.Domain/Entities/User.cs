@@ -12,4 +12,5 @@ public class User : IdentityUser<Guid>
     public DateTime? LastLogin { get; set; }
 
     public ICollection<TeamMembership> TeamMemberships { get; set; } = [];
+    public ICollection<UserPasskey> Passkeys { get; set; } = [];
 }

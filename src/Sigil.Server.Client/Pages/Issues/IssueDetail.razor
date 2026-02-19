@@ -1,4 +1,4 @@
-@page "/issues/{IssueId:int}"
+@page "/projects/{ProjectId:int}/issues/{IssueId:int}"
 @attribute [Authorize]
 @using Sigil.Application.Models.Issues
 @using Sigil.Application.Models.Events
@@ -43,12 +43,12 @@ else
             <div role="tablist" class="tabs tabs-bordered">
                 @if (issue.SuggestedEvent is not null && eventDetail is not null)
                 {
-                    <a role="tab" href="/issues/@IssueId?tab=event"
+                    <a role="tab" href="/projects/@ProjectId/issues/@IssueId?tab=event"
                        class="tab @(activeTab == Tab.SuggestedEvent ? "tab-active" : "")">Event</a>
                 }
-                <a role="tab" href="/issues/@IssueId?tab=events"
+                <a role="tab" href="/projects/@ProjectId/issues/@IssueId?tab=events"
                    class="tab @(activeTab == Tab.Events ? "tab-active" : "")">Events</a>
-                <a role="tab" href="/issues/@IssueId?tab=activity"
+                <a role="tab" href="/projects/@ProjectId/issues/@IssueId?tab=activity"
                    class="tab @(activeTab == Tab.Activity ? "tab-active" : "")">Activity</a>
             </div>
 
@@ -70,7 +70,7 @@ else
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
                             </button>
                         </div>
-                        <a href="/events/@eventDetail.Id" class="btn btn-ghost btn-sm">
+                        <a href="/projects/@ProjectId/issues/@IssueId/events/@eventDetail.Id" class="btn btn-ghost btn-sm">
                             View full event
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                         </a>
@@ -93,7 +93,7 @@ else
                     @if (eventDetail.StackFrames.Count > 0)
                     {
                         <div class="card bg-base-200">
-                            <div class="card-body p-4">
+                            <div class="card-body p-4 overflow-auto">
                                 <h2 class="card-title text-base">Stack Trace</h2>
                                 <StackTraceViewer Frames="eventDetail.StackFrames" />
                             </div>
@@ -227,7 +227,7 @@ else
                                 {
                                     <tr class="hover:bg-base-300 relative cursor-pointer">
                                         <td>
-                                            <a href="/events/@evt.Id" class="stretched-link"><RelativeTime Value="evt.Timestamp"/></a>
+                                            <a href="/projects/@ProjectId/issues/@IssueId/events/@evt.Id" class="stretched-link"><RelativeTime Value="evt.Timestamp"/></a>
                                         </td>
                                         <td class="max-w-md truncate">@(evt.Message ?? "—")</td>
                                         <td><SeverityBadge Level="evt.Level" /></td>
@@ -417,6 +417,7 @@ else
 }
 
 @code {
+    [Parameter] public int ProjectId { get; set; }
     [Parameter] public int IssueId { get; set; }
     [SupplyParameterFromQuery(Name = "tab")] public string? TabParam { get; set; }
 

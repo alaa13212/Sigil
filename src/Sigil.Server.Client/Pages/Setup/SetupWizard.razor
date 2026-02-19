@@ -201,7 +201,7 @@
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Platform</legend>
                         <select class="select w-full" @bind="projectPlatform">
-                            @foreach (var p in popularPlatforms)
+                            @foreach (Platform p in Enum.GetValues<Platform>())
                             {
                                 <option value="@p">@p</option>
                             }
@@ -320,14 +320,7 @@
 
     // Step 6: Done
     private string? dsn;
-
-    private static readonly Platform[] popularPlatforms =
-    [
-        Platform.CSharp, Platform.JavaScript, Platform.Python, Platform.Java,
-        Platform.Node, Platform.Go, Platform.Ruby, Platform.PHP,
-        Platform.Elixir, Platform.Perl, Platform.Other
-    ];
-
+    
     protected override async Task OnInitializedAsync()
     {
         try
