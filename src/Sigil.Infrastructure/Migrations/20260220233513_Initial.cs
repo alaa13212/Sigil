@@ -5,7 +5,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Sigil.Infrastructure.Migrations
+namespace Sigil.infrastructure.Migrations
 {
     /// <inheritdoc />
     internal partial class Initial : Migration
@@ -190,6 +190,34 @@ namespace Sigil.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Passkeys",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CredentialId = table.Column<byte[]>(type: "bytea", nullable: false),
+                    PublicKey = table.Column<byte[]>(type: "bytea", nullable: false),
+                    SignatureCounter = table.Column<long>(type: "bigint", nullable: false),
+                    CredentialType = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    AaGuid = table.Column<Guid>(type: "uuid", nullable: false),
+                    DisplayName = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    LastUsedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsDiscoverable = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Passkeys", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Passkeys_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "TeamMemberships",
                 columns: table => new
                 {
@@ -300,6 +328,117 @@ namespace Sigil.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AlertRules",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ProjectId = table.Column<int>(type: "integer", nullable: false),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    Trigger = table.Column<int>(type: "integer", nullable: false),
+                    Channel = table.Column<int>(type: "integer", nullable: false),
+                    ThresholdCount = table.Column<int>(type: "integer", nullable: true),
+                    ThresholdWindow = table.Column<TimeSpan>(type: "interval", nullable: true),
+                    MinSeverity = table.Column<int>(type: "integer", nullable: true),
+                    ChannelConfig = table.Column<string>(type: "text", nullable: false),
+                    CooldownPeriod = table.Column<TimeSpan>(type: "interval", nullable: false),
+                    Enabled = table.Column<bool>(type: "boolean", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AlertRules", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AlertRules_Projects_ProjectId",
+                        column: x => x.ProjectId,
+                        principalTable: "Projects",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AutoTagRules",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ProjectId = table.Column<int>(type: "integer", nullable: false),
+                    Field = table.Column<string>(type: "text", nullable: false),
+                    Operator = table.Column<int>(type: "integer", nullable: false),
+                    Value = table.Column<string>(type: "text", nullable: false),
+                    TagKey = table.Column<string>(type: "text", nullable: false),
+                    TagValue = table.Column<string>(type: "text", nullable: false),
+                    Enabled = table.Column<bool>(type: "boolean", nullable: false),
+                    Priority = table.Column<int>(type: "integer", nullable: false),
+                    Description = table.Column<string>(type: "text", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AutoTagRules", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AutoTagRules_Projects_ProjectId",
+                        column: x => x.ProjectId,
+                        principalTable: "Projects",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "EventFilters",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ProjectId = table.Column<int>(type: "integer", nullable: false),
+                    Field = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    Operator = table.Column<int>(type: "integer", nullable: false),
+                    Value = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    Action = table.Column<int>(type: "integer", nullable: false),
+                    Enabled = table.Column<bool>(type: "boolean", nullable: false),
+                    Priority = table.Column<int>(type: "integer", nullable: false),
+                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_EventFilters", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_EventFilters_Projects_ProjectId",
+                        column: x => x.ProjectId,
+                        principalTable: "Projects",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ProjectRecommendations",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ProjectId = table.Column<int>(type: "integer", nullable: false),
+                    AnalyzerId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    Severity = table.Column<int>(type: "integer", nullable: false),
+                    Title = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    Description = table.Column<string>(type: "text", nullable: false),
+                    ActionUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    Dismissed = table.Column<bool>(type: "boolean", nullable: false),
+                    DetectedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    DismissedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ProjectRecommendations", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ProjectRecommendations_Projects_ProjectId",
+                        column: x => x.ProjectId,
+                        principalTable: "Projects",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Releases",
                 columns: table => new
                 {
@@ -307,7 +446,6 @@ namespace Sigil.Infrastructure.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     RawName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     FirstSeenAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    DeployedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     Package = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
                     SemanticVersion = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
                     Build = table.Column<int>(type: "integer", nullable: true),
@@ -321,6 +459,60 @@ namespace Sigil.Infrastructure.Migrations
                         name: "FK_Releases_Projects_ProjectId",
                         column: x => x.ProjectId,
                         principalTable: "Projects",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "TextNormalizationRules",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ProjectId = table.Column<int>(type: "integer", nullable: false),
+                    Pattern = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false),
+                    Replacement = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    Priority = table.Column<int>(type: "integer", nullable: false),
+                    Enabled = table.Column<bool>(type: "boolean", nullable: false),
+                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ProjectId1 = table.Column<int>(type: "integer", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TextNormalizationRules", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TextNormalizationRules_Projects_ProjectId",
+                        column: x => x.ProjectId,
+                        principalTable: "Projects",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_TextNormalizationRules_Projects_ProjectId1",
+                        column: x => x.ProjectId1,
+                        principalTable: "Projects",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AlertHistory",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    AlertRuleId = table.Column<int>(type: "integer", nullable: false),
+                    IssueId = table.Column<int>(type: "integer", nullable: true),
+                    FiredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    ErrorMessage = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AlertHistory", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AlertHistory_AlertRules_AlertRuleId",
+                        column: x => x.AlertRuleId,
+                        principalTable: "AlertRules",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -357,7 +549,7 @@ namespace Sigil.Infrastructure.Migrations
                     Level = table.Column<int>(type: "integer", nullable: false),
                     Logger = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     Platform = table.Column<int>(type: "integer", nullable: false),
-                    ReleaseId = table.Column<int>(type: "integer", nullable: false),
+                    ReleaseId = table.Column<int>(type: "integer", nullable: true),
                     Extra = table.Column<Dictionary<string, string>>(type: "jsonb", nullable: true),
                     IssueId = table.Column<int>(type: "integer", nullable: false),
                     ProjectId = table.Column<int>(type: "integer", nullable: false),
@@ -382,55 +574,6 @@ namespace Sigil.Infrastructure.Migrations
                         name: "FK_Events_Releases_ReleaseId",
                         column: x => x.ReleaseId,
                         principalTable: "Releases",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Issues",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    Title = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false),
-                    Fingerprint = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    ExceptionType = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    Culprit = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    Priority = table.Column<int>(type: "integer", nullable: false),
-                    FirstSeen = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    LastSeen = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    ResolvedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    OccurrenceCount = table.Column<int>(type: "integer", nullable: false),
-                    Level = table.Column<int>(type: "integer", nullable: false),
-                    ProjectId = table.Column<int>(type: "integer", nullable: false),
-                    SuggestedEventId = table.Column<long>(type: "bigint", nullable: true),
-                    ResolvedById = table.Column<Guid>(type: "uuid", nullable: true),
-                    AssignedToId = table.Column<Guid>(type: "uuid", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Issues", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Issues_Events_SuggestedEventId",
-                        column: x => x.SuggestedEventId,
-                        principalTable: "Events",
-                        principalColumn: "Id");
-                    table.ForeignKey(
-                        name: "FK_Issues_Projects_ProjectId",
-                        column: x => x.ProjectId,
-                        principalTable: "Projects",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_Issues_Users_AssignedToId",
-                        column: x => x.AssignedToId,
-                        principalTable: "Users",
-                        principalColumn: "Id");
-                    table.ForeignKey(
-                        name: "FK_Issues_Users_ResolvedById",
-                        column: x => x.ResolvedById,
-                        principalTable: "Users",
                         principalColumn: "Id");
                 });
 
@@ -470,23 +613,91 @@ namespace Sigil.Infrastructure.Migrations
                     Message = table.Column<string>(type: "text", nullable: true),
                     Extra = table.Column<Dictionary<string, string>>(type: "jsonb", nullable: true),
                     IssueId = table.Column<int>(type: "integer", nullable: false),
-                    UserId = table.Column<Guid>(type: "uuid", nullable: false)
+                    UserId = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_IssueActivities", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_IssueActivities_Issues_IssueId",
-                        column: x => x.IssueId,
-                        principalTable: "Issues",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
                         name: "FK_IssueActivities_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "IssueBookmarks",
+                columns: table => new
+                {
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IssueId = table.Column<int>(type: "integer", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_IssueBookmarks", x => new { x.UserId, x.IssueId });
+                    table.ForeignKey(
+                        name: "FK_IssueBookmarks_Users_UserId",
                         column: x => x.UserId,
                         principalTable: "Users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Issues",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Title = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false),
+                    Fingerprint = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    ExceptionType = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    Culprit = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    Priority = table.Column<int>(type: "integer", nullable: false),
+                    FirstSeen = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    LastSeen = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ResolvedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    OccurrenceCount = table.Column<int>(type: "integer", nullable: false),
+                    Level = table.Column<int>(type: "integer", nullable: false),
+                    ProjectId = table.Column<int>(type: "integer", nullable: false),
+                    SuggestedEventId = table.Column<long>(type: "bigint", nullable: true),
+                    ResolvedById = table.Column<Guid>(type: "uuid", nullable: true),
+                    AssignedToId = table.Column<Guid>(type: "uuid", nullable: true),
+                    MergeSetId = table.Column<int>(type: "integer", nullable: true),
+                    IgnoreFilterId = table.Column<int>(type: "integer", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Issues", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Issues_EventFilters_IgnoreFilterId",
+                        column: x => x.IgnoreFilterId,
+                        principalTable: "EventFilters",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_Issues_Events_SuggestedEventId",
+                        column: x => x.SuggestedEventId,
+                        principalTable: "Events",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_Issues_Projects_ProjectId",
+                        column: x => x.ProjectId,
+                        principalTable: "Projects",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_Issues_Users_AssignedToId",
+                        column: x => x.AssignedToId,
+                        principalTable: "Users",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_Issues_Users_ResolvedById",
+                        column: x => x.ResolvedById,
+                        principalTable: "Users",
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -516,10 +727,81 @@ namespace Sigil.Infrastructure.Migrations
                         onDelete: ReferentialAction.Cascade);
                 });
 
+            migrationBuilder.CreateTable(
+                name: "MergeSets",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ProjectId = table.Column<int>(type: "integer", nullable: false),
+                    PrimaryIssueId = table.Column<int>(type: "integer", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    FirstSeen = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    LastSeen = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    OccurrenceCount = table.Column<int>(type: "integer", nullable: false),
+                    Level = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_MergeSets", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_MergeSets_Issues_PrimaryIssueId",
+                        column: x => x.PrimaryIssueId,
+                        principalTable: "Issues",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_MergeSets_Projects_ProjectId",
+                        column: x => x.ProjectId,
+                        principalTable: "Projects",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AlertHistory_AlertRuleId",
+                table: "AlertHistory",
+                column: "AlertRuleId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AlertHistory_FiredAt",
+                table: "AlertHistory",
+                column: "FiredAt");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AlertHistory_IssueId",
+                table: "AlertHistory",
+                column: "IssueId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AlertRules_ProjectId",
+                table: "AlertRules",
+                column: "ProjectId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AutoTagRules_ProjectId",
+                table: "AutoTagRules",
+                column: "ProjectId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AutoTagRules_ProjectId_Priority",
+                table: "AutoTagRules",
+                columns: new[] { "ProjectId", "Priority" });
+
             migrationBuilder.CreateIndex(
                 name: "IX_CapturedEventTagValue_TagsId",
                 table: "CapturedEventTagValue",
                 column: "TagsId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EventFilters_ProjectId",
+                table: "EventFilters",
+                column: "ProjectId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EventFilters_ProjectId_Priority",
+                table: "EventFilters",
+                columns: new[] { "ProjectId", "Priority" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Events_EventId",
@@ -569,9 +851,24 @@ namespace Sigil.Infrastructure.Migrations
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_IssueBookmarks_IssueId",
+                table: "IssueBookmarks",
+                column: "IssueId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Issues_AssignedToId",
                 table: "Issues",
                 column: "AssignedToId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Issues_IgnoreFilterId",
+                table: "Issues",
+                column: "IgnoreFilterId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Issues_MergeSetId",
+                table: "Issues",
+                column: "MergeSetId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Issues_ProjectId_Fingerprint",
@@ -593,6 +890,38 @@ namespace Sigil.Infrastructure.Migrations
                 name: "IX_IssueTags_TagValueId",
                 table: "IssueTags",
                 column: "TagValueId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_MergeSets_PrimaryIssueId",
+                table: "MergeSets",
+                column: "PrimaryIssueId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_MergeSets_ProjectId",
+                table: "MergeSets",
+                column: "ProjectId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Passkeys_CredentialId",
+                table: "Passkeys",
+                column: "CredentialId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Passkeys_UserId",
+                table: "Passkeys",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ProjectRecommendations_ProjectId",
+                table: "ProjectRecommendations",
+                column: "ProjectId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ProjectRecommendations_ProjectId_AnalyzerId",
+                table: "ProjectRecommendations",
+                columns: new[] { "ProjectId", "AnalyzerId" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Projects_ApiKey",
@@ -656,6 +985,21 @@ namespace Sigil.Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_TextNormalizationRules_ProjectId",
+                table: "TextNormalizationRules",
+                column: "ProjectId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TextNormalizationRules_ProjectId_Priority",
+                table: "TextNormalizationRules",
+                columns: new[] { "ProjectId", "Priority" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TextNormalizationRules_ProjectId1",
+                table: "TextNormalizationRules",
+                column: "ProjectId1");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_UserClaims_UserId",
                 table: "UserClaims",
                 column: "UserId");
@@ -688,6 +1032,14 @@ namespace Sigil.Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.AddForeignKey(
+                name: "FK_AlertHistory_Issues_IssueId",
+                table: "AlertHistory",
+                column: "IssueId",
+                principalTable: "Issues",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.SetNull);
+
+            migrationBuilder.AddForeignKey(
                 name: "FK_CapturedEventTagValue_Events_EventsId",
                 table: "CapturedEventTagValue",
                 column: "EventsId",
@@ -702,17 +1054,51 @@ namespace Sigil.Infrastructure.Migrations
                 principalTable: "Issues",
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Cascade);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_IssueActivities_Issues_IssueId",
+                table: "IssueActivities",
+                column: "IssueId",
+                principalTable: "Issues",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Cascade);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_IssueBookmarks_Issues_IssueId",
+                table: "IssueBookmarks",
+                column: "IssueId",
+                principalTable: "Issues",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Cascade);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_Issues_MergeSets_MergeSetId",
+                table: "Issues",
+                column: "MergeSetId",
+                principalTable: "MergeSets",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.SetNull);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
-                name: "FK_Issues_Events_SuggestedEventId",
-                table: "Issues");
+                name: "FK_Events_Issues_IssueId",
+                table: "Events");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_MergeSets_Issues_PrimaryIssueId",
+                table: "MergeSets");
+
+            migrationBuilder.DropTable(
+                name: "AlertHistory");
 
             migrationBuilder.DropTable(
                 name: "AppConfigs");
+
+            migrationBuilder.DropTable(
+                name: "AutoTagRules");
 
             migrationBuilder.DropTable(
                 name: "CapturedEventTagValue");
@@ -721,7 +1107,16 @@ namespace Sigil.Infrastructure.Migrations
                 name: "IssueActivities");
 
             migrationBuilder.DropTable(
+                name: "IssueBookmarks");
+
+            migrationBuilder.DropTable(
                 name: "IssueTags");
+
+            migrationBuilder.DropTable(
+                name: "Passkeys");
+
+            migrationBuilder.DropTable(
+                name: "ProjectRecommendations");
 
             migrationBuilder.DropTable(
                 name: "RawEnvelopes");
@@ -736,6 +1131,9 @@ namespace Sigil.Infrastructure.Migrations
                 name: "TeamMemberships");
 
             migrationBuilder.DropTable(
+                name: "TextNormalizationRules");
+
+            migrationBuilder.DropTable(
                 name: "UserClaims");
 
             migrationBuilder.DropTable(
@@ -748,6 +1146,9 @@ namespace Sigil.Infrastructure.Migrations
                 name: "UserTokens");
 
             migrationBuilder.DropTable(
+                name: "AlertRules");
+
+            migrationBuilder.DropTable(
                 name: "TagValues");
 
             migrationBuilder.DropTable(
@@ -757,19 +1158,25 @@ namespace Sigil.Infrastructure.Migrations
                 name: "TagKeys");
 
             migrationBuilder.DropTable(
+                name: "Issues");
+
+            migrationBuilder.DropTable(
+                name: "EventFilters");
+
+            migrationBuilder.DropTable(
                 name: "Events");
+
+            migrationBuilder.DropTable(
+                name: "MergeSets");
+
+            migrationBuilder.DropTable(
+                name: "Users");
 
             migrationBuilder.DropTable(
                 name: "EventUsers");
 
             migrationBuilder.DropTable(
-                name: "Issues");
-
-            migrationBuilder.DropTable(
                 name: "Releases");
-
-            migrationBuilder.DropTable(
-                name: "Users");
 
             migrationBuilder.DropTable(
                 name: "Projects");

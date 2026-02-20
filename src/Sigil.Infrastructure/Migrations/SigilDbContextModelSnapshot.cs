@@ -9,7 +9,7 @@ using Sigil.Infrastructure.Persistence;
 
 #nullable disable
 
-namespace Sigil.Infrastructure.Migrations
+namespace Sigil.infrastructure.Migrations
 {
     [DbContext(typeof(SigilDbContext))]
     partial class SigilDbContextModelSnapshot : ModelSnapshot
@@ -805,9 +805,6 @@ namespace Sigil.Infrastructure.Migrations
                     b.Property<string>("CommitSha")
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
-
-                    b.Property<DateTime?>("DeployedAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("FirstSeenAt")
                         .HasColumnType("timestamp with time zone");

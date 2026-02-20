@@ -10,11 +10,11 @@ using Sigil.Infrastructure.Persistence;
 
 #nullable disable
 
-namespace Sigil.Infrastructure.Migrations
+namespace Sigil.infrastructure.Migrations
 {
     [DbContext(typeof(SigilDbContext))]
-    [Migration("20260220202441_AddNormalizationRules")]
-    partial class AddNormalizationRules
+    [Migration("20260220233513_Initial")]
+    partial class Initial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -372,7 +372,7 @@ namespace Sigil.Infrastructure.Migrations
                     b.Property<DateTime>("ReceivedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("ReleaseId")
+                    b.Property<int?>("ReleaseId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("Timestamp")
@@ -586,7 +586,7 @@ namespace Sigil.Infrastructure.Migrations
                     b.Property<DateTime>("Timestamp")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("UserId")
+                    b.Property<Guid?>("UserId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -808,9 +808,6 @@ namespace Sigil.Infrastructure.Migrations
                     b.Property<string>("CommitSha")
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
-
-                    b.Property<DateTime?>("DeployedAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("FirstSeenAt")
                         .HasColumnType("timestamp with time zone");
@@ -1265,9 +1262,7 @@ namespace Sigil.Infrastructure.Migrations
 
                     b.HasOne("Sigil.Domain.Entities.Release", "Release")
                         .WithMany("Events")
-                        .HasForeignKey("ReleaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("ReleaseId");
 
                     b.HasOne("Sigil.Domain.Entities.EventUser", "User")
                         .WithMany("Events")
@@ -1346,9 +1341,7 @@ namespace Sigil.Infrastructure.Migrations
 
                     b.HasOne("Sigil.Domain.Entities.User", "User")
                         .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("UserId");
 
                     b.Navigation("Issue");
 
