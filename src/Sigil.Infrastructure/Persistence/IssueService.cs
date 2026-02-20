@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Application.Models.Events;
-using Sigil.Application.Models.Filters;
 using Sigil.Application.Models.Issues;
 using Sigil.Application.Models.MergeSets;
 using Sigil.Domain.Entities;
@@ -67,14 +66,12 @@ internal class IssueService(
                         OccurrenceCount = 0,
                         Culprit = representativeEvent.Culprit,
                     });
+                    
+                    newIssues.ForEach(i => i.Activities.Add(new IssueActivity { Action = IssueActivityAction.Created, Timestamp = dateTime.UtcNow, Issue = i }));
                 }
 
                 dbContext.Issues.AddRange(newIssues);
                 await dbContext.SaveChangesAsync();
-
-                foreach (var issue in newIssues)
-                    await activityService.LogActivityAsync(issue.Id, IssueActivityAction.Created, Guid.Empty);
-
                 fromDb.AddRange(newIssues);
             }
 
