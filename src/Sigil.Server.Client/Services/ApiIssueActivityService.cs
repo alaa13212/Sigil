@@ -32,7 +32,7 @@ public class ApiIssueActivityService(HttpClient http) : IIssueActivityService
         return (items, response.TotalCount);
     }
 
-    public Task<IssueActivity> LogActivityAsync(int issueId, Guid userId, IssueActivityAction action, string? message = null) =>
+    public Task<IssueActivity> LogActivityAsync(int issueId, IssueActivityAction action, Guid? userId = null, string? message = null) =>
         throw new NotSupportedException("Not available on client.");
 
     public async Task<ActivityResponse> AddCommentAsync(int issueId, string message)

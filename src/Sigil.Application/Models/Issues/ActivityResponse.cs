@@ -8,4 +8,4 @@ public record ActivityResponse(
     string? Message,
     DateTime Timestamp,
     string? UserName,
-    Guid UserId);
+    Guid? UserId);

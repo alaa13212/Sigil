@@ -35,8 +35,7 @@ public class DigestionService(
         if (parsedEvents.Count == 0)
             return;
 
-        List<string> requiredReleases = parsedEvents.Select(item => item.Release).Distinct().ToList();
-        Dictionary<string, Release> releases = (await releaseService.BulkGetOrCreateReleasesAsync(projectId, requiredReleases)).ToDictionary(r => r.RawName);
+        Dictionary<string, Release> releases = (await releaseService.BulkGetOrCreateReleasesAsync(projectId, parsedEvents)).ToDictionary(r => r.RawName);
 
         List<KeyValuePair<string, string>> requiredTags = parsedEvents.Where(item => item.Tags != null).SelectMany(item => item.Tags!).Distinct().ToList();
         Dictionary<string, TagValue> tagValues = (await tagService.BulkGetOrCreateTagsAsync(requiredTags))

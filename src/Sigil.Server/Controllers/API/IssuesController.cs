@@ -108,7 +108,7 @@ public class IssuesController(
         var userId = GetUserId();
         if (userId is null) return Unauthorized();
 
-        var activity = await activityService.LogActivityAsync(id, userId.Value, IssueActivityAction.Commented, request.Message.Trim());
+        var activity = await activityService.LogActivityAsync(id, IssueActivityAction.Commented, userId.Value, request.Message.Trim());
         return Ok(new ActivityResponse(activity.Id, activity.Action, activity.Message, activity.Timestamp, null, userId.Value));
     }
 

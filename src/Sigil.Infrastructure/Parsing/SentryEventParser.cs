@@ -53,7 +53,7 @@ internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSeri
             Platform = PlatformHelper.Parse(eventData.Platform),
             Level = SeverityHelper.Parse(eventData.Level),
             ServerName = eventData.ServerName,
-            Release = eventData.Release ?? "unknown@0.0.0",
+            Release = eventData.Release,
             
             ExceptionType = eventData.Exception?.Values?.LastOrDefault()?.Type,
             Message = GetMessage(eventData),

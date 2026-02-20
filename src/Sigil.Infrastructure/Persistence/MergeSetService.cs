@@ -56,7 +56,7 @@ internal class MergeSetService(
                 .SetProperty(i => i.AssignedToId, primary.AssignedToId));
 
         foreach (var issue in issues)
-            await activityService.LogActivityAsync(issue.Id, userId, IssueActivityAction.Merged);
+            await activityService.LogActivityAsync(issue.Id, IssueActivityAction.Merged, userId);
 
         issueCache.InvalidateAll();
         return BuildResponse(mergeSet, issues);
@@ -88,7 +88,7 @@ internal class MergeSetService(
         await RefreshAggregatesAsync([mergeSetId]);
 
         foreach (var issue in issues)
-            await activityService.LogActivityAsync(issue.Id, userId, IssueActivityAction.Merged);
+            await activityService.LogActivityAsync(issue.Id, IssueActivityAction.Merged, userId);
 
         issueCache.InvalidateAll();
         return await GetByIdAsync(mergeSetId) ?? throw new InvalidOperationException("Merge set not found.");
@@ -108,7 +108,7 @@ internal class MergeSetService(
         trackedIssue.MergeSetId = null;
         await dbContext.SaveChangesAsync();
 
-        await activityService.LogActivityAsync(issueId, userId, IssueActivityAction.Unmerged);
+        await activityService.LogActivityAsync(issueId, IssueActivityAction.Unmerged, userId);
         issueCache.InvalidateAll();
 
         var remaining = mergeSet.Issues.Where(i => i.Id != issueId).ToList();

@@ -73,7 +73,7 @@ internal class IssueService(
                 await dbContext.SaveChangesAsync();
 
                 foreach (var issue in newIssues)
-                    await activityService.LogActivityAsync(issue.Id, Guid.Empty, IssueActivityAction.Created);
+                    await activityService.LogActivityAsync(issue.Id, IssueActivityAction.Created, Guid.Empty);
 
                 fromDb.AddRange(newIssues);
             }
@@ -225,7 +225,7 @@ internal class IssueService(
                 IssueStatus.Open     => IssueActivityAction.Unresolved,
                 _                    => IssueActivityAction.Unresolved
             };
-            await activityService.LogActivityAsync(issueId, userId.Value, action);
+            await activityService.LogActivityAsync(issueId, action, userId.Value);
         }
 
         issueCache.InvalidateAll();
@@ -246,7 +246,7 @@ internal class IssueService(
         if (actionByUserId.HasValue)
         {
             var action = assignToUserId.HasValue ? IssueActivityAction.Assigned : IssueActivityAction.Unassigned;
-            await activityService.LogActivityAsync(issueId, actionByUserId.Value, action);
+            await activityService.LogActivityAsync(issueId, action, actionByUserId.Value);
         }
 
         issueCache.InvalidateAll();
@@ -359,6 +359,7 @@ internal class IssueService(
 
         var releaseInfo = await dbContext.Events
             .Where(e => e.IssueId == issueId)
+            .Where(e => e.Release != null)
             .Select(e => new { e.Timestamp, ReleaseName = e.Release!.RawName })
             .GroupBy(_ => 1)
             .Select(g => new IssueReleaseRange { FirstRelease = g.OrderBy(e => e.Timestamp).Select(e => e.ReleaseName).FirstOrDefault(), LastRelease = g.OrderByDescending(e => e.Timestamp).Select(e => e.ReleaseName).FirstOrDefault() })

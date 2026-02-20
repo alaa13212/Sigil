@@ -27,7 +27,7 @@ internal class BookmarkService(SigilDbContext dbContext, IDateTime dateTime, IIs
             CreatedAt = dateTime.UtcNow
         });
         await dbContext.SaveChangesAsync();
-        await activityService.LogActivityAsync(issueId, userId, IssueActivityAction.Bookmarked);
+        await activityService.LogActivityAsync(issueId, IssueActivityAction.Bookmarked, userId);
         return true;
     }
 

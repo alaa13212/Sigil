@@ -9,7 +9,7 @@ public class ParsedEvent
     public required Platform Platform { get; init; }
     public required Severity Level { get; init; }
     public string? ServerName { get; init; }
-    public required string Release { get; init; }
+    public string? Release { get; init; }
     public string? ExceptionType { get; init; }
     public string? Message { get; init; }
     public string? NormalizedMessage { get; set; }

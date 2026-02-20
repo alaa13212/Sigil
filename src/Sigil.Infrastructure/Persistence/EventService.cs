@@ -37,7 +37,7 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
             Level = e.Level,
             Logger = e.Logger,
             Platform = e.Platform,
-            ReleaseId = releases[e.Release].Id,
+            ReleaseId = e.Release != null ? releases[e.Release].Id : 0,
             Extra = e.Extra,
             ProjectId = project.Id,
             Issue = issue,

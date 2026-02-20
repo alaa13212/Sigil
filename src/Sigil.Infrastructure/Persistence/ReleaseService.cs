@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
+using Sigil.Domain.Ingestion;
 
 namespace Sigil.Infrastructure.Persistence;
 
@@ -21,18 +22,11 @@ internal partial class ReleaseService(SigilDbContext dbContext, IDateTime dateTi
         return release;
     }
 
-    public async Task<List<Release>> BulkGetOrCreateReleasesAsync(int projectId, IEnumerable<string> rawValues)
+    public async Task<List<Release>> BulkGetOrCreateReleasesAsync(int projectId, List<ParsedEvent> parsedEvents)
     {
-        List<Release> results = [];
-        List<string> misses = [];
-
-        foreach (string rawValue in rawValues)
-        {
-            if (releaseCache.TryGet(projectId, rawValue, out Release? cached))
-                results.Add(cached!);
-            else
-                misses.Add(rawValue);
-        }
+        IEnumerable<string> rawValues = parsedEvents.Where(e => e.Release != null).Select(e => e.Release!).Distinct();
+        var (results, misses) = releaseCache.TryGetMany(rawValues, 
+            rawValue => releaseCache.TryGet(projectId, rawValue, out Release? cached) ? cached : null);
 
         if (misses.Count > 0)
         {
@@ -48,6 +42,7 @@ internal partial class ReleaseService(SigilDbContext dbContext, IDateTime dateTi
             if (newRawValues.Any())
             {
                 List<Release> newReleases = newRawValues.Select(rawValue => ParseAndCreateReleaseAsync(projectId, rawValue)).ToList();
+                newReleases.ForEach(release => release.FirstSeenAt = parsedEvents.Where(e => e.Release == release.RawName).Min(e => e.Timestamp));
                 dbContext.Releases.AddRange(newReleases);
                 await dbContext.SaveChangesAsync();
                 fromDb.AddRange(newReleases);
@@ -75,12 +70,6 @@ internal partial class ReleaseService(SigilDbContext dbContext, IDateTime dateTi
     {
         (string? package, string? version, int? build, string? commitSha) = ParseReleaseComponents(rawValue);
 
-        return CreateReleaseAsync(projectId, rawValue, package, version, build, commitSha);
-    }
-
-
-    private Release CreateReleaseAsync(int projectId, string rawValue, string? package = null, string? version = null, int? build = null, string? commitSha = null)
-    {
         var release = new Release
         {
             ProjectId = projectId,
@@ -89,12 +78,12 @@ internal partial class ReleaseService(SigilDbContext dbContext, IDateTime dateTi
             SemanticVersion = version,
             Build = build,
             CommitSha = commitSha,
-            FirstSeenAt = dateTime.UtcNow
         };
 
         dbContext.Releases.Add(release);
         return release;
     }
+
 
     private static (string? package, string? version, int? build, string? commitSha) ParseReleaseComponents(string rawValue)
     {

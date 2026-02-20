@@ -27,7 +27,7 @@ public class CapturedEvent
     public Platform Platform { get; set; }
 
     [ForeignKey(nameof(Release))]
-    public int ReleaseId { get; set; }
+    public int? ReleaseId { get; set; }
     public Release? Release { get; set; }
     
 

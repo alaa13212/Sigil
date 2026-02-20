@@ -21,8 +21,10 @@ public class PredefinedTagsEnricher : IEventEnricher
        // Add predefined tags
        if (parsedEvent.Environment != null)
            parsedEvent.Tags[TagEnvironment] = parsedEvent.Environment;
-           
-       parsedEvent.Tags[TagRelease] = parsedEvent.Release;
+
+       if (parsedEvent.Release != null)
+           parsedEvent.Tags[TagRelease] = parsedEvent.Release;
+       
        parsedEvent.Tags[TagEventLevel] = parsedEvent.Level.ToStringValue();
        
        if (parsedEvent.ServerName != null)
