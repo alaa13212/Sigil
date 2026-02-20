@@ -2,7 +2,7 @@
 
 namespace Sigil.Application.Services;
 
-internal class ReleaseTagValueFormatter : IInternalTagValueFormatter
+public class ReleaseTagValueFormatter : IInternalTagValueFormatter
 {
     public string Format(string key, string value)
     {

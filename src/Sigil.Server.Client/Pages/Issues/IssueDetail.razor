@@ -347,7 +347,7 @@ else
                 {
                     <h1 class="text-2xl">
                         Issue Group
-                        <span class="text-xl badge badge-xl badge-neutral ml-1">@issue.MergeSet.Members.Count</span>
+                        <span class="badge badge-xl badge-neutral ml-2">@issue.MergeSet.Members.Count</span>
                     </h1>
                     <div class="space-y-4">
                         <div class="flex items-center justify-between">
@@ -374,7 +374,7 @@ else
                                                     @member.Title
                                                 </a>
                                             </div>
-                                            <div class="text-xs opacity-60 mt-0.5 font-mono">@member.Fingerprint[..Math.Min(16, member.Fingerprint.Length)]…</div>
+                                            <div class="text-xs opacity-60 mt-0.5 font-mono">@member.Fingerprint</div>
                                             <div class="text-xs opacity-50 mt-0.5">
                                                 @member.OccurrenceCount events · last seen <RelativeTime Value="member.LastSeen" />
                                             </div>
@@ -423,7 +423,7 @@ else
                         <p class="text-sm opacity-60">Issues with the same title, exception type, or culprit. Consider merging related ones.</p>
 
                         
-                        <fieldset disabled="@CanMerge">
+                        <fieldset disabled="@(!CanMerge)">
                             <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
                                 <span class="text-sm font-medium">@similarSelected.Count selected</span>
                                 <button class="btn btn-primary btn-sm" @onclick="MergeSimilarSelected" disabled="@mergeFromSimilarLoading">
@@ -610,7 +610,7 @@ else
                                     var pct = group.TotalCount > 0 ? (double)tagVal.Count / group.TotalCount * 100 : 0;
                                     <div class="space-y-0.5">
                                         <div class="flex justify-between text-xs">
-                                            <span class="font-mono line-clamp-1" title="@tagVal.Value">@tagVal.Value</span>
+                                            <span class="font-mono line-clamp-1" title="@tagVal.Value">@TagValueFormatter.Format(group.Key, tagVal.Value)</span>
                                             <span class="opacity-50 shrink-0 ml-2">@pct.ToString("F0")%</span>
                                         </div>
                                         <div class="w-full bg-base-300 rounded-full h-1">

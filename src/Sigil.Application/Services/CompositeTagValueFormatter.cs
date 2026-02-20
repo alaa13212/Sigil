@@ -2,7 +2,7 @@
 
 namespace Sigil.Application.Services;
 
-internal class CompositeTagValueFormatter(IEnumerable<IInternalTagValueFormatter> formatters) : ITagValueFormatter
+public class CompositeTagValueFormatter(IEnumerable<IInternalTagValueFormatter> formatters) : ITagValueFormatter
 {
     public string Format(string key, string value)
     {

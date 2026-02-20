@@ -36,7 +36,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<RuleEngine>();
         services.AddScoped<IEventParser, SentryEventParser>();
         services.AddScoped<IEventRanker, EventRanker>();
-        services.AddScoped<IHashGenerator, DefaultHashGenerator>();
+        services.AddSingleton<IHashGenerator, DefaultHashGenerator>();
         services.AddScoped<ICompressionService, GzipCompressionService>();
         services.AddScoped<IDateTime, DateTimeProvider>();
         services.AddScoped<IEventService, EventService>();

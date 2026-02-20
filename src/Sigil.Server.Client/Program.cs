@@ -13,8 +13,11 @@ builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<CookieAuthenticationStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<CookieAuthenticationStateProvider>());
 
-builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
+builder.Services.AddSingleton<IMessageNormalizer, MessageNormalizer>();
+builder.Services.AddSingleton<IInternalTagValueFormatter, ReleaseTagValueFormatter>();
+builder.Services.AddSingleton<ITagValueFormatter, CompositeTagValueFormatter>();
 
+builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 builder.Services.AddScoped<IAuthService, ApiAuthService>();
 builder.Services.AddScoped<ITeamService, ApiTeamService>();
 builder.Services.AddScoped<ISetupService, ApiSetupService>();
@@ -31,7 +34,6 @@ builder.Services.AddScoped<IBookmarkService, ApiBookmarkService>();
 builder.Services.AddScoped<IAlertService, ApiAlertService>();
 builder.Services.AddScoped<IAutoTagService, ApiAutoTagService>();
 builder.Services.AddScoped<INormalizationRuleService, ApiNormalizationRuleService>();
-builder.Services.AddScoped<IMessageNormalizer, MessageNormalizer>();
 builder.Services.AddScoped<IReleaseHealthService, ApiReleaseHealthService>();
 
 await builder.Build().RunAsync();

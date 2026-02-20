@@ -9,17 +9,17 @@ public static class ServiceCollectionExtensions
 {
     public static void AddApplication(this IServiceCollection services)
     {
-        services.AddScoped<IFingerprintGenerator, DefaultFingerprintGenerator>();
-        services.AddScoped<IMessageNormalizer, MessageNormalizer>();
+        services.AddSingleton<IFingerprintGenerator, DefaultFingerprintGenerator>();
+        services.AddSingleton<IMessageNormalizer, MessageNormalizer>();
         
-        services.AddScoped<IEventEnricher, PredefinedTagsEnricher>();
+        services.AddSingleton<IEventEnricher, PredefinedTagsEnricher>();
         services.AddScoped<IEventEnricher, NormalizedMessageEnricher>();
-        services.AddScoped<IEventEnricher, RemoteIpProviderEnricher>();
-        services.AddScoped<IEventEnricher, EventUserUniqueIdentifierEnricher>();
-        services.AddScoped<IEventEnricher, FingerprintEventEnricher>();
+        services.AddSingleton<IEventEnricher, RemoteIpProviderEnricher>();
+        services.AddSingleton<IEventEnricher, EventUserUniqueIdentifierEnricher>();
+        services.AddSingleton<IEventEnricher, FingerprintEventEnricher>();
         services.AddScoped<IEventEnricher, AutoTagsEventEnricher>();
         
-        services.AddScoped<IInternalTagValueFormatter, ReleaseTagValueFormatter>();
-        services.AddScoped<ITagValueFormatter, CompositeTagValueFormatter>();
+        services.AddSingleton<IInternalTagValueFormatter, ReleaseTagValueFormatter>();
+        services.AddSingleton<ITagValueFormatter, CompositeTagValueFormatter>();
     }
 }
