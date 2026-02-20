@@ -50,8 +50,9 @@ internal class ReleaseHealthService(SigilDbContext dbContext) : IReleaseHealthSe
                 NewIssues      = r.Events.Select(e => e.Issue!).Where(i => i.FirstSeen >= r.FirstSeenAt).Select(i => i.Id).Distinct().Count(),
                 TopIssueStats  = r.Events
                     .GroupBy(e => e.IssueId)
-                    .Select(g => new { IssueId = g.Key, EventCount = g.Count() })
-                    .OrderByDescending(x => x.EventCount)
+                    .Select(g => new { IssueId = g.Key, EventCount = g.Count(), IsNew = g.Min(e => e.Timestamp) > r.FirstSeenAt })
+                    .OrderByDescending(x => x.IsNew)
+                    .ThenByDescending(x => x.EventCount)
                     .Take(20)
             })
             .FirstOrDefaultAsync();
