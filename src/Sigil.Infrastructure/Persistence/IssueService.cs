@@ -333,21 +333,6 @@ internal class IssueService(
             .OrderBy(g => g.Key)
             .ToList();
 
-        IssueTagGroup? releaseTags = tagGroups.FirstOrDefault(t => t.Key == "release");
-        if (releaseTags != null)
-        {
-            string value = releaseTags.Values.First().Value;
-            if (value.Contains('@'))
-            {
-                string prefix = value[..(value.IndexOf('@') + 1)];
-                if (releaseTags.Values.All(t => t.Value.StartsWith(prefix)))
-                {
-                    tagGroups.Remove(releaseTags);
-                    tagGroups.Add(releaseTags with { Values = releaseTags.Values.Select(rt => rt with { Value = rt.Value[(rt.Value.IndexOf('@') + 1)..] }).ToList() });
-                }
-            }
-        }
-
         EventSummary? suggestedEvent = null;
         if (issue.SuggestedEvent is not null)
         {
@@ -365,13 +350,6 @@ internal class IssueService(
             .Select(g => new IssueReleaseRange { FirstRelease = g.OrderBy(e => e.Timestamp).Select(e => e.ReleaseName).FirstOrDefault(), LastRelease = g.OrderByDescending(e => e.Timestamp).Select(e => e.ReleaseName).FirstOrDefault() })
             .FirstOrDefaultAsync();
 
-        if (releaseInfo != null)
-        {
-            if (releaseInfo.FirstRelease?.Contains('@') == true)
-                releaseInfo.FirstRelease = releaseInfo.FirstRelease[(releaseInfo.FirstRelease.IndexOf('@') + 1)..];
-            if (releaseInfo.LastRelease?.Contains('@') == true)
-                releaseInfo.LastRelease = releaseInfo.LastRelease[(releaseInfo.LastRelease.IndexOf('@') + 1)..];
-        }
 
         MergeSetResponse? mergeSetResponse = null;
         if (issue.MergeSet is not null)

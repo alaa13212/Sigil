@@ -8,6 +8,7 @@
 @inject IBookmarkService BookmarkService
 @inject IEventService EventService
 @inject IIssueActivityService ActivityService
+@inject ITagValueFormatter TagValueFormatter
 @inject NavigationManager Navigation
 
 <PageTitle>@(issue?.Title ?? "Issue") — Sigil</PageTitle>
@@ -192,7 +193,7 @@ else
                                             {
                                                 <tr>
                                                     <td class="opacity-60 w-1/3">@tag.Key</td>
-                                                    <td class="font-mono">@tag.Value</td>
+                                                    <td class="font-mono">@TagValueFormatter.Format(tag.Key, tag.Value)</td>
                                                 </tr>
                                             }
                                             </tbody>
@@ -562,7 +563,7 @@ else
                             <RelativeTime Value="issue.FirstSeen" />
                             @if (!string.IsNullOrEmpty(issue.FirstRelease))
                             {
-                                <div class="text-xs opacity-50 font-mono">@issue.FirstRelease</div>
+                                <div class="text-xs opacity-50 font-mono">@TagValueFormatter.Format("release", issue.FirstRelease)</div>
                             }
                         </div>
                     </div>
@@ -572,7 +573,7 @@ else
                             <RelativeTime Value="issue.LastSeen" />
                             @if (!string.IsNullOrEmpty(issue.LastRelease))
                             {
-                                <div class="text-xs opacity-50 font-mono">@issue.LastRelease</div>
+                                <div class="text-xs opacity-50 font-mono">@TagValueFormatter.Format("release", issue.LastRelease)</div>
                             }
                         </div>
                     </div>

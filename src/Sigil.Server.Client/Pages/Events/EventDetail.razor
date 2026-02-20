@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using Sigil.Application.Models.Events
 @inject IEventService EventService
+@inject ITagValueFormatter TagValueFormatter
 
 <PageTitle>Event — Sigil</PageTitle>
 
@@ -86,7 +87,7 @@ else
                                         {
                                             <tr>
                                                 <td class="opacity-70">@tag.Key</td>
-                                                <td class="font-mono">@tag.Value</td>
+                                                <td class="font-mono">@TagValueFormatter.Format(tag.Key, tag.Value)</td>
                                             </tr>
                                         }
                                     </tbody>

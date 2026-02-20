@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Sigil.Application.Interfaces;
 using Sigil.Application.Services;
 using Sigil.Domain.Interfaces;
 
@@ -17,5 +18,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEventEnricher, EventUserUniqueIdentifierEnricher>();
         services.AddScoped<IEventEnricher, FingerprintEventEnricher>();
         services.AddScoped<IEventEnricher, AutoTagsEventEnricher>();
+        
+        services.AddScoped<IInternalTagValueFormatter, ReleaseTagValueFormatter>();
+        services.AddScoped<ITagValueFormatter, CompositeTagValueFormatter>();
     }
 }
