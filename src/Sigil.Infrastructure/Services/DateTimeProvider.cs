@@ -1,6 +1,6 @@
 ﻿using Sigil.Application.Interfaces;
 
-namespace Sigil.infrastructure.Services;
+namespace Sigil.Infrastructure.Services;
 
 internal class DateTimeProvider : IDateTime
 {

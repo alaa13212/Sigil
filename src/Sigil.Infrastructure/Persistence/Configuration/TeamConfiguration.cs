@@ -2,7 +2,7 @@
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Sigil.Domain.Entities;
 
-namespace Sigil.infrastructure.Persistence.Configuration;
+namespace Sigil.Infrastructure.Persistence.Configuration;
 
 internal class TeamConfiguration : IEntityTypeConfiguration<Team>
 {

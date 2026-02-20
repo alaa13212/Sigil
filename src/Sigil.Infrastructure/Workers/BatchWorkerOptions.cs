@@ -1,4 +1,4 @@
-﻿namespace Sigil.infrastructure.Workers;
+﻿namespace Sigil.Infrastructure.Workers;
 
 internal class BatchWorkerOptions
 {

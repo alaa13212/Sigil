@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Sigil.Application.DependencyInjection;
 using Sigil.Domain.DependencyInjection;
-using Sigil.infrastructure.DependencyInjection;
+using Sigil.Infrastructure.DependencyInjection;
 using Sigil.Server.Auth;
 using Sigil.Server.Components;
 

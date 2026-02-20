@@ -2,7 +2,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Sigil.Application.Interfaces;
 
-namespace Sigil.infrastructure.Workers;
+namespace Sigil.Infrastructure.Workers;
 
 internal class WorkersHost(
     IEnumerable<IWorker> workers,

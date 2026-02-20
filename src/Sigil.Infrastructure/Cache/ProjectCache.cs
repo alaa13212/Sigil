@@ -1,7 +1,7 @@
 using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
 
-namespace Sigil.infrastructure.Cache;
+namespace Sigil.Infrastructure.Cache;
 
 internal class ProjectCache(ICacheManager cacheManager) : IProjectCache
 {

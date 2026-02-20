@@ -4,7 +4,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Sigil.infrastructure.Migrations
+namespace Sigil.Infrastructure.Migrations
 {
     /// <inheritdoc />
     internal partial class AddAlerts : Migration

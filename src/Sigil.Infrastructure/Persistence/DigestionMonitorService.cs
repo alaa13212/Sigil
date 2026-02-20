@@ -2,9 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Digestion;
-using Sigil.infrastructure.Workers;
+using Sigil.Infrastructure.Workers;
 
-namespace Sigil.infrastructure.Persistence;
+namespace Sigil.Infrastructure.Persistence;
 
 internal class DigestionMonitorService(
     SigilDbContext context,

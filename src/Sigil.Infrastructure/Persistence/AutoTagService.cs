@@ -6,7 +6,7 @@ using Sigil.Application.Services;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Ingestion;
 
-namespace Sigil.infrastructure.Persistence;
+namespace Sigil.Infrastructure.Persistence;
 
 internal class AutoTagService(
     SigilDbContext dbContext,

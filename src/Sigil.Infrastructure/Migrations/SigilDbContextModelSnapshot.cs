@@ -5,11 +5,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
-using Sigil.infrastructure.Persistence;
+using Sigil.Infrastructure.Persistence;
 
 #nullable disable
 
-namespace Sigil.infrastructure.Migrations
+namespace Sigil.Infrastructure.Migrations
 {
     [DbContext(typeof(SigilDbContext))]
     partial class SigilDbContextModelSnapshot : ModelSnapshot

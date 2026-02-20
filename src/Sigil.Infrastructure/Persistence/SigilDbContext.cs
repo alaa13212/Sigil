@@ -2,7 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Sigil.Domain.Entities;
 
-namespace Sigil.infrastructure.Persistence;
+namespace Sigil.Infrastructure.Persistence;
 
 internal class SigilDbContext(DbContextOptions<SigilDbContext> options) : SaveSuppressionDbContext<SigilDbContext>(options)
 {

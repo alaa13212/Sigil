@@ -3,9 +3,9 @@ using Sigil.Domain.Enums;
 using Sigil.Domain.Extensions;
 using Sigil.Domain.Ingestion;
 using Sigil.Domain.Interfaces;
-using Sigil.infrastructure.Parsing.Models;
+using Sigil.Infrastructure.Parsing.Models;
 
-namespace Sigil.infrastructure.Parsing;
+namespace Sigil.Infrastructure.Parsing;
 
 internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSerializerOptions jsonSerializerOptions) : IEventParser
 {

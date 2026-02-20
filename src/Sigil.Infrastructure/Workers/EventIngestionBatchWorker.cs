@@ -5,7 +5,7 @@ using Sigil.Application.Interfaces;
 using Sigil.Domain.Ingestion;
 using Sigil.Domain.Interfaces;
 
-namespace Sigil.infrastructure.Workers;
+namespace Sigil.Infrastructure.Workers;
 
 internal class EventIngestionWorker(
     IServiceProvider services,

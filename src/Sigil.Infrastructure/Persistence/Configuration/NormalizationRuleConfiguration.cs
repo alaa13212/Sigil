@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Sigil.Domain.Entities;
 
-namespace Sigil.infrastructure.Persistence.Configuration;
+namespace Sigil.Infrastructure.Persistence.Configuration;
 
 internal class NormalizationRuleConfiguration : IEntityTypeConfiguration<TextNormalizationRule>
 {

@@ -9,7 +9,7 @@ using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 using Sigil.Domain.Ingestion;
 
-namespace Sigil.infrastructure.Persistence;
+namespace Sigil.Infrastructure.Persistence;
 
 internal class IssueService(
     SigilDbContext dbContext,

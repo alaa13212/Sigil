@@ -3,7 +3,7 @@ using Npgsql;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Auth;
 
-namespace Sigil.infrastructure.Persistence;
+namespace Sigil.Infrastructure.Persistence;
 
 internal class EfDatabaseMigrator(SigilDbContext dbContext) : IDatabaseMigrator
 {

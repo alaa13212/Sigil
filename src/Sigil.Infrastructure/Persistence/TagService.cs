@@ -3,7 +3,7 @@ using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Extensions;
 
-namespace Sigil.infrastructure.Persistence;
+namespace Sigil.Infrastructure.Persistence;
 
 internal class TagService(SigilDbContext dbContext, ITagCache tagCache) : ITagService
 {

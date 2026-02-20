@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Sigil.Domain.Entities;
 
-namespace Sigil.infrastructure.Persistence;
+namespace Sigil.Infrastructure.Persistence;
 
 internal class SaveSuppressionDbContext<T>(DbContextOptions<T> options): IdentityDbContext<User, IdentityRole<Guid>, Guid>(options) where T : DbContext
 {

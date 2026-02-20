@@ -3,7 +3,7 @@ using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 
-namespace Sigil.infrastructure.Persistence.Analyzers;
+namespace Sigil.Infrastructure.Persistence.Analyzers;
 
 internal class HighCardinalityTagAnalyzer(SigilDbContext dbContext) : IProjectAnalyzer
 {

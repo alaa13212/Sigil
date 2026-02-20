@@ -4,7 +4,7 @@ using Sigil.Application.Models.MergeSets;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 
-namespace Sigil.infrastructure.Persistence;
+namespace Sigil.Infrastructure.Persistence;
 
 internal class MergeSetService(
     SigilDbContext dbContext,

@@ -7,9 +7,9 @@ using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Auth;
 using Sigil.Domain;
 using Sigil.Domain.Entities;
-using Sigil.infrastructure.Services;
+using Sigil.Infrastructure.Services;
 
-namespace Sigil.infrastructure.Persistence;
+namespace Sigil.Infrastructure.Persistence;
 
 internal class PasskeyService(
     IAppConfigService appConfig,

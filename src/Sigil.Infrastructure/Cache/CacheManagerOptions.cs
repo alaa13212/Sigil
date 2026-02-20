@@ -1,6 +1,6 @@
 ﻿using Sigil.Application.Interfaces;
 
-namespace Sigil.infrastructure.Cache;
+namespace Sigil.Infrastructure.Cache;
 
 internal class CacheManagerOptions
 {

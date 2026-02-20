@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
 
-namespace Sigil.infrastructure.Workers;
+namespace Sigil.Infrastructure.Workers;
 
 internal class RecommendationAnalysisWorker(
     IServiceProvider services,

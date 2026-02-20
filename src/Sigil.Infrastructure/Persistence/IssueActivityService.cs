@@ -5,7 +5,7 @@ using Sigil.Application.Models.Issues;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 
-namespace Sigil.infrastructure.Persistence;
+namespace Sigil.Infrastructure.Persistence;
 
 internal class IssueActivityService(SigilDbContext dbContext, IDateTime dateTime) : IIssueActivityService
 {

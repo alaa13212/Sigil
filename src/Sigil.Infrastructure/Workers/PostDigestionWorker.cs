@@ -5,9 +5,9 @@ using Microsoft.Extensions.Logging;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Domain.Entities;
-using Sigil.infrastructure.Persistence;
+using Sigil.Infrastructure.Persistence;
 
-namespace Sigil.infrastructure.Workers;
+namespace Sigil.Infrastructure.Workers;
 
 internal class PostDigestionWorker(
     IServiceProvider services,

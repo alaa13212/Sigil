@@ -5,9 +5,9 @@ using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Interfaces;
 using Sigil.Domain.Ingestion;
-using Sigil.infrastructure.Persistence;
+using Sigil.Infrastructure.Persistence;
 
-namespace Sigil.infrastructure.Workers;
+namespace Sigil.Infrastructure.Workers;
 
 internal class DigestionWorker(
     IServiceProvider services,

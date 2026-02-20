@@ -2,7 +2,7 @@
 using System.Text;
 using Sigil.Application.Interfaces;
 
-namespace Sigil.infrastructure.Services;
+namespace Sigil.Infrastructure.Services;
 
 internal class GzipCompressionService  : ICompressionService
 {

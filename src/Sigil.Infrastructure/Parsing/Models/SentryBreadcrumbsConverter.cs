@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Sigil.infrastructure.Parsing.Models;
+namespace Sigil.Infrastructure.Parsing.Models;
 
 /// <summary>
 /// Handles deserialization of Sentry breadcrumbs which can be in two formats:

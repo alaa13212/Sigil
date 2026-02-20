@@ -1,4 +1,4 @@
-﻿namespace Sigil.infrastructure.Persistence;
+﻿namespace Sigil.Infrastructure.Persistence;
 
 internal class SaveSuppressionManager
 {

@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
 
-namespace Sigil.infrastructure.Parsing.Models;
+namespace Sigil.Infrastructure.Parsing.Models;
 
 [Serializable]
 internal class SentryEvent

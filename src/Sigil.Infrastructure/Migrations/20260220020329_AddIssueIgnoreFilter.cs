@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace Sigil.infrastructure.Migrations
+namespace Sigil.Infrastructure.Migrations
 {
     /// <inheritdoc />
     internal partial class AddIssueIgnoreFilter : Migration

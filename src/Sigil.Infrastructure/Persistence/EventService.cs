@@ -8,7 +8,7 @@ using Sigil.Domain.Entities;
 using Sigil.Domain.Extensions;
 using Sigil.Domain.Ingestion;
 
-namespace Sigil.infrastructure.Persistence;
+namespace Sigil.Infrastructure.Persistence;
 
 internal class EventService(SigilDbContext dbContext, ICompressionService compressionService) : IEventService
 {

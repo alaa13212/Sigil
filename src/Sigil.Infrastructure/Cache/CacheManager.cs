@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 using Sigil.Application.Interfaces;
 using Sigil.Domain.Extensions;
 
-namespace Sigil.infrastructure.Cache;
+namespace Sigil.Infrastructure.Cache;
 
 internal class CacheManager : ICacheManager
 {

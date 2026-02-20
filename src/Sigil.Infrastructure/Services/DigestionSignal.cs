@@ -1,7 +1,7 @@
 using System.Threading.Channels;
 using Sigil.Application.Interfaces;
 
-namespace Sigil.infrastructure.Services;
+namespace Sigil.Infrastructure.Services;
 
 internal class DigestionSignal : IDigestionSignal
 {

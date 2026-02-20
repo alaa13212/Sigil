@@ -3,7 +3,7 @@ using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Recommendations;
 using Sigil.Domain.Entities;
 
-namespace Sigil.infrastructure.Persistence;
+namespace Sigil.Infrastructure.Persistence;
 
 internal class RecommendationService(
     SigilDbContext dbContext,

@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace Sigil.infrastructure.Services;
+namespace Sigil.Infrastructure.Services;
 
 internal class PasskeyChallengeStore
 {

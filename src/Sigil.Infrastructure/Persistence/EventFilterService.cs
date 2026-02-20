@@ -7,7 +7,7 @@ using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 using Sigil.Domain.Ingestion;
 
-namespace Sigil.infrastructure.Persistence;
+namespace Sigil.Infrastructure.Persistence;
 
 internal class EventFilterService(SigilDbContext dbContext, IEventFilterCache filterCache, IDateTime dateTime, RuleEngine ruleEngine) : IEventFilterService
 {

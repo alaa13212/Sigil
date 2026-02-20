@@ -4,7 +4,7 @@ using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Auth;
 using Sigil.Domain.Entities;
 
-namespace Sigil.infrastructure.Persistence;
+namespace Sigil.Infrastructure.Persistence;
 
 internal class AuthService(
     UserManager<User> userManager,

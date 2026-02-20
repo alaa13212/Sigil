@@ -6,7 +6,7 @@ using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 
-namespace Sigil.infrastructure.Services;
+namespace Sigil.Infrastructure.Services;
 
 internal class WebhookAlertSender(HttpClient http) : IAlertSender
 {

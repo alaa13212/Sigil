@@ -3,7 +3,7 @@ using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Ingestion;
 
-namespace Sigil.infrastructure.Persistence;
+namespace Sigil.Infrastructure.Persistence;
 
 internal class EventUserService(SigilDbContext dbContext, IEventUserCache eventUserCache) : IEventUserService
 {

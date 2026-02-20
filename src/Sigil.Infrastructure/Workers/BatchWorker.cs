@@ -2,7 +2,7 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Sigil.Application.Interfaces;
 
-namespace Sigil.infrastructure.Workers;
+namespace Sigil.Infrastructure.Workers;
 
 internal abstract class BatchWorker<TItem> : IWorker<TItem>
 {

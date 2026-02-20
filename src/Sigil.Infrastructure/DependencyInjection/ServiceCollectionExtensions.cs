@@ -8,13 +8,13 @@ using Sigil.Application.Models;
 using Sigil.Application.Services;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Interfaces;
-using Sigil.infrastructure.Cache;
-using Sigil.infrastructure.Parsing;
-using Sigil.infrastructure.Persistence;
-using Sigil.infrastructure.Services;
-using Sigil.infrastructure.Workers;
+using Sigil.Infrastructure.Cache;
+using Sigil.Infrastructure.Parsing;
+using Sigil.Infrastructure.Persistence;
+using Sigil.Infrastructure.Services;
+using Sigil.Infrastructure.Workers;
 
-namespace Sigil.infrastructure.DependencyInjection;
+namespace Sigil.Infrastructure.DependencyInjection;
 
 public static class ServiceCollectionExtensions
 {

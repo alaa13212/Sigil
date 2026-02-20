@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
 
-namespace Sigil.infrastructure.Persistence;
+namespace Sigil.Infrastructure.Persistence;
 
 internal class AppConfigService(SigilDbContext dbContext, IAppConfigCache cache) : IAppConfigService
 {
