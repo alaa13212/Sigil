@@ -13,8 +13,8 @@ public class DigestionService(
     IReleaseService releaseService,
     IEventUserService eventUserService,
     ITagService tagService,
-    IFingerprintGenerator fingerprintGenerator,
-    IEventRanker eventRanker
+    IEventRanker eventRanker,
+    IEventFilterService eventFilterService
 ) : IDigestionService
 {
     public async Task BulkDigestAsync(int projectId, List<ParsedEvent> parsedEvents, CancellationToken ct = default)
@@ -24,6 +24,12 @@ public class DigestionService(
 
         var existingIds = await eventService.FindExistingEventIdsAsync(parsedEvents.Select(e => e.EventId));
         parsedEvents.RemoveAll(e => existingIds.Contains(e.EventId));
+        if (parsedEvents.Count == 0)
+            return;
+
+        List<EventFilter> filters = await eventFilterService.GetRawFiltersForProjectAsync(projectId);
+        if (filters.Count > 0)
+            parsedEvents.RemoveAll(e => eventFilterService.ShouldRejectEvent(e, filters));
         if (parsedEvents.Count == 0)
             return;
 
@@ -39,7 +45,9 @@ public class DigestionService(
         List<ParsedEventUser> parsedEventUsers = parsedEvents.Select(item => item.User).Where(u => u != null).ToList()!;
         Dictionary<string, EventUser> eventUsers = (await eventUserService.BulkGetOrCreateEventUsersAsync(parsedEventUsers)).ToDictionary(u => u.UniqueIdentifier);
 
-        ILookup<string, ParsedEvent> issueGrouping = parsedEvents.ToLookup(fingerprintGenerator.GenerateFingerprint);
+        ILookup<string, ParsedEvent> issueGrouping = parsedEvents
+            .Where(e => !e.Fingerprint.IsNullOrEmpty())
+            .ToLookup(e => e.Fingerprint!);
         Dictionary<string, Issue> issues = (await issueService.BulkGetOrCreateIssuesAsync(project, issueGrouping)).ToDictionary(i => i.Fingerprint);
 
         List<CapturedEvent> events = [];

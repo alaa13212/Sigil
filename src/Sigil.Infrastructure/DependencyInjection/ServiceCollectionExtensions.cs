@@ -52,6 +52,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDigestionService, DigestionService>();
         services.AddScoped<IDigestionMonitorService, DigestionMonitorService>();
         services.AddScoped<IPasskeyService, PasskeyService>();
+        services.AddScoped<IEventFilterService, EventFilterService>();
 
         services.AddIdentityServices();
         services.AddPasskeyServices();
@@ -70,6 +71,7 @@ public static class ServiceCollectionExtensions
             options.Add<ITagCache>(20_000, TimeSpan.FromMinutes(3));
             options.Add<IIssueCache>(10_000, TimeSpan.FromMinutes(2));
             options.Add<IEventUserCache>(20_000, TimeSpan.FromMinutes(5));
+            options.Add<IEventFilterCache>(500, TimeSpan.FromMinutes(5));
         });
 
         services.AddScoped<IAppConfigCache, AppConfigCache>();
@@ -78,6 +80,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITagCache, TagCache>();
         services.AddScoped<IIssueCache, IssueCache>();
         services.AddScoped<IEventUserCache, EventUserCache>();
+        services.AddScoped<IEventFilterCache, EventFilterCache>();
     }
     
     private static void AddIdentityServices(this IServiceCollection services)

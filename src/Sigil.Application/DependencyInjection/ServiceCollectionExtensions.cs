@@ -15,5 +15,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEventEnricher, NormalizedMessageEnricher>();
         services.AddScoped<IEventEnricher, RemoteIpProviderEnricher>();
         services.AddScoped<IEventEnricher, EventUserUniqueIdentifierEnricher>();
+        services.AddScoped<IEventEnricher, FingerprintEventEnricher>();
     }
 }

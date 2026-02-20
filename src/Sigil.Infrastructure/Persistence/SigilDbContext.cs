@@ -22,6 +22,7 @@ internal class SigilDbContext(DbContextOptions<SigilDbContext> options) : SaveSu
     public DbSet<AppConfig> AppConfigs => Set<AppConfig>();
     public DbSet<RawEnvelope> RawEnvelopes => Set<RawEnvelope>();
     public DbSet<UserPasskey> Passkeys => Set<UserPasskey>();
+    public DbSet<EventFilter> EventFilters => Set<EventFilter>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

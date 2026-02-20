@@ -1,0 +1,264 @@
+@page "/projects/{ProjectId:int}/filters"
+@attribute [Authorize]
+@using Sigil.Application.Models.Filters
+@inject IEventFilterService FilterService
+
+<PageTitle>Inbound Filters — Sigil</PageTitle>
+
+<div class="max-w-4xl space-y-6">
+    <h1 class="text-2xl font-bold">Project Settings</h1>
+    
+    <!-- Navigation -->
+    <div class="flex flex-wrap gap-2">
+        <a href="/projects/@ProjectId/settings" class="btn btn-sm btn-ghust">General</a>
+        <a href="/projects/@ProjectId/filters" class="btn btn-sm btn-avtive">Inbound Filters</a>
+    </div>
+
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold">Inbound Filters</h1>
+            <p class="text-sm opacity-60 mt-1">Events matching a Reject rule are dropped before being stored.</p>
+        </div>
+        <button class="btn btn-primary btn-sm" @onclick="() => showAddForm = !showAddForm">
+            @(showAddForm ? "Cancel" : "Add Filter")
+        </button>
+    </div>
+
+    @if (showAddForm)
+    {
+        <div class="card bg-base-200">
+            <div class="card-body p-5 space-y-4">
+                <h2 class="font-semibold text-base">New Filter</h2>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Field</legend>
+                        <input type="text" class="input input-sm w-full font-mono"
+                               placeholder="exceptionType, message, release, tag:browser…"
+                               list="filter-fields"
+                               @bind="newField"/>
+                        <p class="fieldset-label text-xs block">
+                            Available: <code>exceptionType</code>, <code>message</code>, <code>release</code>,<br/>
+                            <code>environment</code>, <code>logger</code>, <code>fingerprint</code>, <code>tag:key</code>
+                        </p>
+                    </fieldset>
+
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Operator</legend>
+                        <select class="select select-sm w-full" @bind="newOperator">
+                            @foreach (var op in Enum.GetValues<FilterOperator>())
+                            {
+                                <option value="@op">@op</option>
+                            }
+                        </select>
+                    </fieldset>
+
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Value</legend>
+                        <input type="text" class="input input-sm w-full font-mono"
+                               placeholder="Pattern to match…"
+                               @bind="newValue"/>
+                    </fieldset>
+
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Action</legend>
+                        <select class="select select-sm w-full" @bind="newAction">
+                            @foreach (var action in Enum.GetValues<FilterAction>())
+                            {
+                                <option value="@action">@action</option>
+                            }
+                        </select>
+                    </fieldset>
+
+                    <fieldset class="fieldset sm:col-span-2">
+                        <legend class="fieldset-legend">Description <span class="opacity-50">(optional)</span></legend>
+                        <input type="text" class="input input-sm w-full"
+                               placeholder="What does this filter do?"
+                               @bind="newDescription"/>
+                    </fieldset>
+                </div>
+
+                @if (!string.IsNullOrEmpty(formError))
+                {
+                    <div class="alert alert-error text-sm py-2">@formError</div>
+                }
+
+                <div class="flex gap-2">
+                    <button class="btn btn-primary btn-sm" @onclick="AddFilter" disabled="@saving">
+                        @(saving ? "Saving…" : "Add Filter")
+                    </button>
+                    <button class="btn btn-ghost btn-sm" @onclick="() => showAddForm = false">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (loading)
+    {
+        <div class="flex justify-center py-8">
+            <span class="loading loading-spinner"></span>
+        </div>
+    }
+    else if (filters.Count == 0)
+    {
+        <EmptyState Title="No filters" Description="Add a filter to start dropping unwanted events."/>
+    }
+    else
+    {
+        <div class="card bg-base-200">
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th>Field</th>
+                        <th>Operator</th>
+                        <th>Value</th>
+                        <th>Action</th>
+                        <th>Enabled</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var filter in filters)
+                    {
+                        <tr>
+                            <td class="opacity-70">@(filter.Description ?? "—")</td>
+                            <td class="font-mono text-sm">@filter.Field</td>
+                            <td class="text-sm">@filter.Operator</td>
+                            <td class="font-mono text-sm max-w-xs truncate" title="@filter.Value">@filter.Value</td>
+                            <td>
+                                <span class="badge badge-sm badge-error">
+                                    @filter.Action
+                                </span>
+                            </td>
+                            <td>
+                                <input type="checkbox" class="toggle toggle-sm"
+                                       checked="@filter.Enabled"
+                                       @onchange="() => ToggleEnabled(filter)"/>
+                            </td>
+                            <td>
+                                <button class="btn btn-ghost btn-xs text-error"
+                                        @onclick="() => DeleteFilter(filter.Id)">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+<datalist id="filter-fields">
+
+    <option value="exceptionType" />
+    <option value="message" />
+    <option value="release" />
+    <option value="environment" />
+    <option value="logger" />
+    <option value="fingerprint" />
+    <option value="tag:" />
+
+</datalist>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+
+    private List<EventFilterResponse> filters = [];
+    private bool loading = true;
+    private bool saving;
+    private bool showAddForm;
+    private string? formError;
+
+    // Add form fields
+    private string newField = "";
+    private FilterOperator newOperator = FilterOperator.Contains;
+    private string newValue = "";
+    private FilterAction newAction = FilterAction.Reject;
+    private string? newDescription;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        await LoadFilters();
+        loading = false;
+    }
+
+    private async Task LoadFilters()
+    {
+        try
+        {
+            filters = await FilterService.GetFiltersAsync(ProjectId);
+        }
+        catch
+        {
+            filters = [];
+        }
+    }
+
+    private async Task AddFilter()
+    {
+        if (string.IsNullOrWhiteSpace(newField))
+        {
+            formError = "Field is required.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(newValue))
+        {
+            formError = "Value is required.";
+            return;
+        }
+
+        saving = true;
+        formError = null;
+        try
+        {
+            var request = new CreateFilterRequest(newField.Trim(), newOperator, newValue.Trim(), newAction, true, 0, newDescription?.Trim());
+            var created = await FilterService.CreateFilterAsync(ProjectId, request);
+            filters.Add(created);
+            // Reset form
+            newField = "";
+            newValue = "";
+            newDescription = null;
+            newOperator = FilterOperator.Contains;
+            newAction = FilterAction.Reject;
+            showAddForm = false;
+        }
+        catch
+        {
+            formError = "Failed to create filter.";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task ToggleEnabled(EventFilterResponse filter)
+    {
+        try
+        {
+            var request = new UpdateFilterRequest(filter.Field, filter.Operator, filter.Value, filter.Action, !filter.Enabled, filter.Priority, filter.Description);
+            var updated = await FilterService.UpdateFilterAsync(filter.Id, request);
+            if (updated is not null)
+            {
+                var index = filters.IndexOf(filter);
+                if (index >= 0) filters[index] = updated;
+            }
+        }
+        catch { /* keep current state */ }
+    }
+
+    private async Task DeleteFilter(int filterId)
+    {
+        try
+        {
+            if (await FilterService.DeleteFilterAsync(filterId))
+                filters.RemoveAll(f => f.Id == filterId);
+        }
+        catch { /* ignore */ }
+    }
+}

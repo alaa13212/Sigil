@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Sigil.infrastructure.Persistence;
@@ -12,9 +13,11 @@ using Sigil.infrastructure.Persistence;
 namespace Sigil.infrastructure.Migrations
 {
     [DbContext(typeof(SigilDbContext))]
-    partial class SigilDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260219233947_AddEventFilters")]
+    internal partial class AddEventFilters
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
