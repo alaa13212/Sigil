@@ -7,7 +7,10 @@ namespace Sigil.Infrastructure.Persistence;
 
 internal class TagService(SigilDbContext dbContext, ITagCache tagCache) : ITagService
 {
-    public async Task<IReadOnlyCollection<TagKey>> BulkGetOrCreateTagKeysAsync(IReadOnlyCollection<string> keys)
+    public async Task<IReadOnlyCollection<TagValue>> BulkGetOrCreateTagsAsync(IReadOnlyCollection<KeyValuePair<string, string>> tags)
+        => await BulkGetOrCreateTagsAsync([], tags);
+
+    private async Task<IReadOnlyCollection<TagKey>> BulkGetOrCreateTagKeysAsync(IReadOnlyCollection<string> keys)
     {
         if (keys.IsEmpty())
             return [];
@@ -49,10 +52,7 @@ internal class TagService(SigilDbContext dbContext, ITagCache tagCache) : ITagSe
         return results;
     }
 
-    public async Task<IReadOnlyCollection<TagValue>> BulkGetOrCreateTagsAsync(IReadOnlyCollection<KeyValuePair<string, string>> tags)
-        => await BulkGetOrCreateTagsAsync([], tags);
-
-    public async Task<IReadOnlyCollection<TagValue>> BulkGetOrCreateTagsAsync(IReadOnlyCollection<TagKey> tagKeys, IReadOnlyCollection<KeyValuePair<string, string>> tags)
+    private async Task<IReadOnlyCollection<TagValue>> BulkGetOrCreateTagsAsync(IReadOnlyCollection<TagKey> tagKeys, IReadOnlyCollection<KeyValuePair<string, string>> tags)
     {
         if (tags.IsEmpty())
             return [];

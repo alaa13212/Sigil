@@ -6,22 +6,8 @@ using Sigil.Domain.Ingestion;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal partial class ReleaseService(SigilDbContext dbContext, IDateTime dateTime, IReleaseCache releaseCache) : IReleaseService
+internal partial class ReleaseService(SigilDbContext dbContext, IReleaseCache releaseCache) : IReleaseService
 {
-    public async Task<Release> CreateReleaseAsync(int projectId, string rawValue)
-    {
-        var existing = await GetReleaseByRawValueAsync(projectId, rawValue);
-        if (existing != null)
-        {
-            throw new InvalidOperationException($"Release '{rawValue}' already exists for project '{projectId}'");
-        }
-
-        Release release = ParseAndCreateReleaseAsync(projectId, rawValue);
-        await dbContext.SaveChangesAsync();
-        releaseCache.Set(projectId, release);
-        return release;
-    }
-
     public async Task<List<Release>> BulkGetOrCreateReleasesAsync(int projectId, List<ParsedEvent> parsedEvents)
     {
         IEnumerable<string> rawValues = parsedEvents.Where(e => e.Release != null).Select(e => e.Release!).Distinct();
@@ -58,12 +44,6 @@ internal partial class ReleaseService(SigilDbContext dbContext, IDateTime dateTi
         }
 
         return results;
-    }
-
-    private async Task<Release?> GetReleaseByRawValueAsync(int projectId, string rawValue)
-    {
-        return await dbContext.Releases
-            .FirstOrDefaultAsync(r => r.ProjectId == projectId && r.RawName == rawValue);
     }
 
     private Release ParseAndCreateReleaseAsync(int projectId, string rawValue)

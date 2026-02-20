@@ -82,13 +82,13 @@ public static class ServiceCollectionExtensions
         {
             options.Add<IAppConfigCache>(50, TimeSpan.FromHours(1));
             options.Add<IProjectCache>(100, TimeSpan.FromMinutes(30));
-            options.Add<IReleaseCache>(5_000, TimeSpan.FromMinutes(5));
-            options.Add<ITagCache>(20_000, TimeSpan.FromMinutes(3));
-            options.Add<IIssueCache>(10_000, TimeSpan.FromMinutes(2));
+            options.Add<IReleaseCache>(5_000, TimeSpan.FromMinutes(30));
+            options.Add<ITagCache>(20_000, TimeSpan.FromMinutes(30));
+            options.Add<IIssueCache>(10_000, TimeSpan.FromMinutes(30));
             options.Add<IEventUserCache>(20_000, TimeSpan.FromMinutes(5));
-            options.Add<IEventFilterCache>(500, TimeSpan.FromMinutes(5));
-            options.Add<IAutoTagRuleCache>(500, TimeSpan.FromMinutes(5));
-            options.Add<INormalizationRuleCache>(500, TimeSpan.FromMinutes(5));
+            options.Add<IEventFilterCache>(500, TimeSpan.FromHours(1));
+            options.Add<IAutoTagRuleCache>(500, TimeSpan.FromHours(1));
+            options.Add<INormalizationRuleCache>(500, TimeSpan.FromHours(1));
         });
 
         services.AddScoped<IAppConfigCache, AppConfigCache>();
