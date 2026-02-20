@@ -27,5 +27,6 @@ builder.Services.AddScoped<IMergeSetService, ApiMergeSetService>();
 builder.Services.AddScoped<IBookmarkService, ApiBookmarkService>();
 builder.Services.AddScoped<IAlertService, ApiAlertService>();
 builder.Services.AddScoped<IAutoTagService, ApiAutoTagService>();
+builder.Services.AddScoped<IReleaseHealthService, ApiReleaseHealthService>();
 
 await builder.Build().RunAsync();

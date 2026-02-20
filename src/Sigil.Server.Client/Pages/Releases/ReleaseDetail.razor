@@ -1,0 +1,124 @@
+@page "/projects/{ProjectId:int}/releases/{ReleaseId:int}"
+@attribute [Authorize]
+@using Sigil.Application.Models.Releases
+@inject IReleaseHealthService ReleaseHealthService
+
+<PageTitle>Release — Sigil</PageTitle>
+
+<PageBreadcrumb Items="@([ new PageBreadcrumb.BreadcrumbItem("Projects", "/"), new PageBreadcrumb.BreadcrumbItem("Releases", $"/projects/{ProjectId}/releases"), new PageBreadcrumb.BreadcrumbItem(release?.RawName ?? "…") ])" />
+
+@if (loading)
+{
+    <div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>
+}
+else if (release is null)
+{
+    <EmptyState Title="Release not found" Description="This release may have been removed or the link is invalid." />
+}
+else
+{
+    <div class="space-y-6">
+        <div class="flex items-start justify-between">
+            <div>
+                <h1 class="text-2xl font-bold font-mono">@release.RawName</h1>
+                @if (!string.IsNullOrEmpty(release.SemanticVersion) && release.SemanticVersion != release.RawName)
+                {
+                    <div class="text-sm opacity-50 mt-0.5">@release.SemanticVersion</div>
+                }
+                @if (!string.IsNullOrEmpty(release.Package))
+                {
+                    <div class="text-sm opacity-50">@release.Package</div>
+                }
+            </div>
+
+            @if (!string.IsNullOrEmpty(release.CommitSha))
+            {
+                <div class="badge badge-outline font-mono text-xs">@release.CommitSha[..Math.Min(7, release.CommitSha.Length)]</div>
+            }
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div class="stat bg-base-200 rounded-box p-4">
+                <div class="stat-title">Total Events</div>
+                <div class="stat-value text-2xl">@release.TotalEvents.ToString("N0")</div>
+            </div>
+            <div class="stat bg-base-200 rounded-box p-4">
+                <div class="stat-title">Affected Issues</div>
+                <div class="stat-value text-2xl">@release.AffectedIssues.ToString("N0")</div>
+            </div>
+            <div class="stat bg-base-200 rounded-box p-4">
+                <div class="stat-title">New Issues</div>
+                <div class="stat-value text-2xl @(release.NewIssues > 0 ? "text-error" : "")">@release.NewIssues.ToString("N0")</div>
+            </div>
+            <div class="stat bg-base-200 rounded-box p-4">
+                <div class="stat-title">First Seen</div>
+                <div class="stat-value text-base"><RelativeTime Value="release.FirstSeenAt" /></div>
+            </div>
+        </div>
+
+        @if (release.TopIssues.Count > 0)
+        {
+            <div class="card bg-base-200">
+                <div class="card-body p-4">
+                    <h2 class="card-title text-base mb-2">Top Issues</h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Issue</th>
+                                <th class="text-right">Events</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var issue in release.TopIssues.OrderByDescending(i => i.IsNew))
+                            {
+                                <tr class="hover cursor-pointer @(issue.IsNew ? "bg-error/5 border-l-2 border-error" : "")"
+                                    @onclick="() => GoToIssue(issue.IssueId)">
+                                    <td>
+                                        <div class="flex items-center gap-2">
+                                            @if (issue.IsNew)
+                                            {
+                                                <span class="badge badge-sm badge-error">New</span>
+                                            }
+                                            <SeverityBadge Level="issue.Level" />
+                                            <div>
+                                                <div class="font-medium text-sm">@issue.Title</div>
+                                                @if (!string.IsNullOrEmpty(issue.ExceptionType))
+                                                {
+                                                    <div class="text-xs opacity-50 font-mono">@issue.ExceptionType</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="text-right font-mono text-sm">@issue.EventCount.ToString("N0")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+    [Parameter] public int ReleaseId { get; set; }
+
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private ReleaseDetailResponse? release;
+    private bool loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        try { release = await ReleaseHealthService.GetReleaseDetailAsync(ReleaseId); }
+        catch { release = null; }
+        loading = false;
+    }
+
+    private void GoToIssue(int issueId) =>
+        Navigation.NavigateTo($"/projects/{ProjectId}/issues/{issueId}");
+}

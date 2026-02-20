@@ -1,0 +1,115 @@
+@page "/projects/{ProjectId:int}/releases"
+@attribute [Authorize]
+@using Sigil.Application.Models.Releases
+@inject IReleaseHealthService ReleaseHealthService
+
+<PageTitle>Releases — Sigil</PageTitle>
+
+<PageBreadcrumb Items="@([ new PageBreadcrumb.BreadcrumbItem("Projects", "/"), new PageBreadcrumb.BreadcrumbItem("Releases") ])" />
+
+<div class="space-y-4">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold">Releases</h1>
+        @if (response is not null)
+        {
+            <span class="text-sm opacity-60">@response.TotalCount total</span>
+        }
+    </div>
+
+    @if (loading)
+    {
+        <div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>
+    }
+    else if (response is null || response.Items.Count == 0)
+    {
+        <EmptyState Title="No releases yet" Description="Releases appear here once events start arriving from your SDKs." />
+    }
+    else
+    {
+        <div class="card bg-base-200">
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Release</th>
+                            <th>First Seen</th>
+                            <th>Last Event</th>
+                            <th class="text-right">Events</th>
+                            <th class="text-right">New Issues</th>
+                            <th class="text-right">Affected Issues</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in response.Items)
+                        {
+                            <tr class="hover cursor-pointer" @onclick="() => GoToRelease(r.Id)">
+                                <td>
+                                    @if (!string.IsNullOrEmpty(r.SemanticVersion) && r.SemanticVersion != r.RawName)
+                                    {
+                                        <div class="font-mono font-medium text-sm">@r.SemanticVersion</div>
+                                    }
+                                    <div class="text-xs opacity-50">@r.RawName</div>
+                                </td>
+                                <td class="text-sm"><RelativeTime Value="r.FirstSeenAt" /></td>
+                                <td class="text-sm">
+                                    @if (r.LastEventAt.HasValue)
+                                    {
+                                        <RelativeTime Value="r.LastEventAt.Value" />
+                                    }
+                                    else
+                                    {
+                                        <span class="opacity-40">—</span>
+                                    }
+                                </td>
+                                <td class="text-right font-mono text-sm">@r.TotalEvents.ToString("N0")</td>
+                                <td class="text-right">
+                                    @if (r.NewIssues > 0)
+                                    {
+                                        <span class="badge badge-sm badge-error">@r.NewIssues new</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-sm opacity-40">0</span>
+                                    }
+                                </td>
+                                <td class="text-right text-sm">@r.AffectedIssues</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <Pagination Page="page" TotalCount="response.TotalCount" PageSize="PageSize" OnPageChanged="OnPageChanged" />
+    }
+</div>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private PagedResponse<ReleaseHealthSummary>? response;
+    private bool loading = true;
+    private int page = 1;
+    private const int PageSize = 20;
+
+    protected override async Task OnParametersSetAsync() => await Load();
+
+    private async Task Load()
+    {
+        loading = true;
+        try { response = await ReleaseHealthService.GetReleaseHealthAsync(ProjectId, page, PageSize); }
+        catch { response = null; }
+        loading = false;
+    }
+
+    private async Task OnPageChanged(int newPage)
+    {
+        page = newPage;
+        await Load();
+    }
+
+    private void GoToRelease(int releaseId) =>
+        Navigation.NavigateTo($"/projects/{ProjectId}/releases/{releaseId}");
+}

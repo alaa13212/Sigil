@@ -407,9 +407,11 @@ internal class IssueService(
             i.ProjectId == issue.ProjectId &&
             i.Id != issueId &&
             i.MergeSetId == null &&
-            (i.Title == issue.Title ||
-             (issue.ExceptionType != null && i.ExceptionType == issue.ExceptionType) ||
-             (issue.Culprit != null && i.Culprit == issue.Culprit)));
+            i.ExceptionType == issue.ExceptionType && (
+                i.Title == issue.Title
+                || (issue.Culprit != null && i.Culprit == issue.Culprit)
+            )
+        );
 
         var similar = await q
             .Include(i => i.AssignedTo)

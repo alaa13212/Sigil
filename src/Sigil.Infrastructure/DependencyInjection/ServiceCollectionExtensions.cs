@@ -59,6 +59,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMergeSetService, MergeSetService>();
         services.AddScoped<IBookmarkService, BookmarkService>();
         services.AddScoped<IAlertService, AlertService>();
+        services.AddScoped<IReleaseHealthService, ReleaseHealthService>();
         
         services.AddHttpClient<SlackAlertSender>();
         services.AddHttpClient<WebhookAlertSender>();

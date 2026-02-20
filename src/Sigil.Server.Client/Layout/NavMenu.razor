@@ -23,6 +23,11 @@
                                 </NavLink>
                             </li>
                             <li>
+                                <NavLink href="@($"/projects/{p.Id}/releases")" Match="NavLinkMatch.Prefix" ActiveClass="menu-active">
+                                    Releases
+                                </NavLink>
+                            </li>
+                            <li>
                                 <NavLink href="@($"/projects/{p.Id}/settings")" Match="NavLinkMatch.Prefix" ActiveClass="menu-active">
                                     Settings
                                 </NavLink>
