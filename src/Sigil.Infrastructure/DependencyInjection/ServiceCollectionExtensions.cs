@@ -33,6 +33,7 @@ public static class ServiceCollectionExtensions
         
         services.AddScoped<IDatabaseMigrator, EfDatabaseMigrator>();
         
+        services.AddSingleton<RuleEngine>();
         services.AddScoped<IEventParser, SentryEventParser>();
         services.AddScoped<IEventRanker, EventRanker>();
         services.AddScoped<IHashGenerator, DefaultHashGenerator>();
