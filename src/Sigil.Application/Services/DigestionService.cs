@@ -1,4 +1,5 @@
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 using Sigil.Domain.Extensions;
@@ -15,8 +16,7 @@ public class DigestionService(
     ITagService tagService,
     IEventRanker eventRanker,
     IEventFilterService eventFilterService,
-    IMergeSetService mergeSetService,
-    IAlertService alertService
+    IWorker<PostDigestionWork> postDigestionQueue
 ) : IDigestionService
 {
     public async Task BulkDigestAsync(int projectId, List<ParsedEvent> parsedEvents, CancellationToken ct = default)
@@ -70,9 +70,12 @@ public class DigestionService(
         }
 
         await eventService.SaveEventsAsync(events);
-        
-        await RefreshMergedIssues(issues);
-        await FireAlerts(issues, newIssueIds, regressionIssueIds);
+
+        postDigestionQueue.TryEnqueue(new PostDigestionWork(
+            projectId,
+            issues.Values.Select(i => i.Id).ToList(),
+            newIssueIds,
+            regressionIssueIds));
     }
 
     private static void UpdateIssueWithParsedEvents(IGrouping<string, ParsedEvent> group, Dictionary<string, TagValue> tagValues, Issue issue)
@@ -108,28 +111,4 @@ public class DigestionService(
         issueTag.LastSeen = TimeMath.Later(issueTag.LastSeen, parsedEvent.Timestamp);
     }
 
-    private async Task RefreshMergedIssues(Dictionary<string, Issue> issues)
-    {
-        var affectedMergeSetIds = issues.Values
-            .Where(i => i.MergeSetId.HasValue)
-            .Select(i => i.MergeSetId!.Value)
-            .Distinct()
-            .ToList();
-
-        if (affectedMergeSetIds.Count > 0)
-            await mergeSetService.RefreshAggregatesAsync(affectedMergeSetIds);
-    }
-
-    private async Task FireAlerts(Dictionary<string, Issue> issues, HashSet<int> newIssueIds, HashSet<int> regressionIssueIds)
-    {
-        foreach (var issue in issues.Values)
-        {
-            if (newIssueIds.Contains(issue.Id))
-                await alertService.EvaluateNewIssueAsync(issue);
-            else if (regressionIssueIds.Contains(issue.Id))
-                await alertService.EvaluateRegressionAsync(issue);
-
-            await alertService.EvaluateThresholdAsync(issue);
-        }
-    }
 }

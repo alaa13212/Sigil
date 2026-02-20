@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models;
 using Sigil.Application.Services;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Interfaces;
@@ -111,8 +112,13 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<WorkersHost>();
         services.AddSingleton<IDigestionSignal, DigestionSignal>();
         services.AddWorker<IEventIngestionWorker, EventIngestionWorker>();
+        
         services.AddSingleton<DigestionWorker>();
-        services.AddSingleton<IWorker>(sp => sp.GetRequiredService<DigestionWorker>());
+        services.AddSingleton<IWorker>(UseExisting<DigestionWorker>);
+        
+        services.AddSingleton<PostDigestionWorker>();
+        services.AddSingleton<IWorker<PostDigestionWork>>(UseExisting<PostDigestionWorker>);
+        services.AddSingleton<IWorker>(UseExisting<PostDigestionWorker>);
 
         services.Configure<BatchWorkersConfig>(configuration.GetSection("BatchWorkers"));
     }
