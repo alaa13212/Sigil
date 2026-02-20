@@ -31,20 +31,6 @@ public class ApiProjectService(HttpClient http) : IProjectService
         return await http.GetFromJsonAsync<List<ProjectOverviewResponse>>("api/projects/overviews") ?? [];
     }
 
-
-    public async Task<Project?> GetProjectByIdAsync(int id)
-    {
-        var detail = await GetProjectDetailAsync(id);
-        return detail is null ? null : new Project
-        {
-            Id = detail.Id,
-            Name = detail.Name,
-            Platform = detail.Platform,
-            ApiKey = detail.ApiKey,
-            TeamId = detail.TeamId
-        };
-    }
-
     public async Task<Project> CreateProjectAsync(string name, Platform platform, int? teamId = null)
     {
         var response = await http.PostAsJsonAsync("api/projects", new CreateProjectRequest(name, platform, teamId));
@@ -79,4 +65,11 @@ public class ApiProjectService(HttpClient http) : IProjectService
         new() { Id = r.Id, Name = r.Name, Platform = r.Platform, ApiKey = r.ApiKey };
 
     private record RotateKeyResponse(string ApiKey);
+    
+    
+    public Task<Project?> GetProjectByIdAsync(int id) =>
+        throw new NotSupportedException("Not available on client.");
+    
+    public Task<List<Project>> GetAllProjectsAsync() =>
+        throw new NotSupportedException("Not available on client.");
 }

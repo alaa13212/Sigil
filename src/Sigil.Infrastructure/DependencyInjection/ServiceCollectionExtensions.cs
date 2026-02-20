@@ -60,6 +60,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IBookmarkService, BookmarkService>();
         services.AddScoped<IAlertService, AlertService>();
         services.AddScoped<IReleaseHealthService, ReleaseHealthService>();
+        services.AddScoped<IRecommendationService, RecommendationService>();
+        services.AddAllImplementations<IProjectAnalyzer>();
         
         services.AddHttpClient<SlackAlertSender>();
         services.AddHttpClient<WebhookAlertSender>();
@@ -125,6 +127,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PostDigestionWorker>();
         services.AddSingleton<IWorker<PostDigestionWork>>(UseExisting<PostDigestionWorker>);
         services.AddSingleton<IWorker>(UseExisting<PostDigestionWorker>);
+
+        services.AddSingleton<RecommendationAnalysisWorker>();
+        services.AddSingleton<IWorker>(UseExisting<RecommendationAnalysisWorker>);
 
         services.Configure<BatchWorkersConfig>(configuration.GetSection("BatchWorkers"));
     }

@@ -38,6 +38,12 @@ internal class ProjectService(SigilDbContext dbContext, IAppConfigService appCon
         return project;
     }
 
+    
+    public async Task<List<Project>> GetAllProjectsAsync()
+    {
+        return await dbContext.Projects.ToListAsync();
+    }
+
     public async Task<Project> UpdateProjectAsync(int projectId, string name)
     {
         var project = await dbContext.Projects.AsTracking().FirstAsync(p => p.Id == projectId);

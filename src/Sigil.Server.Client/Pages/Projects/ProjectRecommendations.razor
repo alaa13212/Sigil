@@ -1,0 +1,119 @@
+@page "/projects/{ProjectId:int}/issues/recommendations"
+@attribute [Authorize]
+@using Sigil.Application.Models.Recommendations
+@using Sigil.Domain.Entities
+@inject IRecommendationService RecommendationService
+@inject IProjectService ProjectService
+
+<PageTitle>Recommendations — Sigil</PageTitle>
+
+<PageBreadcrumb Items="@([
+    new PageBreadcrumb.BreadcrumbItem("Projects", "/"),
+    new PageBreadcrumb.BreadcrumbItem("Issues", $"/projects/{ProjectId}/issues"),
+    new PageBreadcrumb.BreadcrumbItem("Recommendations")
+])" />
+
+<div class="space-y-6 max-w-3xl">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold">Recommendations</h1>
+            <p class="text-sm opacity-60 mt-1">Suggestions to improve your error tracking setup.</p>
+        </div>
+        <button class="btn btn-sm btn-ghost" @onclick="Refresh" disabled="@refreshing">
+            @if (refreshing)
+            {
+                <span class="loading loading-spinner loading-xs"></span>
+            }
+            else
+            {
+                <span>Refresh</span>
+            }
+        </button>
+    </div>
+
+    @if (loading)
+    {
+        <div class="flex justify-center py-16">
+            <span class="loading loading-spinner loading-lg"></span>
+        </div>
+    }
+    else if (recommendations.Count == 0)
+    {
+        <EmptyState Title="No recommendations" Description="Your project setup looks great. Check back after more events come in." />
+    }
+    else
+    {
+        <div class="space-y-3">
+            @foreach (var rec in recommendations)
+            {
+                <div class="card bg-base-200">
+                    <div class="card-body p-4">
+                        <div class="flex items-start gap-3">
+                            <div class="mt-0.5 shrink-0">
+                                @SeverityIcon(rec.Severity)
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="font-semibold">@rec.Title</span>
+                                    <span class="badge badge-sm @SeverityBadgeClass(rec.Severity)">@rec.Severity</span>
+                                </div>
+                                <p class="text-sm opacity-70 mt-1">@rec.Description</p>
+                                @if (!string.IsNullOrEmpty(rec.ActionUrl))
+                                {
+                                    <a href="@rec.ActionUrl" class="btn btn-xs btn-ghost mt-2">Configure →</a>
+                                }
+                                <div class="text-xs opacity-40 mt-1">Detected <RelativeTime Value="rec.DetectedAt" /></div>
+                            </div>
+                            <button class="btn btn-ghost btn-xs shrink-0" @onclick="() => Dismiss(rec.Id)"
+                                    title="Dismiss this recommendation">
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+
+    private List<ProjectRecommendationResponse> recommendations = [];
+    private bool loading = true;
+    private bool refreshing;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        recommendations = await RecommendationService.GetRecommendationsAsync(ProjectId);
+        loading = false;
+    }
+
+    private async Task Refresh()
+    {
+        refreshing = true;
+        recommendations = await RecommendationService.GetRecommendationsAsync(ProjectId);
+        refreshing = false;
+    }
+
+    private async Task Dismiss(int id)
+    {
+        await RecommendationService.DismissAsync(id);
+        recommendations.RemoveAll(r => r.Id == id);
+    }
+
+    private static string SeverityBadgeClass(RecommendationSeverity severity) => severity switch
+    {
+        RecommendationSeverity.Critical => "badge-error",
+        RecommendationSeverity.Warning  => "badge-warning",
+        _                               => "badge-info"
+    };
+
+    private static RenderFragment SeverityIcon(RecommendationSeverity severity) => severity switch
+    {
+        RecommendationSeverity.Critical => @<span class="text-error text-lg">🔴</span>,
+        RecommendationSeverity.Warning  => @<span class="text-warning text-lg">⚠</span>,
+        _                               => @<span class="text-info text-lg">💡</span>
+    };
+}
