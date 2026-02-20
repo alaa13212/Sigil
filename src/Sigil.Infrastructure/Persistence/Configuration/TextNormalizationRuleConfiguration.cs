@@ -4,7 +4,7 @@ using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Persistence.Configuration;
 
-internal class NormalizationRuleConfiguration : IEntityTypeConfiguration<TextNormalizationRule>
+internal class TextNormalizationRuleConfiguration : IEntityTypeConfiguration<TextNormalizationRule>
 {
     public void Configure(EntityTypeBuilder<TextNormalizationRule> builder)
     {

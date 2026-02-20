@@ -15,6 +15,7 @@ internal class SetupService(
     SignInManager<User> signInManager,
     RoleManager<IdentityRole<Guid>> roleManager,
     IAppConfigService appConfigService,
+    INormalizationRuleService normalizationRuleService,
     IDatabaseMigrator databaseMigrator) : ISetupService
 {
     // Cached per process lifetime; null = unchecked, false = up to date, true = pending
@@ -127,8 +128,10 @@ internal class SetupService(
             Name = request.ProjectName,
             Platform = request.ProjectPlatform,
             ApiKey = RandomNumberGenerator.GetHexString(32).ToLower(),
-            TeamId = team.Id
+            TeamId = team.Id,
+            Rules = normalizationRuleService.CreateDefaultRulesPreset(),
         };
+        project.Rules.ForEach(r => r.Project = project);
         dbContext.Projects.Add(project);
         await dbContext.SaveChangesAsync();
 
