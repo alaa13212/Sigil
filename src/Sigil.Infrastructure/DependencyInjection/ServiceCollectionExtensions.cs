@@ -53,6 +53,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDigestionMonitorService, DigestionMonitorService>();
         services.AddScoped<IPasskeyService, PasskeyService>();
         services.AddScoped<IEventFilterService, EventFilterService>();
+        services.AddScoped<IMergeSetService, MergeSetService>();
 
         services.AddIdentityServices();
         services.AddPasskeyServices();

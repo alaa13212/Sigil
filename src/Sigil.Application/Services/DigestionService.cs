@@ -14,7 +14,8 @@ public class DigestionService(
     IEventUserService eventUserService,
     ITagService tagService,
     IEventRanker eventRanker,
-    IEventFilterService eventFilterService
+    IEventFilterService eventFilterService,
+    IMergeSetService mergeSetService
 ) : IDigestionService
 {
     public async Task BulkDigestAsync(int projectId, List<ParsedEvent> parsedEvents, CancellationToken ct = default)
@@ -87,5 +88,14 @@ public class DigestionService(
         }
 
         await eventService.SaveEventsAsync(events);
+
+        var affectedMergeSetIds = issues.Values
+            .Where(i => i.MergeSetId.HasValue)
+            .Select(i => i.MergeSetId!.Value)
+            .Distinct()
+            .ToList();
+
+        if (affectedMergeSetIds.Count > 0)
+            await mergeSetService.RefreshAggregatesAsync(affectedMergeSetIds);
     }
 }

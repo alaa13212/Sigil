@@ -1,4 +1,4 @@
-@page "/projects/{ProjectId:int}/filters"
+@page "/projects/{ProjectId:int}/settings/filters"
 @attribute [Authorize]
 @using Sigil.Application.Models.Filters
 @inject IEventFilterService FilterService
@@ -11,7 +11,7 @@
     <!-- Navigation -->
     <div class="flex flex-wrap gap-2">
         <a href="/projects/@ProjectId/settings" class="btn btn-sm btn-ghust">General</a>
-        <a href="/projects/@ProjectId/filters" class="btn btn-sm btn-avtive">Inbound Filters</a>
+        <a href="/projects/@ProjectId/settings/filters" class="btn btn-sm btn-avtive">Inbound Filters</a>
     </div>
 
     <div class="flex items-center justify-between">

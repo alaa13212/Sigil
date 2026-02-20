@@ -9,5 +9,6 @@ internal class IssueConfiguration : IEntityTypeConfiguration<Issue>
     public void Configure(EntityTypeBuilder<Issue> builder)
     {
         builder.HasIndex(e => new { e.ProjectId, e.Fingerprint }).IsUnique();
+        builder.HasIndex(e => e.MergeSetId);
     }
 }

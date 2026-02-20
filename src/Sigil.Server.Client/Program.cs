@@ -23,5 +23,6 @@ builder.Services.AddScoped<IIssueActivityService, ApiIssueActivityService>();
 builder.Services.AddScoped<IDigestionMonitorService, ApiDigestionMonitorService>();
 builder.Services.AddScoped<IPasskeyService, ApiPasskeyService>();
 builder.Services.AddScoped<IEventFilterService, ApiEventFilterService>();
+builder.Services.AddScoped<IMergeSetService, ApiMergeSetService>();
 
 await builder.Build().RunAsync();

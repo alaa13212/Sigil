@@ -3,8 +3,10 @@
 @using Sigil.Application.Models.Issues
 @using Sigil.Application.Models.Events
 @inject IIssueService IssueService
+@inject IMergeSetService MergeSetService
 @inject IEventService EventService
 @inject IIssueActivityService ActivityService
+@inject NavigationManager Navigation
 
 <PageTitle>@(issue?.Title ?? "Issue") — Sigil</PageTitle>
 
@@ -49,6 +51,8 @@ else
                    class="tab @(activeTab == Tab.Events ? "tab-active" : "")">Events</a>
                 <a role="tab" href="/projects/@ProjectId/issues/@IssueId?tab=activity"
                    class="tab @(activeTab == Tab.Activity ? "tab-active" : "")">Activity</a>
+                <a role="tab" href="/projects/@ProjectId/issues/@IssueId?tab=similar"
+                   class="tab @(activeTab == Tab.Similar ? "tab-active" : "")">Similar</a>
             </div>
 
             <!-- Suggested Event tab -->
@@ -296,6 +300,150 @@ else
                     </ul>
                 }
             }
+
+            <!-- Similar Issues tab -->
+            @if (activeTab == Tab.Similar)
+            {
+                @if (issue.MergeSet is not null)
+                {
+                    <h1 class="text-2xl">
+                        Issue Group
+                        <span class="text-xl badge badge-xl badge-neutral ml-1">@issue.MergeSet.Members.Count</span>
+                    </h1>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <p class="text-sm opacity-60">Issues in this merge group. The primary issue's title and metadata represent the group.</p>
+                        </div>
+
+                        <div class="card bg-base-200">
+                            <div class="card-body p-4 space-y-3">
+                                @foreach (var member in issue.MergeSet.Members.OrderByDescending(m => m.IsPrimary))
+                                {
+                                    <div class="flex items-start justify-between gap-4 p-3 rounded @(member.IsPrimary ? "bg-primary/10" : "bg-base-300")">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center gap-2">
+                                                @if (member.IsPrimary)
+                                                {
+                                                    <span class="badge badge-primary badge-sm">Primary</span>
+                                                }
+                                                <a href="/projects/@ProjectId/issues/@member.IssueId" class="font-semibold text-sm hover:underline truncate">
+                                                    @member.Title
+                                                </a>
+                                            </div>
+                                            <div class="text-xs opacity-60 mt-0.5 font-mono">@member.Fingerprint[..Math.Min(16, member.Fingerprint.Length)]…</div>
+                                            <div class="text-xs opacity-50 mt-0.5">
+                                                @member.OccurrenceCount events · last seen <RelativeTime Value="member.LastSeen" />
+                                            </div>
+                                        </div>
+                                        <div class="flex gap-1 shrink-0">
+                                            @if (!member.IsPrimary)
+                                            {
+                                                <button class="btn btn-ghost btn-xs" title="Set as primary"
+                                                        @onclick="() => SetPrimary(member.IssueId)" disabled="@memberActionLoading">
+                                                    Set Primary
+                                                </button>
+                                                <button class="btn btn-ghost btn-xs text-error" title="Remove from group"
+                                                        @onclick="() => RemoveMember(member.IssueId)" disabled="@memberActionLoading">
+                                                    Remove
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        
+                    </div>
+                }
+                @if (similarIssues is null)
+                {
+                    <div class="flex justify-center py-8">
+                        <span class="loading loading-spinner loading-md"></span>
+                    </div>
+                }
+                else if (similarIssues.Count == 0)
+                {
+                    <div class="divider"></div>
+                    <h1 class="text-2xl">
+                        Similar Issues
+                    </h1>
+                    <EmptyState Title="No similar issues" Description="No other issues share the same title, exception type, or culprit." />
+                }
+                else
+                {
+                    <div class="divider"></div>
+                    <h1 class="text-2xl">
+                        Similar Issues
+                    </h1>
+                    <div class="space-y-2">
+                        <p class="text-sm opacity-60">Issues with the same title, exception type, or culprit. Consider merging related ones.</p>
+
+                        @if (similarSelected.Count >= 1)
+                        {
+                            <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
+                                <span class="text-sm font-medium">@similarSelected.Count selected</span>
+                                <button class="btn btn-primary btn-sm" @onclick="MergeSimilarSelected" disabled="@mergeFromSimilarLoading">
+                                    @if (mergeFromSimilarLoading)
+                                    {
+                                        <span class="loading loading-spinner loading-xs"></span>
+                                    }
+                                    Merge with this issue
+                                </button>
+                                <button class="btn btn-ghost btn-sm" @onclick="() => similarSelected.Clear()">Clear</button>
+                                @if (!string.IsNullOrEmpty(similarMergeError))
+                                {
+                                    <span class="text-sm text-error">@similarMergeError</span>
+                                }
+                            </div>
+                        }
+
+                        <div class="overflow-x-auto">
+                            <table class="table table-zebra table-sm">
+                                <thead>
+                                    <tr>
+                                        <th class="w-8"></th>
+                                        <th>Issue</th>
+                                        <th>Severity</th>
+                                        <th>Status</th>
+                                        <th class="text-right">Events</th>
+                                        <th>Last Seen</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var sim in similarIssues)
+                                    {
+                                        <tr class="hover:bg-base-300 relative @(similarSelected.Contains(sim.Id) ? "bg-primary/5" : "")">
+                                            <td @onclick:stopPropagation="true">
+                                                <input type="checkbox" class="checkbox checkbox-sm"
+                                                       checked="@similarSelected.Contains(sim.Id)"
+                                                       @onchange="e => ToggleSimilar(sim.Id, (bool)(e.Value ?? false))" />
+                                            </td>
+                                            <td>
+                                                <a href="/projects/@ProjectId/issues/@sim.Id" class="stretched-link after:start-12!" target="_blank"></a>
+                                                <div class="font-semibold text-sm">
+                                                    @if (!string.IsNullOrEmpty(sim.ExceptionType))
+                                                    {
+                                                        <span class="opacity-80">@sim.ExceptionType: </span>
+                                                    }
+                                                    @sim.Title
+                                                </div>
+                                                @if (!string.IsNullOrEmpty(sim.Culprit))
+                                                {
+                                                    <div class="text-xs opacity-60">@sim.Culprit</div>
+                                                }
+                                            </td>
+                                            <td><SeverityBadge Level="sim.Level" /></td>
+                                            <td><StatusBadge Status="sim.Status" /></td>
+                                            <td class="text-right font-mono">@sim.OccurrenceCount</td>
+                                            <td><RelativeTime Value="sim.LastSeen" /></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            }
         </div>
 
         <!-- Right sidebar -->
@@ -381,6 +529,13 @@ else
                         <span class="opacity-60">Events</span>
                         <span class="font-mono">@issue.OccurrenceCount</span>
                     </div>
+                    @if (issue.MergeSet is not null)
+                    {
+                        <div class="flex justify-between">
+                            <span class="opacity-60">Merge Group</span>
+                            <span class="font-mono">@issue.MergeSet.Members.Count members</span>
+                        </div>
+                    }
                 </div>
             </div>
 
@@ -444,6 +599,7 @@ else
     private List<BreadcrumbResponse> breadcrumbs = [];
     private PagedResponse<EventSummary>? events;
     private PagedResponse<ActivityResponse>? activities;
+    private List<IssueSummary>? similarIssues;
     private bool loading = true;
     private bool actionLoading;
     private bool eventNavigating;
@@ -451,23 +607,44 @@ else
     private int eventsPage = 1;
     private const int EventsPageSize = 50;
 
-    private enum Tab { SuggestedEvent, Events, Activity }
+    // Members tab state
+    private bool memberActionLoading;
+    private string memberActionError = "";
+    private int addIssueId;
+
+    // Similar issues state
+    private HashSet<int> similarSelected = [];
+    private bool mergeFromSimilarLoading;
+    private string similarMergeError = "";
+
+    private enum Tab { SuggestedEvent, Events, Activity, Similar }
 
     protected override async Task OnParametersSetAsync()
     {
         loading = true;
         events = null;
         activities = null;
+        similarIssues = null;
         breadcrumbs = [];
         navigation = null;
+        memberActionError = "";
+        similarSelected.Clear();
 
         await LoadIssue();
+
+        // Redirect non-primary merged issues to primary
+        if (issue?.MergeSet is not null && issue.MergeSet.PrimaryIssueId != IssueId)
+        {
+            Navigation.NavigateTo($"/projects/{ProjectId}/issues/{issue.MergeSet.PrimaryIssueId}", replace: true);
+            return;
+        }
 
         activeTab = TabParam?.ToLower() switch
         {
             "event"    => issue?.SuggestedEvent is not null ? Tab.SuggestedEvent : Tab.Events,
             "events"   => Tab.Events,
             "activity" => Tab.Activity,
+            "similar"  => Tab.Similar,
             _          => issue?.SuggestedEvent is not null ? Tab.SuggestedEvent : Tab.Events
         };
 
@@ -477,6 +654,8 @@ else
             await LoadEvents();
         else if (activeTab == Tab.Activity)
             await LoadActivity();
+        else if (activeTab == Tab.Similar)
+            await LoadSimilar();
     }
 
     private async Task LoadIssue()
@@ -554,6 +733,18 @@ else
         }
     }
 
+    private async Task LoadSimilar()
+    {
+        try
+        {
+            similarIssues = await IssueService.GetSimilarIssuesAsync(IssueId);
+        }
+        catch
+        {
+            similarIssues = [];
+        }
+    }
+
     private async Task UpdateStatus(IssueStatus status)
     {
         actionLoading = true;
@@ -591,6 +782,107 @@ else
         await LoadEvents();
     }
 
+    private async Task SetPrimary(int issueId)
+    {
+        if (issue?.MergeSet is null) return;
+        memberActionLoading = true;
+        memberActionError = "";
+        try
+        {
+            await MergeSetService.SetPrimaryAsync(issue.MergeSet.Id, issueId);
+            await LoadIssue();
+        }
+        catch (Exception ex)
+        {
+            memberActionError = ex.Message;
+        }
+        finally
+        {
+            memberActionLoading = false;
+        }
+    }
+
+    private async Task RemoveMember(int issueId)
+    {
+        if (issue?.MergeSet is null) return;
+        memberActionLoading = true;
+        memberActionError = "";
+        try
+        {
+            await MergeSetService.RemoveIssueAsync(issue.MergeSet.Id, issueId, Guid.Empty);
+            await LoadIssue();
+        }
+        catch (Exception ex)
+        {
+            memberActionError = ex.Message;
+        }
+        finally
+        {
+            memberActionLoading = false;
+        }
+    }
+
+    private async Task AddMember()
+    {
+        if (issue?.MergeSet is null || addIssueId <= 0) return;
+        memberActionLoading = true;
+        memberActionError = "";
+        try
+        {
+            await MergeSetService.AddIssueAsync(issue.MergeSet.Id, addIssueId, Guid.Empty);
+            addIssueId = 0;
+            await LoadIssue();
+        }
+        catch (Exception ex)
+        {
+            memberActionError = ex.Message;
+        }
+        finally
+        {
+            memberActionLoading = false;
+        }
+    }
+
+    private void ToggleSimilar(int issueId, bool selected)
+    {
+        similarMergeError = "";
+        if (selected) similarSelected.Add(issueId);
+        else similarSelected.Remove(issueId);
+    }
+
+    private async Task MergeSimilarSelected()
+    {
+        if (similarSelected.Count == 0) return;
+        mergeFromSimilarLoading = true;
+        similarMergeError = "";
+        try
+        {
+            var allIds = new List<int> { IssueId };
+            allIds.AddRange(similarSelected);
+
+            if (issue?.MergeSet is not null)
+            {
+                // Already in a merge set — add each selected issue
+                foreach (var id in similarSelected)
+                    await MergeSetService.AddIssueAsync(issue.MergeSet.Id, id, Guid.Empty);
+            }
+            else
+            {
+                await MergeSetService.CreateAsync(ProjectId, allIds, Guid.Empty);
+            }
+
+            Navigation.NavigateTo($"/projects/{ProjectId}/issues/{IssueId}?tab=members", forceLoad: false);
+        }
+        catch (Exception ex)
+        {
+            similarMergeError = ex.Message;
+        }
+        finally
+        {
+            mergeFromSimilarLoading = false;
+        }
+    }
+
     private static string FormatAction(IssueActivityAction action) => action switch
     {
         IssueActivityAction.Created    => "Issue created",
@@ -600,6 +892,8 @@ else
         IssueActivityAction.Assigned   => "Assigned",
         IssueActivityAction.Unassigned => "Unassigned",
         IssueActivityAction.Commented  => "Commented",
+        IssueActivityAction.Merged     => "Merged into group",
+        IssueActivityAction.Unmerged   => "Removed from group",
         _                              => action.ToString()
     };
 }

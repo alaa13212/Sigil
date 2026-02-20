@@ -55,4 +55,8 @@ public class Issue
 
     [InverseProperty(nameof(IssueActivity.Issue))]
     public ICollection<IssueActivity> Activities { get; set; } = [];
+
+    [ForeignKey(nameof(MergeSet))]
+    public int? MergeSetId { get; set; }
+    public MergeSet? MergeSet { get; set; }
 }

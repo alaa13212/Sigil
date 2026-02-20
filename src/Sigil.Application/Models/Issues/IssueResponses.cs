@@ -1,4 +1,5 @@
 using Sigil.Application.Models.Events;
+using Sigil.Application.Models.MergeSets;
 using Sigil.Domain.Enums;
 
 namespace Sigil.Application.Models.Issues;
@@ -14,7 +15,9 @@ public record IssueSummary(
     DateTime FirstSeen,
     DateTime LastSeen,
     int OccurrenceCount,
-    string? AssignedToName);
+    string? AssignedToName,
+    int? MergeSetId = null,
+    int MergeSetSize = 0);
 
 public record IssueDetailResponse(
     int Id,
@@ -36,7 +39,8 @@ public record IssueDetailResponse(
     List<IssueTagGroup> Tags,
     EventSummary? SuggestedEvent,
     string? FirstRelease,
-    string? LastRelease);
+    string? LastRelease,
+    MergeSetResponse? MergeSet = null);
 
 public record IssueTagGroup(string Key, List<IssueTagValue> Values, int TotalCount);
 

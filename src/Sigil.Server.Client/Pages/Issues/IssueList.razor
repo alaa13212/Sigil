@@ -3,7 +3,6 @@
 @using Sigil.Application.Models.Issues
 @inject IIssueService IssueService
 @inject NavigationManager Navigation
-@using System.Net
 
 <PageTitle>Issues — Sigil</PageTitle>
 
@@ -31,7 +30,6 @@
         </form>
 
         <!-- Severity filter -->
-        
         <label class="select select-sm w-48">
             <span class="label">Severity</span>
             <select value="@severityFilter" @onchange="OnSeverityChanged">
@@ -46,7 +44,6 @@
         <!-- Sort -->
         <label class="select select-sm w-48">
             <span class="label">Sort</span>
-            
             <select value="@sortBy" @onchange="OnSortChanged">
                 @foreach (var opt in sortOptions)
                 {
@@ -92,10 +89,22 @@
                 <tbody>
                     @foreach (var issue in Response.Items)
                     {
+                        var isMerged = issue.MergeSetId.HasValue;
+                        var targetUrl = $"/projects/{ProjectId}/issues/{issue.Id}";
                         <tr class="hover:bg-base-300 relative cursor-pointer">
                             <td>
-                                <a href="/projects/@ProjectId/issues/@issue.Id" class="stretched-link" ></a>
-                                <div class="font-semibold">
+                                <a href="@targetUrl" class="stretched-link"></a>
+                                <div class="font-semibold flex items-center gap-1.5 truncate">
+                                    @if (isMerged && issue.MergeSetSize > 1)
+                                    {
+                                        <!-- Stacked layers icon for merged issues -->
+                                        <span class="badge badge-sm badge-neutral gap-1" title="Merged issue group (@issue.MergeSetSize members)">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                            </svg>
+                                            @issue.MergeSetSize
+                                        </span>
+                                    }
                                     @if (!string.IsNullOrEmpty(issue.ExceptionType))
                                     {
                                         <span class="opacity-80">@issue.ExceptionType: </span>
@@ -158,7 +167,6 @@
     {
         var targetPage = Math.Max(1, PageParam);
 
-        // Restored from SSR with the same page — skip re-fetch
         if (Response is not null && Response.Page == targetPage)
         {
             currentPage = targetPage;
@@ -193,7 +201,7 @@
             Response = await IssueService.GetIssueSummariesAsync(ProjectId, query);
             projectNotFound = false;
         }
-        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             projectNotFound = true;
             Response = null;
@@ -245,5 +253,4 @@
     {
         Navigation.NavigateTo($"projects/{ProjectId}/issues/?page={newPage}");
     }
-
 }

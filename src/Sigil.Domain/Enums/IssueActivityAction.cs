@@ -9,4 +9,9 @@ public enum IssueActivityAction
     Assigned,
     Unassigned,
     Commented,
+    Merged,
+    Unmerged,
+    Archived,
+    Unarchived,
+    Bookmarked,
 }

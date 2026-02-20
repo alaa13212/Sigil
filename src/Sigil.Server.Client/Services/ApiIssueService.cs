@@ -90,6 +90,11 @@ public class ApiIssueService(HttpClient http) : IIssueService
         return response.IsSuccessStatusCode;
     }
 
+    public async Task<List<IssueSummary>> GetSimilarIssuesAsync(int issueId)
+    {
+        return await http.GetFromJsonAsync<List<IssueSummary>>($"api/issues/{issueId}/similar") ?? [];
+    }
+
     public Task<List<Issue>> BulkGetOrCreateIssuesAsync(Project project, IEnumerable<IGrouping<string, ParsedEvent>> eventsByFingerprint) =>
         throw new NotSupportedException("Not available on client.");
 }

@@ -3,6 +3,7 @@ using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Application.Models.Events;
 using Sigil.Application.Models.Issues;
+using Sigil.Application.Models.MergeSets;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 using Sigil.Domain.Ingestion;
@@ -85,8 +86,9 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
                 .Include(i => i.SuggestedEvent!.Release)
                 .Include(i => i.SuggestedEvent!.User)
                 .Include(i => i.Tags)
-                .ThenInclude(it => it.TagValue)
-                .ThenInclude(tv => tv!.TagKey);
+                    .ThenInclude(it => it.TagValue)
+                    .ThenInclude(tv => tv!.TagKey)
+                .Include(i => i.MergeSet);
         }
 
         if (includeEvents)
@@ -102,7 +104,9 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
 
     public async Task<(List<Issue> Items, int TotalCount)> GetIssuesAsync(int projectId, IssueQueryParams query)
     {
-        IQueryable<Issue> q = dbContext.Issues.Where(i => i.ProjectId == projectId);
+        IQueryable<Issue> q = dbContext.Issues
+            .Where(i => i.ProjectId == projectId)
+            .Where(i => i.MergeSetId == null || i.MergeSet!.PrimaryIssueId == i.Id);
 
         if (query.Status.HasValue)
             q = q.Where(i => i.Status == query.Status.Value);
@@ -129,14 +133,23 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
 
         q = query.SortBy switch
         {
-            IssueSortBy.FirstSeen => query.SortDescending ? q.OrderByDescending(i => i.FirstSeen) : q.OrderBy(i => i.FirstSeen),
-            IssueSortBy.OccurrenceCount => query.SortDescending ? q.OrderByDescending(i => i.OccurrenceCount) : q.OrderBy(i => i.OccurrenceCount),
-            IssueSortBy.Priority => query.SortDescending ? q.OrderByDescending(i => i.Priority) : q.OrderBy(i => i.Priority),
-            _ => query.SortDescending ? q.OrderByDescending(i => i.LastSeen) : q.OrderBy(i => i.LastSeen),
+            IssueSortBy.FirstSeen => query.SortDescending
+                ? q.OrderByDescending(i => i.MergeSet != null ? i.MergeSet.FirstSeen : i.FirstSeen)
+                : q.OrderBy(i => i.MergeSet != null ? i.MergeSet.FirstSeen : i.FirstSeen),
+            IssueSortBy.OccurrenceCount => query.SortDescending
+                ? q.OrderByDescending(i => i.MergeSet != null ? i.MergeSet.OccurrenceCount : i.OccurrenceCount)
+                : q.OrderBy(i => i.MergeSet != null ? i.MergeSet.OccurrenceCount : i.OccurrenceCount),
+            IssueSortBy.Priority => query.SortDescending
+                ? q.OrderByDescending(i => i.Priority)
+                : q.OrderBy(i => i.Priority),
+            _ => query.SortDescending
+                ? q.OrderByDescending(i => i.MergeSet != null ? i.MergeSet.LastSeen : i.LastSeen)
+                : q.OrderBy(i => i.MergeSet != null ? i.MergeSet.LastSeen : i.LastSeen),
         };
 
         var items = await q
             .Include(i => i.AssignedTo)
+            .Include(i => i.MergeSet)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
             .ToListAsync();
@@ -162,6 +175,12 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
         }
 
         await dbContext.SaveChangesAsync();
+
+        if (issue.MergeSetId.HasValue)
+            await dbContext.Issues
+                .Where(i => i.MergeSetId == issue.MergeSetId && i.Id != issueId)
+                .ExecuteUpdateAsync(s => s.SetProperty(i => i.Status, status));
+
         issueCache.InvalidateAll();
         return issue;
     }
@@ -171,6 +190,12 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
         var issue = await dbContext.Issues.AsTracking().FirstAsync(i => i.Id == issueId);
         issue.AssignedToId = assignToUserId;
         await dbContext.SaveChangesAsync();
+
+        if (issue.MergeSetId.HasValue)
+            await dbContext.Issues
+                .Where(i => i.MergeSetId == issue.MergeSetId && i.Id != issueId)
+                .ExecuteUpdateAsync(s => s.SetProperty(i => i.AssignedToId, assignToUserId));
+
         issueCache.InvalidateAll();
         return issue;
     }
@@ -180,6 +205,12 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
         var issue = await dbContext.Issues.AsTracking().FirstAsync(i => i.Id == issueId);
         issue.Priority = priority;
         await dbContext.SaveChangesAsync();
+
+        if (issue.MergeSetId.HasValue)
+            await dbContext.Issues
+                .Where(i => i.MergeSetId == issue.MergeSetId && i.Id != issueId)
+                .ExecuteUpdateAsync(s => s.SetProperty(i => i.Priority, priority));
+
         issueCache.InvalidateAll();
         return issue;
     }
@@ -196,15 +227,39 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
     {
         var (items, totalCount) = await GetIssuesAsync(projectId, query);
 
-        var summaries = items.Select(i => new IssueSummary(
-            i.Id, i.Title, i.ExceptionType, i.Culprit,
-            i.Status, i.Priority, i.Level,
-            i.FirstSeen, i.LastSeen, i.OccurrenceCount,
-            i.AssignedTo?.DisplayName)).ToList();
+        // Load member counts for merge sets via a separate query to avoid the Issue→MergeSet→Issues cycle
+        var mergeSetIds = items
+            .Where(i => i.MergeSetId.HasValue)
+            .Select(i => i.MergeSetId!.Value)
+            .Distinct()
+            .ToList();
+
+        var memberCounts = mergeSetIds.Count > 0
+            ? await dbContext.Issues
+                .Where(i => i.MergeSetId.HasValue && mergeSetIds.Contains(i.MergeSetId!.Value))
+                .GroupBy(i => i.MergeSetId!.Value)
+                .Select(g => new { Id = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.Id, x => x.Count)
+            : new Dictionary<int, int>();
+
+        var summaries = items.Select(i =>
+        {
+            var ms = i.MergeSet;
+            return new IssueSummary(
+                i.Id, i.Title, i.ExceptionType, i.Culprit,
+                i.Status, i.Priority,
+                ms?.Level ?? i.Level,
+                ms?.FirstSeen ?? i.FirstSeen,
+                ms?.LastSeen ?? i.LastSeen,
+                ms?.OccurrenceCount ?? i.OccurrenceCount,
+                i.AssignedTo?.DisplayName,
+                i.MergeSetId,
+                i.MergeSetId.HasValue ? memberCounts.GetValueOrDefault(i.MergeSetId.Value, 0) : 0);
+        }).ToList();
 
         return new PagedResponse<IssueSummary>(summaries, totalCount, query.Page, query.PageSize);
     }
-    
+
     public async Task<IssueDetailResponse?> GetIssueDetailAsync(int issueId)
     {
         var issue = await GetIssueByIdAsync(issueId, includeTags: true);
@@ -224,19 +279,18 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
             })
             .OrderBy(g => g.Key)
             .ToList();
-        
+
         IssueTagGroup? releaseTags = tagGroups.FirstOrDefault(t => t.Key == "release");
         if (releaseTags != null)
         {
             string value = releaseTags.Values.First().Value;
-            if(value.Contains('@'))
+            if (value.Contains('@'))
             {
-                string prefix = value[..(value.IndexOf('@')+1)];
+                string prefix = value[..(value.IndexOf('@') + 1)];
                 if (releaseTags.Values.All(t => t.Value.StartsWith(prefix)))
                 {
                     tagGroups.Remove(releaseTags);
                     tagGroups.Add(releaseTags with { Values = releaseTags.Values.Select(rt => rt with { Value = rt.Value[(rt.Value.IndexOf('@') + 1)..] }).ToList() });
-                    
                 }
             }
         }
@@ -250,7 +304,6 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
                 e.Timestamp, e.Release?.RawName, e.User?.Identifier);
         }
 
-        // Query first and last release names for this issue
         var releaseInfo = await dbContext.Events
             .Where(e => e.IssueId == issueId)
             .Select(e => new { e.Timestamp, ReleaseName = e.Release!.RawName })
@@ -265,7 +318,22 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
             if (releaseInfo.LastRelease?.Contains('@') == true)
                 releaseInfo.LastRelease = releaseInfo.LastRelease[(releaseInfo.LastRelease.IndexOf('@') + 1)..];
         }
-        
+
+        MergeSetResponse? mergeSetResponse = null;
+        if (issue.MergeSet is not null)
+        {
+            var primaryIssueId = issue.MergeSet.PrimaryIssueId;
+            var members = await dbContext.Issues
+                .Where(mi => mi.MergeSetId == issue.MergeSet.Id)
+                .Select(mi => new MergeSetMember(
+                    mi.Id, mi.Title, mi.ExceptionType, mi.Fingerprint,
+                    mi.OccurrenceCount, mi.FirstSeen, mi.LastSeen,
+                    mi.Id == primaryIssueId))
+                .ToListAsync();
+            mergeSetResponse = new MergeSetResponse(
+                issue.MergeSet.Id, primaryIssueId, members, issue.MergeSet.CreatedAt);
+        }
+
         return new IssueDetailResponse(
             issue.Id, issue.ProjectId, issue.Title, issue.ExceptionType, issue.Culprit,
             issue.Fingerprint, issue.Status, issue.Priority, issue.Level,
@@ -273,9 +341,36 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
             issue.AssignedTo?.DisplayName, issue.AssignedToId,
             issue.ResolvedBy?.DisplayName, issue.ResolvedAt,
             tagGroups, suggestedEvent,
-            releaseInfo?.FirstRelease, releaseInfo?.LastRelease);
+            releaseInfo?.FirstRelease, releaseInfo?.LastRelease,
+            mergeSetResponse);
     }
-    
+
+    public async Task<List<IssueSummary>> GetSimilarIssuesAsync(int issueId)
+    {
+        var issue = await dbContext.Issues.FirstOrDefaultAsync(i => i.Id == issueId);
+        if (issue is null) return [];
+
+        var q = dbContext.Issues.Where(i =>
+            i.ProjectId == issue.ProjectId &&
+            i.Id != issueId &&
+            i.MergeSetId == null &&
+            (i.Title == issue.Title ||
+             (issue.ExceptionType != null && i.ExceptionType == issue.ExceptionType) ||
+             (issue.Culprit != null && i.Culprit == issue.Culprit)));
+
+        var similar = await q
+            .Include(i => i.AssignedTo)
+            .OrderByDescending(i => i.LastSeen)
+            .Take(20)
+            .ToListAsync();
+
+        return similar.Select(i => new IssueSummary(
+            i.Id, i.Title, i.ExceptionType, i.Culprit,
+            i.Status, i.Priority, i.Level,
+            i.FirstSeen, i.LastSeen, i.OccurrenceCount,
+            i.AssignedTo?.DisplayName)).ToList();
+    }
+
     internal class IssueReleaseRange
     {
         public string? FirstRelease { get; set; }

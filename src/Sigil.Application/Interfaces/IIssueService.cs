@@ -24,4 +24,7 @@ public interface IIssueService
     Task<Issue> AssignIssueAsync(int issueId, Guid? assignToUserId, Guid? actionByUserId = null);
     Task<Issue> UpdateIssuePriorityAsync(int issueId, Priority priority);
     Task<bool> DeleteIssueAsync(int issueId);
+
+    // Discovery
+    Task<List<IssueSummary>> GetSimilarIssuesAsync(int issueId);
 }

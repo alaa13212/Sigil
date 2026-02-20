@@ -91,6 +91,12 @@ public class IssuesController(
         return Ok(await activityService.GetActivitySummariesAsync(id, page, Math.Clamp(pageSize, 1, 100)));
     }
 
+    [HttpGet("api/issues/{id:int}/similar")]
+    public async Task<IActionResult> Similar(int id)
+    {
+        return Ok(await issueService.GetSimilarIssuesAsync(id));
+    }
+
     private Guid? GetUserId()
     {
         var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
