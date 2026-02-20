@@ -59,8 +59,10 @@ internal class TagService(SigilDbContext dbContext, ITagCache tagCache) : ITagSe
 
         var (results, misses) = tagCache.TryGetMany(tags, tag =>
         {
-            tagCache.TryGetValue(tag.Key, tag.Value, out var v);
-            return v;
+            tagCache.TryGetValue(tag.Key, tag.Value, out var tagValue);
+            if (tagValue is not null)
+                dbContext.Attach(tagValue);
+            return tagValue;
         });
 
         if (misses.Count > 0)
