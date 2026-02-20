@@ -41,6 +41,10 @@ internal class IssueActivityService(SigilDbContext dbContext, IDateTime dateTime
         return activity;
     }
 
+    // Not used server-side — the controller handles auth and calls LogActivityAsync directly
+    public Task<ActivityResponse> AddCommentAsync(int issueId, string message) =>
+        throw new NotSupportedException("Call LogActivityAsync with IssueActivityAction.Commented instead.");
+
     public async Task<PagedResponse<ActivityResponse>> GetActivitySummariesAsync(int issueId, int page = 1, int pageSize = 50)
     {
         var (items, totalCount) = await GetActivitiesForIssueAsync(issueId, page, pageSize);

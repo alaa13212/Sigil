@@ -61,7 +61,7 @@ public class IssuesController(
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateStatusRequest request)
     {
         var userId = GetUserId();
-        var issue = await issueService.UpdateIssueStatusAsync(id, request.Status, userId);
+        var issue = await issueService.UpdateIssueStatusAsync(id, request.Status, userId, request.IgnoreFutureEvents);
         return Ok(new { issue.Id, issue.Status });
     }
 
@@ -97,6 +97,19 @@ public class IssuesController(
     public async Task<IActionResult> Similar(int id)
     {
         return Ok(await issueService.GetSimilarIssuesAsync(id));
+    }
+
+    [HttpPost("api/issues/{id:int}/comments")]
+    public async Task<IActionResult> AddComment(int id, [FromBody] AddCommentRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Message))
+            return BadRequest("Comment cannot be empty.");
+
+        var userId = GetUserId();
+        if (userId is null) return Unauthorized();
+
+        var activity = await activityService.LogActivityAsync(id, userId.Value, IssueActivityAction.Commented, request.Message.Trim());
+        return Ok(new ActivityResponse(activity.Id, activity.Action, activity.Message, activity.Timestamp, null, userId.Value));
     }
 
     private Guid? GetUserId()

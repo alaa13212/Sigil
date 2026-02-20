@@ -34,4 +34,11 @@ public class ApiIssueActivityService(HttpClient http) : IIssueActivityService
 
     public Task<IssueActivity> LogActivityAsync(int issueId, Guid userId, IssueActivityAction action, string? message = null) =>
         throw new NotSupportedException("Not available on client.");
+
+    public async Task<ActivityResponse> AddCommentAsync(int issueId, string message)
+    {
+        var response = await http.PostAsJsonAsync($"api/issues/{issueId}/comments", new AddCommentRequest(message));
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<ActivityResponse>())!;
+    }
 }

@@ -2,10 +2,11 @@ using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Issues;
 using Sigil.Domain.Entities;
+using Sigil.Domain.Enums;
 
 namespace Sigil.infrastructure.Persistence;
 
-internal class BookmarkService(SigilDbContext dbContext, IDateTime dateTime) : IBookmarkService
+internal class BookmarkService(SigilDbContext dbContext, IDateTime dateTime, IIssueActivityService activityService) : IBookmarkService
 {
     public async Task<bool> ToggleBookmarkAsync(int issueId, Guid userId)
     {
@@ -26,6 +27,7 @@ internal class BookmarkService(SigilDbContext dbContext, IDateTime dateTime) : I
             CreatedAt = dateTime.UtcNow
         });
         await dbContext.SaveChangesAsync();
+        await activityService.LogActivityAsync(issueId, userId, IssueActivityAction.Bookmarked);
         return true;
     }
 

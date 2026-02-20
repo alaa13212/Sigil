@@ -46,8 +46,9 @@ public record IssueTagGroup(string Key, List<IssueTagValue> Values, int TotalCou
 
 public record IssueTagValue(string Value, int Count);
 
-public record UpdateStatusRequest(IssueStatus Status);
+public record UpdateStatusRequest(IssueStatus Status, bool IgnoreFutureEvents = false);
 
 public record AssignRequest(Guid? UserId);
 
 public record UpdatePriorityRequest(Priority Priority);
+public record AddCommentRequest(string Message);

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Application.Models.Events;
+using Sigil.Application.Models.Filters;
 using Sigil.Application.Models.Issues;
 using Sigil.Application.Models.MergeSets;
 using Sigil.Domain.Entities;
@@ -10,7 +11,13 @@ using Sigil.Domain.Ingestion;
 
 namespace Sigil.infrastructure.Persistence;
 
-internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, IDateTime dateTime, IIssueCache issueCache) : IIssueService
+internal class IssueService(
+    SigilDbContext dbContext,
+    IEventRanker eventRanker,
+    IDateTime dateTime,
+    IIssueCache issueCache,
+    IIssueActivityService activityService,
+    IEventFilterService eventFilterService) : IIssueService
 {
     public async Task<List<Issue>> BulkGetOrCreateIssuesAsync(Project project, IEnumerable<IGrouping<string, ParsedEvent>> eventsByFingerprint)
     {
@@ -64,6 +71,10 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
 
                 dbContext.Issues.AddRange(newIssues);
                 await dbContext.SaveChangesAsync();
+
+                foreach (var issue in newIssues)
+                    await activityService.LogActivityAsync(issue.Id, Guid.Empty, IssueActivityAction.Created);
+
                 fromDb.AddRange(newIssues);
             }
 
@@ -160,9 +171,10 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
         return (items, totalCount);
     }
 
-    public async Task<Issue> UpdateIssueStatusAsync(int issueId, IssueStatus status, Guid? userId = null)
+    public async Task<Issue> UpdateIssueStatusAsync(int issueId, IssueStatus status, Guid? userId = null, bool ignoreFutureEvents = false)
     {
         var issue = await dbContext.Issues.AsTracking().FirstAsync(i => i.Id == issueId);
+        var previousStatus = issue.Status;
 
         issue.Status = status;
 
@@ -175,6 +187,25 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
         {
             issue.ResolvedAt = null;
             issue.ResolvedById = null;
+
+            // Remove ignore filter when reopening
+            if (issue.IgnoreFilterId.HasValue)
+            {
+                await eventFilterService.DeleteFilterAsync(issue.IgnoreFilterId.Value);
+                issue.IgnoreFilterId = null;
+            }
+        }
+
+        // Create fingerprint filter when ignoring with "ignore future events"
+        if (status == IssueStatus.Ignored && ignoreFutureEvents && !issue.IgnoreFilterId.HasValue)
+        {
+            var filter = await eventFilterService.CreateFilterAsync(issue.ProjectId, new Application.Models.Filters.CreateFilterRequest(
+                Field: "fingerprint",
+                Operator: FilterOperator.Equals,
+                Value: issue.Fingerprint,
+                Action: FilterAction.Reject,
+                Description: $"Auto-created when issue #{issueId} was ignored"));
+            issue.IgnoreFilterId = filter.Id;
         }
 
         await dbContext.SaveChangesAsync();
@@ -183,6 +214,19 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
             await dbContext.Issues
                 .Where(i => i.MergeSetId == issue.MergeSetId && i.Id != issueId)
                 .ExecuteUpdateAsync(s => s.SetProperty(i => i.Status, status));
+
+        // Log activity
+        if (userId.HasValue)
+        {
+            var action = status switch
+            {
+                IssueStatus.Resolved => IssueActivityAction.Resolved,
+                IssueStatus.Ignored  => IssueActivityAction.Ignored,
+                IssueStatus.Open     => IssueActivityAction.Unresolved,
+                _                    => IssueActivityAction.Unresolved
+            };
+            await activityService.LogActivityAsync(issueId, userId.Value, action);
+        }
 
         issueCache.InvalidateAll();
         return issue;
@@ -198,6 +242,12 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
             await dbContext.Issues
                 .Where(i => i.MergeSetId == issue.MergeSetId && i.Id != issueId)
                 .ExecuteUpdateAsync(s => s.SetProperty(i => i.AssignedToId, assignToUserId));
+
+        if (actionByUserId.HasValue)
+        {
+            var action = assignToUserId.HasValue ? IssueActivityAction.Assigned : IssueActivityAction.Unassigned;
+            await activityService.LogActivityAsync(issueId, actionByUserId.Value, action);
+        }
 
         issueCache.InvalidateAll();
         return issue;

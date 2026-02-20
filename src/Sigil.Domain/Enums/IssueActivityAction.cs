@@ -11,7 +11,5 @@ public enum IssueActivityAction
     Commented,
     Merged,
     Unmerged,
-    Archived,
-    Unarchived,
     Bookmarked,
 }

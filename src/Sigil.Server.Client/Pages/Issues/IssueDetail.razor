@@ -278,6 +278,29 @@ else
             <!-- Activity tab -->
             @if (activeTab == Tab.Activity)
             {
+                <!-- Comment form -->
+                <div class="card bg-base-200">
+                    <div class="card-body p-4 space-y-2">
+                        <textarea class="textarea textarea-bordered w-full text-sm" rows="3"
+                                  placeholder="Add a comment…"
+                                  @bind="commentText" disabled="@commentLoading"></textarea>
+                        <div class="flex items-center gap-2">
+                            <button class="btn btn-primary btn-sm" @onclick="SubmitComment"
+                                    disabled="@(commentLoading || string.IsNullOrWhiteSpace(commentText))">
+                                @if (commentLoading)
+                                {
+                                    <span class="loading loading-spinner loading-xs"></span>
+                                }
+                                Comment
+                            </button>
+                            @if (!string.IsNullOrEmpty(commentError))
+                            {
+                                <span class="text-sm text-error">@commentError</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+
                 @if (activities is null || activities.Items.Count == 0)
                 {
                     <EmptyState Title="No activity yet" />
@@ -302,7 +325,7 @@ else
                                     }
                                     @if (!string.IsNullOrEmpty(act.Message))
                                     {
-                                        <div class="text-xs opacity-60 mt-0.5">@act.Message</div>
+                                        <div class="text-xs opacity-60 mt-0.5 whitespace-pre-wrap">@act.Message</div>
                                     }
                                 </div>
                             </li>
@@ -485,6 +508,13 @@ else
                             </button>
                         }
                     </div>
+                    @if (issue.Status != IssueStatus.Ignored)
+                    {
+                        <label class="flex items-center gap-2 text-xs cursor-pointer">
+                            <input type="checkbox" class="checkbox checkbox-xs" @bind="ignoreFutureEvents" />
+                            Also ignore future events with this fingerprint
+                        </label>
+                    }
                 </div>
             </div>
 
@@ -617,11 +647,17 @@ else
     private int eventsPage = 1;
     private const int EventsPageSize = 50;
     private bool isBookmarked;
+    private bool ignoreFutureEvents;
 
     // Members tab state
     private bool memberActionLoading;
     private string memberActionError = "";
     private int addIssueId;
+
+    // Comment state
+    private string commentText = "";
+    private bool commentLoading;
+    private string commentError = "";
 
     // Similar issues state
     private HashSet<int> similarSelected = [];
@@ -751,6 +787,27 @@ else
         }
     }
 
+    private async Task SubmitComment()
+    {
+        if (string.IsNullOrWhiteSpace(commentText)) return;
+        commentLoading = true;
+        commentError = "";
+        try
+        {
+            await ActivityService.AddCommentAsync(IssueId, commentText.Trim());
+            commentText = "";
+            await LoadActivity();
+        }
+        catch (Exception ex)
+        {
+            commentError = ex.Message;
+        }
+        finally
+        {
+            commentLoading = false;
+        }
+    }
+
     private async Task LoadSimilar()
     {
         try
@@ -768,7 +825,9 @@ else
         actionLoading = true;
         try
         {
-            await IssueService.UpdateIssueStatusAsync(IssueId, status);
+            var ignoreFuture = status == IssueStatus.Ignored && ignoreFutureEvents;
+            await IssueService.UpdateIssueStatusAsync(IssueId, status, ignoreFutureEvents: ignoreFuture);
+            ignoreFutureEvents = false;
             await LoadIssue();
         }
         finally
@@ -912,6 +971,7 @@ else
         IssueActivityAction.Commented  => "Commented",
         IssueActivityAction.Merged     => "Merged into group",
         IssueActivityAction.Unmerged   => "Removed from group",
+        IssueActivityAction.Bookmarked => "Bookmarked",
         _                              => action.ToString()
     };
 }

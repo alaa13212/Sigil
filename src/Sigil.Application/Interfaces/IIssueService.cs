@@ -20,7 +20,7 @@ public interface IIssueService
     Task<IssueDetailResponse?> GetIssueDetailAsync(int issueId);
 
     // Mutations
-    Task<Issue> UpdateIssueStatusAsync(int issueId, IssueStatus status, Guid? userId = null);
+    Task<Issue> UpdateIssueStatusAsync(int issueId, IssueStatus status, Guid? userId = null, bool ignoreFutureEvents = false);
     Task<Issue> AssignIssueAsync(int issueId, Guid? assignToUserId, Guid? actionByUserId = null);
     Task<Issue> UpdateIssuePriorityAsync(int issueId, Priority priority);
     Task<bool> DeleteIssueAsync(int issueId);

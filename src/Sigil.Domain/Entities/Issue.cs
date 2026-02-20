@@ -59,4 +59,9 @@ public class Issue
     [ForeignKey(nameof(MergeSet))]
     public int? MergeSetId { get; set; }
     public MergeSet? MergeSet { get; set; }
+
+    // Set when the issue is ignored with "ignore future events" option
+    [ForeignKey(nameof(IgnoreFilter))]
+    public int? IgnoreFilterId { get; set; }
+    public EventFilter? IgnoreFilter { get; set; }
 }

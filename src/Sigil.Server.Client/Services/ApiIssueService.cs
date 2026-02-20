@@ -67,9 +67,9 @@ public class ApiIssueService(HttpClient http) : IIssueService
         };
     }
 
-    public async Task<Issue> UpdateIssueStatusAsync(int issueId, IssueStatus status, Guid? userId = null)
+    public async Task<Issue> UpdateIssueStatusAsync(int issueId, IssueStatus status, Guid? userId = null, bool ignoreFutureEvents = false)
     {
-        await http.PutAsJsonAsync($"api/issues/{issueId}/status", new UpdateStatusRequest(status));
+        await http.PutAsJsonAsync($"api/issues/{issueId}/status", new UpdateStatusRequest(status, ignoreFutureEvents));
         return (await GetIssueByIdAsync(issueId))!;
     }
 

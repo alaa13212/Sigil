@@ -10,5 +10,10 @@ internal class IssueConfiguration : IEntityTypeConfiguration<Issue>
     {
         builder.HasIndex(e => new { e.ProjectId, e.Fingerprint }).IsUnique();
         builder.HasIndex(e => e.MergeSetId);
+
+        builder.HasOne(i => i.IgnoreFilter)
+            .WithMany()
+            .HasForeignKey(i => i.IgnoreFilterId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }
