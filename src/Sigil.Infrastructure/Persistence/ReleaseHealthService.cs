@@ -18,7 +18,7 @@ internal class ReleaseHealthService(SigilDbContext dbContext) : IReleaseHealthSe
             .Take(pageSize)
             .Select(r => new
             {
-                r.Id, r.RawName, r.SemanticVersion, r.FirstSeenAt, r.DeployedAt,
+                r.Id, r.RawName, r.SemanticVersion, r.FirstSeenAt,
                 TotalEvents    = r.Events.Count(),
                 AffectedIssues = r.Events.Select(e => e.IssueId).Distinct().Count(),
                 NewIssues      = r.Events.Select(e => e.Issue!).Where(i => i.FirstSeen >= r.FirstSeenAt).Select(i => i.Id).Distinct().Count(),
@@ -31,8 +31,8 @@ internal class ReleaseHealthService(SigilDbContext dbContext) : IReleaseHealthSe
 
         var summaries = rows
             .Select(r => new ReleaseHealthSummary(
-                r.Id, r.RawName, r.SemanticVersion, r.FirstSeenAt, r.DeployedAt,
-                r.TotalEvents, r.NewIssues, 0, r.AffectedIssues, r.LastEventAt))
+                r.Id, r.RawName, r.SemanticVersion, r.FirstSeenAt, r.TotalEvents, r.NewIssues, 0,
+                r.AffectedIssues, r.LastEventAt))
             .ToList();
 
         return new PagedResponse<ReleaseHealthSummary>(summaries, total, page, pageSize);
@@ -44,7 +44,7 @@ internal class ReleaseHealthService(SigilDbContext dbContext) : IReleaseHealthSe
             .Where(r => r.Id == releaseId)
             .Select(r => new
             {
-                r.Id, r.RawName, r.SemanticVersion, r.Package, r.Build, r.CommitSha, r.FirstSeenAt, r.DeployedAt,
+                r.Id, r.RawName, r.SemanticVersion, r.Package, r.Build, r.CommitSha, r.FirstSeenAt,
                 TotalEvents    = r.Events.Count(),
                 AffectedIssues = r.Events.Select(e => e.IssueId).Distinct().Count(),
                 NewIssues      = r.Events.Select(e => e.Issue!).Where(i => i.FirstSeen >= r.FirstSeenAt).Select(i => i.Id).Distinct().Count(),
@@ -78,7 +78,7 @@ internal class ReleaseHealthService(SigilDbContext dbContext) : IReleaseHealthSe
         return new ReleaseDetailResponse(
             data.Id, data.RawName, data.SemanticVersion, data.Package,
             data.Build?.ToString(), data.CommitSha,
-            data.FirstSeenAt, data.DeployedAt,
-            data.TotalEvents, data.NewIssues, 0, data.AffectedIssues, topIssues);
+            data.FirstSeenAt, data.TotalEvents, data.NewIssues, 0,
+            data.AffectedIssues, topIssues);
     }
 }

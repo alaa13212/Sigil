@@ -10,7 +10,6 @@ public class Release
     public required string RawName { get; set; }
     
     public DateTime FirstSeenAt { get; set; }
-    public DateTime? DeployedAt { get; set; }
     
     
     [MaxLength(200)]

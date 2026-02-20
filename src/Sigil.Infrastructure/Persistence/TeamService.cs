@@ -26,7 +26,7 @@ internal class TeamService(SigilDbContext dbContext) : ITeamService
         if (team is null) return null;
 
         var members = team.Members.Select(m =>
-            new TeamMemberResponse(m.UserId, m.User.DisplayName, m.User.Email, m.Role)).ToList();
+            new TeamMemberResponse(m.UserId, m.User!.DisplayName, m.User.Email, m.Role)).ToList();
 
         var projects = team.Projects.Select(p =>
             new TeamProjectResponse(p.Id, p.Name, p.Platform)).ToList();

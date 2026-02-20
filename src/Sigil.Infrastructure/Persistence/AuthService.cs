@@ -12,6 +12,9 @@ internal class AuthService(
 {
     public async Task<AuthResult> LoginAsync(LoginRequest request)
     {
+        ArgumentNullException.ThrowIfNull(request.Email);
+        ArgumentNullException.ThrowIfNull(request.Password);
+        
         var user = await userManager.FindByEmailAsync(request.Email);
         if (user is null)
             return AuthResult.Failure("Invalid email or password.");
