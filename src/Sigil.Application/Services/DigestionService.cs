@@ -1,8 +1,8 @@
 using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
+using Sigil.Domain.Enums;
 using Sigil.Domain.Extensions;
 using Sigil.Domain.Ingestion;
-using Sigil.Domain.Interfaces;
 
 namespace Sigil.Application.Services;
 
@@ -15,7 +15,8 @@ public class DigestionService(
     ITagService tagService,
     IEventRanker eventRanker,
     IEventFilterService eventFilterService,
-    IMergeSetService mergeSetService
+    IMergeSetService mergeSetService,
+    IAlertService alertService
 ) : IDigestionService
 {
     public async Task BulkDigestAsync(int projectId, List<ParsedEvent> parsedEvents, CancellationToken ct = default)
@@ -51,35 +52,16 @@ public class DigestionService(
             .ToLookup(e => e.Fingerprint!);
         Dictionary<string, Issue> issues = (await issueService.BulkGetOrCreateIssuesAsync(project, issueGrouping)).ToDictionary(i => i.Fingerprint);
 
+        // Track alert signals before mutation
+        HashSet<int> newIssueIds = issues.Values.Where(i => i.OccurrenceCount == 0).Select(i => i.Id).ToHashSet();
+        HashSet<int> regressionIssueIds = issues.Values.Where(i => i.Status == IssueStatus.Resolved).Select(i => i.Id).ToHashSet();
+
         List<CapturedEvent> events = [];
         foreach (IGrouping<string, ParsedEvent> group in issueGrouping)
         {
             Issue issue = issues[group.Key];
 
-            foreach (ParsedEvent parsedEvent in group)
-            {
-                if (parsedEvent.Tags == null)
-                    continue;
-
-                foreach (KeyValuePair<string, string> tag in parsedEvent.Tags)
-                {
-                    TagValue tagValue = tagValues[$"{tag.Key}:{tag.Value}"];
-                    IssueTag? issueTag = issue.Tags.FirstOrDefault(iTag => iTag.TagValueId == tagValue.Id);
-                    if (issueTag == null)
-                    {
-                        issueTag = new IssueTag { Issue = issue, TagValueId = tagValues[$"{tag.Key}:{tag.Value}"].Id, FirstSeen = parsedEvent.Timestamp, LastSeen = parsedEvent.Timestamp };
-                        issue.Tags.Add(issueTag);
-                    }
-
-                    issueTag.OccurrenceCount++;
-                    issueTag.FirstSeen = TimeMath.Earlier(issueTag.FirstSeen, parsedEvent.Timestamp);
-                    issueTag.LastSeen = TimeMath.Later(issueTag.LastSeen, parsedEvent.Timestamp);
-                }
-
-                issue.OccurrenceCount++;
-                issue.FirstSeen = TimeMath.Earlier(issue.FirstSeen, parsedEvent.Timestamp);
-                issue.LastSeen = TimeMath.Later(issue.LastSeen, parsedEvent.Timestamp);
-            }
+            UpdateIssueWithParsedEvents(group, tagValues, issue);
 
             List<CapturedEvent> eventsEntities = eventService.BulkCreateEventsEntities(group, project, issue, releases, eventUsers, tagValues).ToList();
             events.AddRange(eventsEntities);
@@ -88,7 +70,46 @@ public class DigestionService(
         }
 
         await eventService.SaveEventsAsync(events);
+        
+        await RefreshMergedIssues(issues);
+        await FireAlerts(issues, newIssueIds, regressionIssueIds);
+    }
 
+    private static void UpdateIssueWithParsedEvents(IGrouping<string, ParsedEvent> group, Dictionary<string, TagValue> tagValues, Issue issue)
+    {
+        foreach (ParsedEvent parsedEvent in group)
+        {
+            if (parsedEvent.Tags == null)
+                continue;
+
+            foreach (KeyValuePair<string, string> tag in parsedEvent.Tags)
+            {
+                UpdateIssueTag(tagValues, tag, issue, parsedEvent);
+            }
+
+            issue.OccurrenceCount++;
+            issue.FirstSeen = TimeMath.Earlier(issue.FirstSeen, parsedEvent.Timestamp);
+            issue.LastSeen = TimeMath.Later(issue.LastSeen, parsedEvent.Timestamp);
+        }
+    }
+
+    private static void UpdateIssueTag(Dictionary<string, TagValue> tagValues, KeyValuePair<string, string> tag, Issue issue, ParsedEvent parsedEvent)
+    {
+        TagValue tagValue = tagValues[$"{tag.Key}:{tag.Value}"];
+        IssueTag? issueTag = issue.Tags.FirstOrDefault(iTag => iTag.TagValueId == tagValue.Id);
+        if (issueTag == null)
+        {
+            issueTag = new IssueTag { Issue = issue, TagValueId = tagValues[$"{tag.Key}:{tag.Value}"].Id, FirstSeen = parsedEvent.Timestamp, LastSeen = parsedEvent.Timestamp };
+            issue.Tags.Add(issueTag);
+        }
+
+        issueTag.OccurrenceCount++;
+        issueTag.FirstSeen = TimeMath.Earlier(issueTag.FirstSeen, parsedEvent.Timestamp);
+        issueTag.LastSeen = TimeMath.Later(issueTag.LastSeen, parsedEvent.Timestamp);
+    }
+
+    private async Task RefreshMergedIssues(Dictionary<string, Issue> issues)
+    {
         var affectedMergeSetIds = issues.Values
             .Where(i => i.MergeSetId.HasValue)
             .Select(i => i.MergeSetId!.Value)
@@ -97,5 +118,18 @@ public class DigestionService(
 
         if (affectedMergeSetIds.Count > 0)
             await mergeSetService.RefreshAggregatesAsync(affectedMergeSetIds);
+    }
+
+    private async Task FireAlerts(Dictionary<string, Issue> issues, HashSet<int> newIssueIds, HashSet<int> regressionIssueIds)
+    {
+        foreach (var issue in issues.Values)
+        {
+            if (newIssueIds.Contains(issue.Id))
+                await alertService.EvaluateNewIssueAsync(issue);
+            else if (regressionIssueIds.Contains(issue.Id))
+                await alertService.EvaluateRegressionAsync(issue);
+
+            await alertService.EvaluateThresholdAsync(issue);
+        }
     }
 }

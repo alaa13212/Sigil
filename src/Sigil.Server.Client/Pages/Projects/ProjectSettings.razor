@@ -4,6 +4,8 @@
 @inject IProjectService ProjectService
 @inject NavigationManager NavigationManager
 
+@layout ProjectSettingsLayout
+
 <PageTitle>Project Settings — Sigil</PageTitle>
 
 @if (loading)
@@ -19,14 +21,8 @@ else if (Project is null)
 else
 {
     <div class="max-w-2xl space-y-6">
-        <h1 class="text-2xl font-bold">Project Settings</h1>
-        @* TODO Nested Layout *@
-        <!-- Navigation -->
-        <div class="flex flex-wrap gap-2">
-            <a href="/projects/@ProjectId/settings" class="btn btn-sm btn-active">General</a>
-            <a href="/projects/@ProjectId/settings/filters" class="btn btn-sm btn-ghost">Inbound Filters</a>
-        </div>
-
+        <h2 class="text-lg font-bold">General Settings</h2>
+        
         <!-- Project Name -->
         <div class="card bg-base-200">
             <div class="card-body p-5 space-y-3">

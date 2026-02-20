@@ -3,20 +3,14 @@
 @using Sigil.Application.Models.Filters
 @inject IEventFilterService FilterService
 
+@layout ProjectSettingsLayout
+
 <PageTitle>Inbound Filters — Sigil</PageTitle>
 
 <div class="space-y-6">
-    <h1 class="text-2xl font-bold">Project Settings</h1>
-    
-    <!-- Navigation -->
-    <div class="flex flex-wrap gap-2">
-        <a href="/projects/@ProjectId/settings" class="btn btn-sm btn-ghust">General</a>
-        <a href="/projects/@ProjectId/settings/filters" class="btn btn-sm btn-avtive">Inbound Filters</a>
-    </div>
-
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-bold">Inbound Filters</h1>
+            <h2 class="text-lg font-bold">Inbound Filters</h2>
             <p class="text-sm opacity-60 mt-1">Events matching a Reject rule are dropped before being stored.</p>
         </div>
         <button class="btn btn-primary btn-sm" @onclick="() => showAddForm = !showAddForm">

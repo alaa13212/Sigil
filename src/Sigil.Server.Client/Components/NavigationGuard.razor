@@ -59,16 +59,9 @@ else
         if(path.StartsWith(SetupWizardPath, StringComparison.OrdinalIgnoreCase))
             return null;
         
-        try
-        {
-            var setupStatus = await SetupService.GetSetupStatusAsync();
-            if (!setupStatus.IsComplete)
-                return SetupWizardPath;
-        }
-        catch
-        {
+        var setupStatus = await SetupService.GetSetupStatusAsync();
+        if (!setupStatus.IsComplete)
             return SetupWizardPath;
-        }
         
 
         if (path.StartsWith(LoginPath, StringComparison.OrdinalIgnoreCase))

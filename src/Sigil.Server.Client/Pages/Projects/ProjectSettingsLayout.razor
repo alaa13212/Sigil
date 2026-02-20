@@ -1,0 +1,39 @@
+﻿@using Sigil.Server.Client.Extensions
+@inherits LayoutComponentBase
+
+@layout MainLayout
+
+<div class="space-y-6">
+    <h1 class="text-2xl font-bold">Project Settings</h1>
+    
+    @* TODO Nested Layout *@
+    <!-- Navigation -->
+    <div class="flex flex-wrap gap-2">
+        <NavLink href="@($"/projects/{ProjectId}/settings")" class="btn btn-sm btn-ghost" ActiveClass="btn-active" Match="NavLinkMatch.All">General</NavLink>
+        <NavLink href="@($"/projects/{ProjectId}/settings/filters")" class="btn btn-sm btn-ghost" ActiveClass="btn-active">Inbound Filters</NavLink>
+        <NavLink href="@($"/projects/{ProjectId}/settings/alerts")" class="btn btn-sm btn-ghost" ActiveClass="btn-active">Alerts</NavLink>
+        <NavLink href="@($"/projects/{ProjectId}/settings/alert-history")" class="btn btn-sm btn-ghost" ActiveClass="btn-active">Alert History</NavLink>
+    </div>
+    
+    <div>
+        @Body
+    </div>
+  
+</div>
+
+@code {
+
+    [Parameter]
+    public long ProjectId { get; set; }
+    
+    
+    protected override void OnParametersSet()
+    {
+        // pull out the "Slug" parameter from the route data
+        if (Body != null && Body.TryGetRouteData(out var routeData) && routeData.RouteValues.TryGetValue(nameof(ProjectId), out object? projectId))
+        {
+            ProjectId = Convert.ToInt64(projectId);
+        }
+    }
+
+}

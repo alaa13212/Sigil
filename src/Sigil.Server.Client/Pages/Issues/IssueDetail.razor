@@ -411,8 +411,8 @@ else
                     <div class="space-y-2">
                         <p class="text-sm opacity-60">Issues with the same title, exception type, or culprit. Consider merging related ones.</p>
 
-                        @if (similarSelected.Count >= 1)
-                        {
+                        
+                        <fieldset disabled="@CanMerge">
                             <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
                                 <span class="text-sm font-medium">@similarSelected.Count selected</span>
                                 <button class="btn btn-primary btn-sm" @onclick="MergeSimilarSelected" disabled="@mergeFromSimilarLoading">
@@ -428,7 +428,8 @@ else
                                     <span class="text-sm text-error">@similarMergeError</span>
                                 }
                             </div>
-                        }
+                        </fieldset>
+
 
                         <div class="overflow-x-auto">
                             <table class="table table-zebra table-sm">
@@ -663,6 +664,7 @@ else
     private HashSet<int> similarSelected = [];
     private bool mergeFromSimilarLoading;
     private string similarMergeError = "";
+    private bool CanMerge => issue?.MergeSet != null ? similarSelected.Count >= 1 : similarSelected.Count >= 2; 
 
     private enum Tab { SuggestedEvent, Events, Activity, Similar }
 
@@ -887,27 +889,6 @@ else
         try
         {
             await MergeSetService.RemoveIssueAsync(issue.MergeSet.Id, issueId, Guid.Empty);
-            await LoadIssue();
-        }
-        catch (Exception ex)
-        {
-            memberActionError = ex.Message;
-        }
-        finally
-        {
-            memberActionLoading = false;
-        }
-    }
-
-    private async Task AddMember()
-    {
-        if (issue?.MergeSet is null || addIssueId <= 0) return;
-        memberActionLoading = true;
-        memberActionError = "";
-        try
-        {
-            await MergeSetService.AddIssueAsync(issue.MergeSet.Id, addIssueId, Guid.Empty);
-            addIssueId = 0;
             await LoadIssue();
         }
         catch (Exception ex)

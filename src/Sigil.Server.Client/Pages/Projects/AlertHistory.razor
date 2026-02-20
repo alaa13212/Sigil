@@ -1,0 +1,96 @@
+@page "/projects/{ProjectId:int}/settings/alert-history"
+@attribute [Authorize]
+@using Sigil.Application.Models.Alerts
+@inject IAlertService AlertService
+
+@layout ProjectSettingsLayout
+
+<PageTitle>Alert History — Sigil</PageTitle>
+
+<div class="space-y-4">
+    <h2 class="text-lg font-bold">Alert History</h2>
+
+    @if (loading)
+    {
+        <div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>
+    }
+    else if (response is null || response.Items.Count == 0)
+    {
+        <EmptyState Title="No alerts fired yet" Description="Alerts will appear here once your rules trigger." />
+    }
+    else
+    {
+        <div class="overflow-x-auto">
+            <table class="table table-zebra table-sm">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Rule</th>
+                        <th>Issue</th>
+                        <th>Status</th>
+                        <th>Error</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var h in response.Items)
+                    {
+                        <tr>
+                            <td class="text-sm"><RelativeTime Value="h.FiredAt" /></td>
+                            <td class="font-medium text-sm">@h.AlertRuleName</td>
+                            <td class="text-sm">
+                                @if (h.IssueId.HasValue)
+                                {
+                                    <a href="/projects/@ProjectId/issues/@h.IssueId" class="link link-hover opacity-80 truncate max-w-xs block">
+                                        @(h.IssueTitle ?? $"#{h.IssueId}")
+                                    </a>
+                                }
+                                else
+                                {
+                                    <span class="opacity-40">—</span>
+                                }
+                            </td>
+                            <td>
+                                <span class="badge badge-sm @StatusClass(h.Status)">@h.Status</span>
+                            </td>
+                            <td class="text-xs opacity-60 max-w-xs truncate">@(h.ErrorMessage ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <Pagination Page="page" TotalCount="response.TotalCount" PageSize="PageSize" OnPageChanged="OnPageChanged" />
+    }
+</div>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+
+    private Application.Models.PagedResponse<AlertHistoryResponse>? response;
+    private bool loading = true;
+    private int page = 1;
+    private const int PageSize = 50;
+
+    protected override async Task OnParametersSetAsync() => await Load();
+
+    private async Task Load()
+    {
+        loading = true;
+        response = await AlertService.GetAlertHistoryAsync(ProjectId, page, PageSize);
+        loading = false;
+    }
+
+    private async Task OnPageChanged(int newPage)
+    {
+        page = newPage;
+        await Load();
+    }
+
+    private static string StatusClass(AlertDeliveryStatus s) => s switch
+    {
+        AlertDeliveryStatus.Sent      => "badge-success",
+        AlertDeliveryStatus.Failed    => "badge-error",
+        AlertDeliveryStatus.Throttled => "badge-warning",
+        _                             => "badge-ghost"
+    };
+}

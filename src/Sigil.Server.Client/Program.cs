@@ -25,5 +25,6 @@ builder.Services.AddScoped<IPasskeyService, ApiPasskeyService>();
 builder.Services.AddScoped<IEventFilterService, ApiEventFilterService>();
 builder.Services.AddScoped<IMergeSetService, ApiMergeSetService>();
 builder.Services.AddScoped<IBookmarkService, ApiBookmarkService>();
+builder.Services.AddScoped<IAlertService, ApiAlertService>();
 
 await builder.Build().RunAsync();

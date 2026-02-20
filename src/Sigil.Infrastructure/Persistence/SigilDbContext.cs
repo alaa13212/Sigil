@@ -25,6 +25,8 @@ internal class SigilDbContext(DbContextOptions<SigilDbContext> options) : SaveSu
     public DbSet<EventFilter> EventFilters => Set<EventFilter>();
     public DbSet<MergeSet> MergeSets => Set<MergeSet>();
     public DbSet<IssueBookmark> IssueBookmarks => Set<IssueBookmark>();
+    public DbSet<AlertRule> AlertRules => Set<AlertRule>();
+    public DbSet<AlertHistory> AlertHistory => Set<AlertHistory>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

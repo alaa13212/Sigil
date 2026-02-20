@@ -1,0 +1,175 @@
+@page "/projects/{ProjectId:int}/settings/alerts"
+@attribute [Authorize]
+@using Sigil.Application.Models.Alerts
+@inject IAlertService AlertService
+
+@layout ProjectSettingsLayout
+
+<PageTitle>Alerts — Sigil</PageTitle>
+
+<div class="max-w-3xl space-y-6">
+    <div class="flex items-center justify-between">
+        <h2 class="text-lg font-bold">Alert Rules</h2>
+        <button class="btn btn-primary btn-sm" @onclick="OpenCreate">+ New Rule</button>
+    </div>
+
+    @if (loading)
+    {
+        <div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>
+    }
+    else if (rules.Count == 0)
+    {
+        <EmptyState Title="No alert rules" Description="Create a rule to get notified when issues meet certain conditions." />
+    }
+    else
+    {
+        <div class="space-y-3">
+            @foreach (var rule in rules)
+            {
+                <div class="card bg-base-200">
+                    <div class="card-body p-4">
+                        <div class="flex items-start justify-between gap-4">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="font-semibold">@rule.Name</span>
+                                    <span class="badge badge-sm @(rule.Enabled ? "badge-success" : "badge-ghost")">
+                                        @(rule.Enabled ? "Enabled" : "Disabled")
+                                    </span>
+                                    <span class="badge badge-sm badge-neutral">@FormatTrigger(rule.Trigger)</span>
+                                    <span class="badge badge-sm badge-neutral">@rule.Channel</span>
+                                </div>
+                                <div class="text-xs opacity-60 mt-1 space-x-3">
+                                    @if (rule.ThresholdCount.HasValue && rule.ThresholdWindow.HasValue)
+                                    {
+                                        <span>Threshold: @rule.ThresholdCount events in @FormatWindow(rule.ThresholdWindow.Value)</span>
+                                    }
+                                    @if (rule.MinSeverity.HasValue)
+                                    {
+                                        <span>Min severity: @rule.MinSeverity</span>
+                                    }
+                                    <span>Cooldown: @FormatWindow(rule.CooldownPeriod)</span>
+                                </div>
+                            </div>
+                            <div class="flex gap-1 shrink-0">
+                                <button class="btn btn-ghost btn-xs" @onclick="() => TestRule(rule)" disabled="@(testingId == rule.Id)">
+                                    @if (testingId == rule.Id)
+                                    {
+                                        <span class="loading loading-spinner loading-xs"></span>
+                                    }
+                                    else
+                                    {
+                                        <span>Test</span>
+                                    }
+                                </button>
+                                <button class="btn btn-ghost btn-xs" @onclick="() => OpenEdit(rule)">Edit</button>
+                                <button class="btn btn-ghost btn-xs text-error" @onclick="() => DeleteRule(rule.Id)">Delete</button>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(testFeedback) && testingId == 0 && lastTestedId == rule.Id)
+                        {
+                            <div class="text-xs mt-1 @(testSuccess ? "text-success" : "text-error")">@testFeedback</div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<AlertRuleModal IsOpen="showModal"
+                ProjectId="ProjectId"
+                EditingRule="editingRule"
+                OnSaved="OnRuleSaved"
+                OnClosed="CloseModal" />
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+
+    private List<AlertRuleResponse> rules = [];
+    private bool loading = true;
+    private bool showModal;
+    private AlertRuleResponse? editingRule;
+    private int testingId;
+    private int lastTestedId;
+    private string testFeedback = "";
+    private bool testSuccess;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        rules = await AlertService.GetRulesForProjectAsync(ProjectId);
+        loading = false;
+    }
+
+    private void OpenCreate()
+    {
+        editingRule = null;
+        showModal = true;
+    }
+
+    private void OpenEdit(AlertRuleResponse rule)
+    {
+        editingRule = rule;
+        showModal = true;
+    }
+
+    private void CloseModal() => showModal = false;
+
+    private void OnRuleSaved(AlertRuleResponse saved)
+    {
+        if (editingRule is null)
+        {
+            rules.Add(saved);
+        }
+        else
+        {
+            var idx = rules.FindIndex(r => r.Id == saved.Id);
+            if (idx >= 0) rules[idx] = saved;
+        }
+        showModal = false;
+    }
+
+    private async Task DeleteRule(int ruleId)
+    {
+        await AlertService.DeleteRuleAsync(ruleId);
+        rules.RemoveAll(r => r.Id == ruleId);
+    }
+
+    private async Task TestRule(AlertRuleResponse rule)
+    {
+        testingId = rule.Id;
+        testFeedback = "";
+        try
+        {
+            await AlertService.SendTestAlertAsync(rule.Id);
+            testSuccess = true;
+            testFeedback = "Test alert sent successfully.";
+        }
+        catch
+        {
+            testSuccess = false;
+            testFeedback = "Test alert failed.";
+        }
+        finally
+        {
+            lastTestedId = rule.Id;
+            testingId = 0;
+        }
+    }
+
+    private static string FormatTrigger(AlertTrigger t) => t switch
+    {
+        AlertTrigger.NewIssue          => "New Issue",
+        AlertTrigger.IssueRegression   => "Issue Regression",
+        AlertTrigger.ThresholdExceeded => "Threshold Exceeded",
+        AlertTrigger.NewHighSeverity   => "New High-Severity Issue",
+        _                              => t.ToString()
+    };
+
+    private static string FormatWindow(TimeSpan ts)
+    {
+        if (ts.TotalDays >= 1) return $"{ts.TotalDays:F0}d";
+        if (ts.TotalHours >= 1) return $"{ts.TotalHours:F0}h";
+        return $"{ts.TotalMinutes:F0}m";
+    }
+}
