@@ -4,5 +4,5 @@ namespace Sigil.Domain.Interfaces;
 
 public interface IEventParser
 {
-    List<ParsedEvent> Parse(string rawEnvelope, DateTime receivedAt);
+    List<ParsedEvent> Parse(int projectId, string rawEnvelope, DateTime receivedAt);
 }

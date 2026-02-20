@@ -1,0 +1,255 @@
+@page "/projects/{ProjectId:int}/settings/auto-tags"
+@attribute [Authorize]
+@using Sigil.Application.Models.AutoTags
+@inject IAutoTagService AutoTagService
+
+@layout ProjectSettingsLayout
+
+<PageTitle>Auto Tags — Sigil</PageTitle>
+
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-lg font-bold">Auto-Tag Rules</h2>
+            <p class="text-sm opacity-60 mt-1">Rules are evaluated in priority order (highest first). Matching events get the specified tag applied before storage.</p>
+        </div>
+        <button class="btn btn-primary btn-sm" @onclick="() => showAddForm = !showAddForm">
+            @(showAddForm ? "Cancel" : "Add Rule")
+        </button>
+    </div>
+
+    @if (showAddForm)
+    {
+        <div class="card bg-base-200">
+            <div class="card-body p-5 space-y-4">
+                <h2 class="font-semibold text-base">New Rule</h2>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Field</legend>
+                        <input type="text" class="input input-sm w-full font-mono"
+                               placeholder="exceptionType, message, release…"
+                               list="autotag-fields"
+                               @bind="newField" />
+                        <p class="fieldset-label text-xs block">
+                            Available: <code>exceptionType</code>, <code>message</code>, <code>normalizedMessage</code>, <code>release</code>,<br />
+                            <code>environment</code>, <code>logger</code>, <code>level</code>, <code>culprit</code>, <code>stacktrace</code>, <code>tag:key</code>
+                        </p>
+                    </fieldset>
+
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Operator</legend>
+                        <select class="select select-sm w-full" @bind="newOperator">
+                            @foreach (var op in Enum.GetValues<FilterOperator>())
+                            {
+                                <option value="@op">@op</option>
+                            }
+                        </select>
+                    </fieldset>
+
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Value</legend>
+                        <input type="text" class="input input-sm w-full font-mono"
+                               placeholder="Pattern to match…"
+                               @bind="newValue" />
+                    </fieldset>
+
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Priority</legend>
+                        <input type="number" class="input input-sm w-full" @bind="newPriority" min="0" />
+                        <p class="fieldset-label text-xs">Lower number = applied first</p>
+                    </fieldset>
+
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Tag Key</legend>
+                        <input type="text" class="input input-sm w-full font-mono"
+                               placeholder="e.g. category" pattern="[a-z0-9\-]"
+                               @bind="newTagKey" />
+                    </fieldset>
+
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Tag Value</legend>
+                        <input type="text" class="input input-sm w-full font-mono"
+                               placeholder="e.g. database-error" pattern="[a-z0-9\-]"
+                               @bind="newTagValue" />
+                    </fieldset>
+
+                    <fieldset class="fieldset sm:col-span-2">
+                        <legend class="fieldset-legend">Description <span class="opacity-50">(optional)</span></legend>
+                        <input type="text" class="input input-sm w-full"
+                               placeholder="What does this rule do?"
+                               @bind="newDescription" />
+                    </fieldset>
+                </div>
+
+                @if (!string.IsNullOrEmpty(formError))
+                {
+                    <div class="alert alert-error text-sm py-2">@formError</div>
+                }
+
+                <div class="flex gap-2">
+                    <button class="btn btn-primary btn-sm" @onclick="AddRule" disabled="@saving">
+                        @(saving ? "Saving…" : "Add Rule")
+                    </button>
+                    <button class="btn btn-ghost btn-sm" @onclick="() => showAddForm = false">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (loading)
+    {
+        <div class="flex justify-center py-8">
+            <span class="loading loading-spinner"></span>
+        </div>
+    }
+    else if (rules.Count == 0)
+    {
+        <EmptyState Title="No auto-tag rules" Description="Add a rule to automatically tag events during ingestion." />
+    }
+    else
+    {
+        <div class="card bg-base-200">
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Description</th>
+                            <th>Condition</th>
+                            <th>Applies Tag</th>
+                            <th>Priority</th>
+                            <th>Enabled</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var rule in rules)
+                        {
+                            <tr>
+                                <td class="opacity-70">@(rule.Description ?? "—")</td>
+                                <td class="font-mono text-xs">
+                                    <span class="opacity-70">@rule.Field</span>
+                                    <span class="badge badge-xs badge-ghost mx-1">@rule.Operator</span>
+                                    <span title="@rule.Value">@TruncateValue(rule.Value)</span>
+                                </td>
+                                <td class="font-mono text-xs">
+                                    <span class="badge badge-sm badge-neutral">@rule.TagKey</span>
+                                    <span class="opacity-50 mx-1">=</span>
+                                    <span>@rule.TagValue</span>
+                                </td>
+                                <td class="text-sm">@rule.Priority</td>
+                                <td>
+                                    <input type="checkbox" class="toggle toggle-sm"
+                                           checked="@rule.Enabled"
+                                           @onchange="() => ToggleEnabled(rule)" />
+                                </td>
+                                <td>
+                                    <button class="btn btn-ghost btn-xs text-error"
+                                            @onclick="() => DeleteRule(rule.Id)">
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+<datalist id="autotag-fields">
+    <option value="exceptionType" />
+    <option value="message" />
+    <option value="normalizedMessage" />
+    <option value="release" />
+    <option value="environment" />
+    <option value="logger" />
+    <option value="level" />
+    <option value="culprit" />
+    <option value="stacktrace" />
+    <option value="tag:" />
+</datalist>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+
+    private List<AutoTagRuleResponse> rules = [];
+    private bool loading = true;
+    private bool saving;
+    private bool showAddForm;
+    private string? formError;
+
+    private string newField = "";
+    private FilterOperator newOperator = FilterOperator.Contains;
+    private string newValue = "";
+    private string newTagKey = "";
+    private string newTagValue = "";
+    private int newPriority;
+    private string? newDescription;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        try { rules = await AutoTagService.GetRulesForProjectAsync(ProjectId); }
+        catch { rules = []; }
+        loading = false;
+    }
+
+    private async Task AddRule()
+    {
+        if (string.IsNullOrWhiteSpace(newField)) { formError = "Field is required."; return; }
+        if (string.IsNullOrWhiteSpace(newValue)) { formError = "Value is required."; return; }
+        if (string.IsNullOrWhiteSpace(newTagKey)) { formError = "Tag key is required."; return; }
+        if (string.IsNullOrWhiteSpace(newTagValue)) { formError = "Tag value is required."; return; }
+
+        saving = true;
+        formError = null;
+        try
+        {
+            var request = new CreateAutoTagRuleRequest(
+                newField.Trim(), newOperator, newValue.Trim(),
+                newTagKey.Trim(), newTagValue.Trim(),
+                true, newPriority, newDescription?.Trim());
+            rules.Add(await AutoTagService.CreateRuleAsync(ProjectId, request));
+            rules.Sort((r1, r2) => r2.Priority - r1.Priority);
+            newField = ""; newValue = ""; newTagKey = ""; newTagValue = "";
+            newDescription = null; newPriority = 0;
+            newOperator = FilterOperator.Contains;
+            showAddForm = false;
+        }
+        catch { formError = "Failed to create rule."; }
+        finally { saving = false; }
+    }
+
+    private async Task ToggleEnabled(AutoTagRuleResponse rule)
+    {
+        try
+        {
+            var request = new UpdateAutoTagRuleRequest(
+                rule.Field, rule.Operator, rule.Value,
+                rule.TagKey, rule.TagValue,
+                !rule.Enabled, rule.Priority, rule.Description);
+            var updated = await AutoTagService.UpdateRuleAsync(rule.Id, request);
+            if (updated is not null)
+            {
+                var idx = rules.IndexOf(rule);
+                if (idx >= 0) rules[idx] = updated;
+            }
+        }
+        catch { /* keep current state */ }
+    }
+
+    private async Task DeleteRule(int ruleId)
+    {
+        try
+        {
+            if (await AutoTagService.DeleteRuleAsync(ruleId))
+                rules.RemoveAll(r => r.Id == ruleId);
+        }
+        catch { /* ignore */ }
+    }
+
+    private static string TruncateValue(string value) =>
+        value.Length > 30 ? value[..27] + "…" : value;
+}

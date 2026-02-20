@@ -5,8 +5,9 @@ namespace Sigil.Application.Services;
 
 public class FingerprintEventEnricher(IFingerprintGenerator fingerprintGenerator) : IEventEnricher
 {
-    public void Enrich(ParsedEvent parsedEvent)
+    public Task Enrich(ParsedEvent parsedEvent, int projectId)
     {
         parsedEvent.Fingerprint = fingerprintGenerator.GenerateFingerprint(parsedEvent);
+        return Task.CompletedTask;
     }
 }

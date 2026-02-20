@@ -14,7 +14,7 @@ public class PredefinedTagsEnricher : IEventEnricher
    private const string TagRuntime = "runtime";
    private const string TagRuntimeName = "runtime.name";
    
-   public void Enrich(ParsedEvent parsedEvent)
+   public Task Enrich(ParsedEvent parsedEvent, int projectId)
    {
        parsedEvent.Tags ??= [];
        
@@ -34,5 +34,6 @@ public class PredefinedTagsEnricher : IEventEnricher
            parsedEvent.Tags[TagRuntimeName] = runtime.Name;
        }
 
+       return Task.CompletedTask;
    }
 }

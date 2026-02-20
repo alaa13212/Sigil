@@ -6,11 +6,13 @@ namespace Sigil.Application.Services;
 
 public class NormalizedMessageEnricher(IMessageNormalizer normalizer) : IEventEnricher
 {
-    public void Enrich(ParsedEvent parsedEvent)
+    public Task Enrich(ParsedEvent parsedEvent, int projectId)
     {
         if (!parsedEvent.Message.IsNullOrEmpty())
         {
             parsedEvent.NormalizedMessage = normalizer.NormalizeMessage(parsedEvent.Message);
         }
+        
+        return Task.CompletedTask;
     }
 }

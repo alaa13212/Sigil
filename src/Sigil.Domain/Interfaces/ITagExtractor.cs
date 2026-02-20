@@ -4,5 +4,5 @@ namespace Sigil.Domain.Interfaces;
 
 public interface IEventEnricher
 {
-    void Enrich(ParsedEvent parsedEvent);
+    Task Enrich(ParsedEvent parsedEvent, int projectId);
 }

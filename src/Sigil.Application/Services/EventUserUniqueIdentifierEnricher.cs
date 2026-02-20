@@ -7,14 +7,14 @@ namespace Sigil.Application.Services;
 
 public class EventUserUniqueIdentifierEnricher(IHashGenerator hashGenerator) : IEventEnricher
 {
-    public void Enrich(ParsedEvent parsedEvent)
+    public Task Enrich(ParsedEvent parsedEvent, int projectId)
     {
         if (parsedEvent.User != null)
         {
             if (parsedEvent.User.Id.IsNullOrEmpty() && parsedEvent.User.Username.IsNullOrEmpty() && parsedEvent.User.Email.IsNullOrEmpty() && parsedEvent.User.IpAddress.IsNullOrEmpty())
             {
                 parsedEvent.User = null;
-                return;
+                return Task.CompletedTask;
             }
             
             string? uniqueIdentifier = null;
@@ -29,5 +29,7 @@ public class EventUserUniqueIdentifierEnricher(IHashGenerator hashGenerator) : I
 
             parsedEvent.User.UniqueIdentifier = hashGenerator.ComputeHash(uniqueIdentifier!);
         }
+        
+        return Task.CompletedTask;
     }
 }

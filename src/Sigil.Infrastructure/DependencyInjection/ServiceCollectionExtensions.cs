@@ -55,14 +55,18 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDigestionMonitorService, DigestionMonitorService>();
         services.AddScoped<IPasskeyService, PasskeyService>();
         services.AddScoped<IEventFilterService, EventFilterService>();
+        services.AddScoped<IAutoTagService, AutoTagService>();
         services.AddScoped<IMergeSetService, MergeSetService>();
         services.AddScoped<IBookmarkService, BookmarkService>();
         services.AddScoped<IAlertService, AlertService>();
+        
         services.AddHttpClient<SlackAlertSender>();
         services.AddHttpClient<WebhookAlertSender>();
-        services.AddScoped<IAlertSender>(sp => sp.GetRequiredService<SlackAlertSender>());
-        services.AddScoped<IAlertSender>(sp => sp.GetRequiredService<WebhookAlertSender>());
+        services.AddScoped<IAlertSender>(UseExisting<SlackAlertSender>);
+        services.AddScoped<IAlertSender>(UseExisting<WebhookAlertSender>);
 
+        services.AddScoped<IEventEnricher, AutoTagsEventEnricher>();
+        
         services.AddIdentityServices();
         services.AddPasskeyServices();
         services.AddCaches();
@@ -81,6 +85,7 @@ public static class ServiceCollectionExtensions
             options.Add<IIssueCache>(10_000, TimeSpan.FromMinutes(2));
             options.Add<IEventUserCache>(20_000, TimeSpan.FromMinutes(5));
             options.Add<IEventFilterCache>(500, TimeSpan.FromMinutes(5));
+            options.Add<IAutoTagRuleCache>(500, TimeSpan.FromMinutes(5));
         });
 
         services.AddScoped<IAppConfigCache, AppConfigCache>();
@@ -90,6 +95,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IIssueCache, IssueCache>();
         services.AddScoped<IEventUserCache, EventUserCache>();
         services.AddScoped<IEventFilterCache, EventFilterCache>();
+        services.AddScoped<IAutoTagRuleCache, AutoTagRuleCache>();
     }
     
     private static void AddIdentityServices(this IServiceCollection services)

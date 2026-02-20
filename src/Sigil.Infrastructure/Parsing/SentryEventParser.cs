@@ -9,7 +9,7 @@ namespace Sigil.infrastructure.Parsing;
 
 internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSerializerOptions jsonSerializerOptions) : IEventParser
 {
-    public List<ParsedEvent> Parse(string rawEnvelope, DateTime receivedAt)
+    public List<ParsedEvent> Parse(int projectId, string rawEnvelope, DateTime receivedAt)
     {
         using var reader = new StringReader(rawEnvelope);
         string envelopeHeaderLine = reader.ReadLine()!;
@@ -30,7 +30,7 @@ internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSeri
                 parsedEvent.ReceivedAt = receivedAt;
 
                 foreach (var enricher in enrichers)
-                    enricher.Enrich(parsedEvent);
+                    enricher.Enrich(parsedEvent, projectId);
 
                 events.Add(parsedEvent);
             }
