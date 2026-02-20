@@ -13,9 +13,9 @@ public class ApiMergeSetService(HttpClient http) : IMergeSetService
         return (await response.Content.ReadFromJsonAsync<MergeSetResponse>())!;
     }
 
-    public async Task<MergeSetResponse> AddIssueAsync(int mergeSetId, int issueId, Guid userId)
+    public async Task<MergeSetResponse> BulkAddIssuesAsync(int mergeSetId, List<int> issueIds, Guid userId)
     {
-        var response = await http.PostAsJsonAsync($"api/merge-sets/{mergeSetId}/issues", new AddIssueToMergeSetRequest(issueId));
+        var response = await http.PostAsJsonAsync($"api/merge-sets/{mergeSetId}/issues/bulk", new BulkAddIssuesToMergeSetRequest(issueIds));
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<MergeSetResponse>())!;
     }

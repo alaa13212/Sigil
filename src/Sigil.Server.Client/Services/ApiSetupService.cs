@@ -6,10 +6,20 @@ namespace Sigil.Server.Client.Services;
 
 public class ApiSetupService(HttpClient http) : ISetupService
 {
+    private static bool _setupStatusCache;
+    private static bool _migrationsCache;
+    
     public async Task<SetupStatus> GetSetupStatusAsync()
     {
-        return await http.GetFromJsonAsync<SetupStatus>("api/setup/status")
-               ?? new SetupStatus(false);
+        if(_setupStatusCache)
+            return new SetupStatus(true);
+        
+        SetupStatus? status = await http.GetFromJsonAsync<SetupStatus>("api/setup/status");
+
+        if (status is { IsComplete: true })
+            _setupStatusCache = true;
+        
+        return status ?? new SetupStatus(false);
     }
 
     public async Task<DbStatusResponse> GetDbStatusAsync()
@@ -43,9 +53,15 @@ public class ApiSetupService(HttpClient http) : ISetupService
 
     public async Task<bool> HasPendingMigrationsAsync()
     {
+        if(_migrationsCache)
+            return false;
+        
         try
         {
             var result = await http.GetFromJsonAsync<HasPendingBody>("api/setup/maintenance/has-pending");
+            if(result is {HasPending: false})
+                _migrationsCache = true;
+            
             return result?.HasPending ?? false;
         }
         catch

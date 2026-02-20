@@ -62,27 +62,35 @@ internal class MergeSetService(
         return BuildResponse(mergeSet, issues);
     }
 
-    public async Task<MergeSetResponse> AddIssueAsync(int mergeSetId, int issueId, Guid userId)
+    public async Task<MergeSetResponse> BulkAddIssuesAsync(int mergeSetId, List<int> issueIds, Guid userId)
     {
+        if (issueIds.Count == 0)
+            throw new InvalidOperationException("No issue IDs provided.");
+
         var mergeSet = await dbContext.MergeSets.AsTracking()
-            .Include(m => m.Issues)
             .FirstOrDefaultAsync(m => m.Id == mergeSetId)
             ?? throw new InvalidOperationException("Merge set not found.");
 
-        var issue = await dbContext.Issues.AsTracking()
-            .FirstOrDefaultAsync(i => i.Id == issueId && i.ProjectId == mergeSet.ProjectId)
-            ?? throw new InvalidOperationException("Issue not found in this project.");
+        var issues = await dbContext.Issues.AsTracking()
+            .Where(i => issueIds.Contains(i.Id) && i.ProjectId == mergeSet.ProjectId)
+            .ToListAsync();
 
-        if (issue.MergeSetId != null)
-            throw new InvalidOperationException("Issue is already in a merge set.");
+        if (issues.Count != issueIds.Count)
+            throw new InvalidOperationException("One or more issues not found in this project.");
 
-        issue.MergeSetId = mergeSetId;
+        if (issues.Any(i => i.MergeSetId != null))
+            throw new InvalidOperationException("One or more issues are already in a merge set.");
+
+        foreach (var issue in issues)
+            issue.MergeSetId = mergeSetId;
+
         await dbContext.SaveChangesAsync();
         await RefreshAggregatesAsync([mergeSetId]);
 
-        await activityService.LogActivityAsync(issueId, userId, IssueActivityAction.Merged);
-        issueCache.InvalidateAll();
+        foreach (var issue in issues)
+            await activityService.LogActivityAsync(issue.Id, userId, IssueActivityAction.Merged);
 
+        issueCache.InvalidateAll();
         return await GetByIdAsync(mergeSetId) ?? throw new InvalidOperationException("Merge set not found.");
     }
 

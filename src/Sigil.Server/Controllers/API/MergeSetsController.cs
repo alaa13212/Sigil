@@ -34,14 +34,14 @@ public class MergeSetsController(IMergeSetService mergeSetService) : SigilContro
         return result is not null ? Ok(result) : NotFound();
     }
 
-    [HttpPost("api/merge-sets/{id:int}/issues")]
-    public async Task<IActionResult> AddIssue(int id, [FromBody] AddIssueToMergeSetRequest request)
+    [HttpPost("api/merge-sets/{id:int}/issues/bulk")]
+    public async Task<IActionResult> BulkAddIssues(int id, [FromBody] BulkAddIssuesToMergeSetRequest request)
     {
         var userId = GetUserId();
         if (userId is null) return Unauthorized();
         try
         {
-            var result = await mergeSetService.AddIssueAsync(id, request.IssueId, userId.Value);
+            var result = await mergeSetService.BulkAddIssuesAsync(id, request.IssueIds, userId.Value);
             return Ok(result);
         }
         catch (InvalidOperationException ex)

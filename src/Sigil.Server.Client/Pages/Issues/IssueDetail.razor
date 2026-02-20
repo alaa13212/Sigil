@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using Sigil.Application.Models.Issues
 @using Sigil.Application.Models.Events
+@using Sigil.Domain.Extensions
 @inject IIssueService IssueService
 @inject IMergeSetService MergeSetService
 @inject IBookmarkService BookmarkService
@@ -347,7 +348,12 @@ else
                         <div class="flex items-center justify-between">
                             <p class="text-sm opacity-60">Issues in this merge group. The primary issue's title and metadata represent the group.</p>
                         </div>
-
+                        @if(!memberActionError.IsNullOrEmpty())
+                        {
+                            <div role="alert" class="alert alert-warning">
+                                <span>@memberActionError</span>
+                            </div>
+                        }
                         <div class="card bg-base-200">
                             <div class="card-body p-4 space-y-3">
                                 @foreach (var member in issue.MergeSet.Members.OrderByDescending(m => m.IsPrimary))
@@ -920,9 +926,8 @@ else
 
             if (issue?.MergeSet is not null)
             {
-                // Already in a merge set — add each selected issue
-                foreach (var id in similarSelected)
-                    await MergeSetService.AddIssueAsync(issue.MergeSet.Id, id, Guid.Empty);
+                // Already in a merge set — add all selected issues
+                await MergeSetService.BulkAddIssuesAsync(issue.MergeSet.Id, similarSelected.ToList(), Guid.Empty);
             }
             else
             {

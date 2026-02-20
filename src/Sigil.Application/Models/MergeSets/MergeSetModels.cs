@@ -14,6 +14,6 @@ public record MergeSetMember(
 
 public record CreateMergeSetRequest(List<int> IssueIds);
 
-public record AddIssueToMergeSetRequest(int IssueId);
+public record BulkAddIssuesToMergeSetRequest(List<int> IssueIds);
 
 public record SetPrimaryRequest(int IssueId);
