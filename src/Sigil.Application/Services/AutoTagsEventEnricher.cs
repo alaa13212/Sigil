@@ -3,7 +3,7 @@ using Sigil.Domain.Entities;
 using Sigil.Domain.Ingestion;
 using Sigil.Domain.Interfaces;
 
-namespace Sigil.infrastructure.Services;
+namespace Sigil.Application.Services;
 
 internal class AutoTagsEventEnricher(IAutoTagService autoTagService) : IEventEnricher
 {

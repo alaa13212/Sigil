@@ -65,8 +65,6 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<WebhookAlertSender>();
         services.AddScoped<IAlertSender>(UseExisting<SlackAlertSender>);
         services.AddScoped<IAlertSender>(UseExisting<WebhookAlertSender>);
-
-        services.AddScoped<IEventEnricher, AutoTagsEventEnricher>();
         
         services.AddIdentityServices();
         services.AddPasskeyServices();
