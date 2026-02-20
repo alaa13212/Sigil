@@ -8,7 +8,7 @@ using Sigil.Domain.Enums;
 
 namespace Sigil.infrastructure.Persistence;
 
-internal class ProjectService(SigilDbContext dbContext, IAppConfigService appConfigService, IProjectCache projectCache) : IProjectService
+internal class ProjectService(SigilDbContext dbContext, IAppConfigService appConfigService, INormalizationRuleService normalizationRuleService, IProjectCache projectCache) : IProjectService
 {
     public async Task<Project> CreateProjectAsync(string name, Platform platform, int? teamId = null)
     {
@@ -17,8 +17,10 @@ internal class ProjectService(SigilDbContext dbContext, IAppConfigService appCon
             Name = name,
             Platform = platform,
             ApiKey = RandomNumberGenerator.GetHexString(32).ToLower(),
-            TeamId = teamId
+            TeamId = teamId,
+            Rules = normalizationRuleService.CreateDefaultRulesPreset()
         };
+        project.Rules.ForEach(r => r.Project = project);
 
         dbContext.Projects.Add(project);
         await dbContext.SaveChangesAsync();

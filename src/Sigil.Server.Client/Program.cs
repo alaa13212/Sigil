@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Sigil.Application.Interfaces;
+using Sigil.Application.Services;
+using Sigil.Domain.Interfaces;
 using Sigil.Server.Client.Auth;
 using Sigil.Server.Client.Services;
 
@@ -28,6 +30,8 @@ builder.Services.AddScoped<IMergeSetService, ApiMergeSetService>();
 builder.Services.AddScoped<IBookmarkService, ApiBookmarkService>();
 builder.Services.AddScoped<IAlertService, ApiAlertService>();
 builder.Services.AddScoped<IAutoTagService, ApiAutoTagService>();
+builder.Services.AddScoped<INormalizationRuleService, ApiNormalizationRuleService>();
+builder.Services.AddScoped<IMessageNormalizer, MessageNormalizer>();
 builder.Services.AddScoped<IReleaseHealthService, ApiReleaseHealthService>();
 
 await builder.Build().RunAsync();

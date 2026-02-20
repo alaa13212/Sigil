@@ -28,6 +28,7 @@ internal class SigilDbContext(DbContextOptions<SigilDbContext> options) : SaveSu
     public DbSet<AlertRule> AlertRules => Set<AlertRule>();
     public DbSet<AlertHistory> AlertHistory => Set<AlertHistory>();
     public DbSet<AutoTagRule> AutoTagRules => Set<AutoTagRule>();
+    public DbSet<TextNormalizationRule> TextNormalizationRules => Set<TextNormalizationRule>();
     public DbSet<ProjectRecommendation> ProjectRecommendations => Set<ProjectRecommendation>();
 
     protected override void OnModelCreating(ModelBuilder builder)

@@ -1,0 +1,225 @@
+@page "/projects/{ProjectId:int}/settings/normalization"
+@attribute [Authorize]
+@using Sigil.Application.Models.NormalizationRules
+@using Sigil.Domain.Entities
+@using Sigil.Domain.Interfaces
+@inject INormalizationRuleService NormalizationService
+@inject IMessageNormalizer MessageNormalizer
+
+@layout ProjectSettingsLayout
+
+<PageTitle>Message Normalization — Sigil</PageTitle>
+
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-lg font-bold">Message Normalization Rules</h2>
+            <p class="text-sm opacity-60 mt-1">Custom rules are applied after the built-in defaults (UUIDs, numbers, emails, etc.). Lower priority number = applied first.</p>
+        </div>
+        <button class="btn btn-primary btn-sm" @onclick="() => showAddForm = !showAddForm">
+            @(showAddForm ? "Cancel" : "Add Rule")
+        </button>
+    </div>
+
+    @if (showAddForm)
+    {
+        <div class="card bg-base-200">
+            <div class="card-body p-5 space-y-4">
+                <h2 class="font-semibold text-base">New Rule</h2>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Pattern <span class="opacity-50">(regex)</span></legend>
+                        <input type="text" class="input input-sm w-full font-mono"
+                               placeholder="e.g. \border-\d+"
+                               @bind="newPattern" />
+                    </fieldset>
+
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Replacement</legend>
+                        <input type="text" class="input input-sm w-full font-mono"
+                               placeholder="e.g. {order_id}"
+                               @bind="newReplacement" />
+                    </fieldset>
+
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Priority</legend>
+                        <input type="number" class="input input-sm w-full" @bind="newPriority" min="0" />
+                        <p class="fieldset-label text-xs">Lower number = applied first</p>
+                    </fieldset>
+
+                    <fieldset class="fieldset sm:col-span-2">
+                        <legend class="fieldset-legend">Description <span class="opacity-50">(optional)</span></legend>
+                        <input type="text" class="input input-sm w-full"
+                               placeholder="What does this rule normalize?"
+                               @bind="newDescription" />
+                    </fieldset>
+                </div>
+
+                @if (!string.IsNullOrEmpty(formError))
+                {
+                    <div class="alert alert-error text-sm py-2">@formError</div>
+                }
+
+                <div class="flex gap-2">
+                    <button class="btn btn-primary btn-sm" @onclick="AddRule" disabled="@saving">
+                        @(saving ? "Saving…" : "Add Rule")
+                    </button>
+                    <button class="btn btn-ghost btn-sm" @onclick="() => showAddForm = false">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Preview -->
+    <div class="card bg-base-200">
+        <div class="card-body p-5 space-y-3">
+            <h2 class="font-semibold">Test Normalization</h2>
+            <p class="text-sm opacity-60">Enter a message to see how it looks after all normalization rules are applied.</p>
+            <div class="flex gap-2">
+                <input type="text" class="input input-sm flex-1 font-mono"
+                       placeholder="e.g. Failed to process order-12345 for user abc@example.com"
+                       @bind="previewInput" />
+                <button class="btn btn-ghost btn-sm" @onclick="RunPreview">Preview</button>
+            </div>
+            @if (previewResult is not null)
+            {
+                <div class="bg-base-300 rounded p-3 font-mono text-sm break-all">
+                    @previewResult
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (loading)
+    {
+        <div class="flex justify-center py-8">
+            <span class="loading loading-spinner"></span>
+        </div>
+    }
+    else if (rules.Count == 0)
+    {
+        <EmptyState Title="No custom rules" Description="Add a rule to normalize project-specific patterns like order IDs, user tokens, or internal codes." />
+    }
+    else
+    {
+        <div class="card bg-base-200">
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Description</th>
+                            <th>Pattern</th>
+                            <th>Replacement</th>
+                            <th>Priority</th>
+                            <th>Enabled</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var rule in rules)
+                        {
+                            <tr>
+                                <td class="opacity-70">@(rule.Description ?? "—")</td>
+                                <td class="font-mono text-xs" title="@rule.Pattern">@TruncateValue(rule.Pattern)</td>
+                                <td class="font-mono text-xs">@rule.Replacement</td>
+                                <td class="text-sm">@rule.Priority</td>
+                                <td>
+                                    <input type="checkbox" class="toggle toggle-sm"
+                                           checked="@rule.Enabled"
+                                           @onchange="() => ToggleEnabled(rule)" />
+                                </td>
+                                <td>
+                                    <button class="btn btn-ghost btn-xs text-error"
+                                            @onclick="() => DeleteRule(rule.Id)">
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+
+    private List<TextNormalizationRule> rules = [];
+    private bool loading = true;
+    private bool saving;
+    private bool showAddForm;
+    private string? formError;
+    private string previewInput = "";
+    private string? previewResult;
+
+    private string newPattern = "";
+    private string newReplacement = "";
+    private int newPriority;
+    private string? newDescription;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        try { rules = await NormalizationService.GetRulesAsync(ProjectId); }
+        catch { rules = []; }
+        loading = false;
+    }
+
+    private async Task AddRule()
+    {
+        if (string.IsNullOrWhiteSpace(newPattern)) { formError = "Pattern is required."; return; }
+        if (string.IsNullOrWhiteSpace(newReplacement)) { formError = "Replacement is required."; return; }
+
+        saving = true;
+        formError = null;
+        try
+        {
+            var request = new CreateNormalizationRuleRequest(
+                newPattern.Trim(), newReplacement.Trim(),
+                newPriority, true, newDescription?.Trim());
+            rules.Add(await NormalizationService.CreateRuleAsync(ProjectId, request));
+            rules.Sort((a, b) => b.Priority - a.Priority);
+            newPattern = ""; newReplacement = ""; newPriority = 0; newDescription = null;
+            showAddForm = false;
+        }
+        catch { formError = "Failed to create rule."; }
+        finally { saving = false; }
+    }
+
+    private async Task ToggleEnabled(TextNormalizationRule rule)
+    {
+        try
+        {
+            var request = new UpdateNormalizationRuleRequest(rule.Pattern, rule.Replacement, rule.Priority, !rule.Enabled, rule.Description);
+            
+            var updated = await NormalizationService.UpdateRuleAsync(rule.Id, request);
+            if (updated is not null)
+            {
+                var idx = rules.IndexOf(rule);
+                if (idx >= 0) rules[idx] = updated;
+            }
+        }
+        catch { /* keep current state */ }
+    }
+
+    private async Task DeleteRule(int ruleId)
+    {
+        try
+        {
+            if (await NormalizationService.DeleteRuleAsync(ruleId))
+                rules.RemoveAll(r => r.Id == ruleId);
+        }
+        catch { /* ignore */ }
+    }
+
+    private void RunPreview()
+    {
+        previewResult = MessageNormalizer.NormalizeMessage(rules, previewInput);
+    }
+
+    private static string TruncateValue(string value) =>
+        value.Length > 40 ? value[..37] + "…" : value;
+}

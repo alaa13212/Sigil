@@ -23,4 +23,7 @@ public class Project
     
     public ICollection<Issue> Issues { get; set; } = [];
     public ICollection<CapturedEvent> Events { get; set; } = [];
+    
+    [InverseProperty(nameof(TextNormalizationRule.Project))]
+    public List<TextNormalizationRule> Rules { get; set; } = [];
 }

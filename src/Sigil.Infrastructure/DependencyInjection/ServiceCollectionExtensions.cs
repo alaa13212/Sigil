@@ -56,6 +56,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPasskeyService, PasskeyService>();
         services.AddScoped<IEventFilterService, EventFilterService>();
         services.AddScoped<IAutoTagService, AutoTagService>();
+        services.AddScoped<INormalizationRuleService, NormalizationRuleService>();
         services.AddScoped<IMergeSetService, MergeSetService>();
         services.AddScoped<IBookmarkService, BookmarkService>();
         services.AddScoped<IAlertService, AlertService>();
@@ -87,6 +88,7 @@ public static class ServiceCollectionExtensions
             options.Add<IEventUserCache>(20_000, TimeSpan.FromMinutes(5));
             options.Add<IEventFilterCache>(500, TimeSpan.FromMinutes(5));
             options.Add<IAutoTagRuleCache>(500, TimeSpan.FromMinutes(5));
+            options.Add<INormalizationRuleCache>(500, TimeSpan.FromMinutes(5));
         });
 
         services.AddScoped<IAppConfigCache, AppConfigCache>();
@@ -97,6 +99,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEventUserCache, EventUserCache>();
         services.AddScoped<IEventFilterCache, EventFilterCache>();
         services.AddScoped<IAutoTagRuleCache, AutoTagRuleCache>();
+        services.AddScoped<INormalizationRuleCache, NormalizationRuleCache>();
     }
     
     private static void AddIdentityServices(this IServiceCollection services)

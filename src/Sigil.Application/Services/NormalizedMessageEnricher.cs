@@ -1,18 +1,19 @@
-﻿using Sigil.Domain.Extensions;
+using Sigil.Application.Interfaces;
+using Sigil.Domain.Entities;
+using Sigil.Domain.Extensions;
 using Sigil.Domain.Ingestion;
 using Sigil.Domain.Interfaces;
 
 namespace Sigil.Application.Services;
 
-public class NormalizedMessageEnricher(IMessageNormalizer normalizer) : IEventEnricher
+public class NormalizedMessageEnricher(IMessageNormalizer normalizer, INormalizationRuleService normalizationRuleService) : IEventEnricher
 {
-    public Task Enrich(ParsedEvent parsedEvent, int projectId)
+    public async Task Enrich(ParsedEvent parsedEvent, int projectId)
     {
         if (!parsedEvent.Message.IsNullOrEmpty())
         {
-            parsedEvent.NormalizedMessage = normalizer.NormalizeMessage(parsedEvent.Message);
+            List<TextNormalizationRule> rules = await normalizationRuleService.GetRawRulesAsync(projectId);
+            parsedEvent.NormalizedMessage = normalizer.NormalizeMessage(rules, parsedEvent.Message);
         }
-        
-        return Task.CompletedTask;
     }
 }

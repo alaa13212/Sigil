@@ -9,7 +9,7 @@ public static class ServiceCollectionExtensions
     public static void AddApplication(this IServiceCollection services)
     {
         services.AddScoped<IFingerprintGenerator, DefaultFingerprintGenerator>();
-        services.AddScoped<IMessageNormalizer, DefaultMessageNormalizer>();
+        services.AddScoped<IMessageNormalizer, MessageNormalizer>();
         
         services.AddScoped<IEventEnricher, PredefinedTagsEnricher>();
         services.AddScoped<IEventEnricher, NormalizedMessageEnricher>();
