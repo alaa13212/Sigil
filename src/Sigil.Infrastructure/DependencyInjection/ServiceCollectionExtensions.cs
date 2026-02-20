@@ -54,6 +54,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPasskeyService, PasskeyService>();
         services.AddScoped<IEventFilterService, EventFilterService>();
         services.AddScoped<IMergeSetService, MergeSetService>();
+        services.AddScoped<IBookmarkService, BookmarkService>();
 
         services.AddIdentityServices();
         services.AddPasskeyServices();

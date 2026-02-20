@@ -4,6 +4,7 @@
 @using Sigil.Application.Models.Events
 @inject IIssueService IssueService
 @inject IMergeSetService MergeSetService
+@inject IBookmarkService BookmarkService
 @inject IEventService EventService
 @inject IIssueActivityService ActivityService
 @inject NavigationManager Navigation
@@ -29,7 +30,16 @@ else
         <div class="flex-1 min-w-0 space-y-4">
             <!-- Title and exception type -->
             <div>
-                <h1 class="text-2xl font-bold break-words">@issue.Title</h1>
+                <div class="flex items-start gap-2">
+                    <h1 class="text-2xl font-bold break-words flex-1">@issue.Title</h1>
+                    <button class="btn btn-ghost btn-sm mt-0.5 shrink-0" @onclick="ToggleBookmark"
+                            title="@(isBookmarked ? "Remove bookmark" : "Bookmark this issue")">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 @(isBookmarked ? "text-warning" : "opacity-40")"
+                             fill="@(isBookmarked ? "currentColor" : "none")" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                        </svg>
+                    </button>
+                </div>
                 @if (!string.IsNullOrEmpty(issue.ExceptionType))
                 {
                     <div class="text-sm opacity-60 mt-1 font-mono">@issue.ExceptionType</div>
@@ -250,7 +260,7 @@ else
                                         <td>
                                             <a href="/projects/@ProjectId/issues/@IssueId/events/@evt.Id" class="stretched-link"><RelativeTime Value="evt.Timestamp"/></a>
                                         </td>
-                                        <td class="max-w-md truncate">@(evt.Message ?? "—")</td>
+                                        <td class="line-clamp-1">@(evt.Message ?? "—")</td>
                                         <td><SeverityBadge Level="evt.Level" /></td>
                                         <td class="text-sm opacity-70">@(evt.UserIdentifier ?? "—")</td>
                                         <td class="text-sm font-mono opacity-70">@(evt.Release ?? "—")</td>
@@ -326,7 +336,7 @@ else
                                                 {
                                                     <span class="badge badge-primary badge-sm">Primary</span>
                                                 }
-                                                <a href="/projects/@ProjectId/issues/@member.IssueId" class="font-semibold text-sm hover:underline truncate">
+                                                <a href="/projects/@ProjectId/issues/@member.IssueId" class="font-semibold text-sm hover:underline line-clamp-1">
                                                     @member.Title
                                                 </a>
                                             </div>
@@ -419,7 +429,7 @@ else
                                                        @onchange="e => ToggleSimilar(sim.Id, (bool)(e.Value ?? false))" />
                                             </td>
                                             <td>
-                                                <a href="/projects/@ProjectId/issues/@sim.Id" class="stretched-link after:start-12!" target="_blank"></a>
+                                                <a href="/projects/@ProjectId/issues/@sim.Id" class="stretched-link after:start-12! cursor-pointer" target="_blank"></a>
                                                 <div class="font-semibold text-sm">
                                                     @if (!string.IsNullOrEmpty(sim.ExceptionType))
                                                     {
@@ -558,7 +568,7 @@ else
                                     var pct = group.TotalCount > 0 ? (double)tagVal.Count / group.TotalCount * 100 : 0;
                                     <div class="space-y-0.5">
                                         <div class="flex justify-between text-xs">
-                                            <span class="font-mono truncate max-w-[210px]" title="@tagVal.Value">@tagVal.Value</span>
+                                            <span class="font-mono line-clamp-1" title="@tagVal.Value">@tagVal.Value</span>
                                             <span class="opacity-50 shrink-0 ml-2">@pct.ToString("F0")%</span>
                                         </div>
                                         <div class="w-full bg-base-300 rounded-full h-1">
@@ -606,6 +616,7 @@ else
     private Tab activeTab = Tab.Events;
     private int eventsPage = 1;
     private const int EventsPageSize = 50;
+    private bool isBookmarked;
 
     // Members tab state
     private bool memberActionLoading;
@@ -676,6 +687,8 @@ else
                 navigation = null;
                 breadcrumbs = [];
             }
+
+            isBookmarked = await BookmarkService.IsBookmarkedAsync(IssueId, Guid.Empty);
         }
         catch
         {
@@ -684,6 +697,11 @@ else
             navigation = null;
             breadcrumbs = [];
         }
+    }
+
+    private async Task ToggleBookmark()
+    {
+        isBookmarked = await BookmarkService.ToggleBookmarkAsync(IssueId, Guid.Empty);
     }
 
     private async Task NavigateEvent(long eventId)

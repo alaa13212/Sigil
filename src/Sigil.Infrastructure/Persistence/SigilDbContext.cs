@@ -24,6 +24,7 @@ internal class SigilDbContext(DbContextOptions<SigilDbContext> options) : SaveSu
     public DbSet<UserPasskey> Passkeys => Set<UserPasskey>();
     public DbSet<EventFilter> EventFilters => Set<EventFilter>();
     public DbSet<MergeSet> MergeSets => Set<MergeSet>();
+    public DbSet<IssueBookmark> IssueBookmarks => Set<IssueBookmark>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

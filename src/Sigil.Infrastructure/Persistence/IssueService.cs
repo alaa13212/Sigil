@@ -120,6 +120,9 @@ internal class IssueService(SigilDbContext dbContext, IEventRanker eventRanker, 
         if (query.AssignedToId.HasValue)
             q = q.Where(i => i.AssignedToId == query.AssignedToId.Value);
 
+        if (query.BookmarkedByUserId.HasValue)
+            q = q.Where(i => dbContext.IssueBookmarks.Any(b => b.IssueId == i.Id && b.UserId == query.BookmarkedByUserId.Value));
+
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var search = query.Search.ToLower();

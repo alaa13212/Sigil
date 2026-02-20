@@ -23,6 +23,7 @@ public class ApiIssueService(HttpClient http) : IIssueService
         qs["sortDesc"] = query.SortDescending.ToString().ToLower();
         qs["page"] = query.Page.ToString();
         qs["pageSize"] = query.PageSize.ToString();
+        if (query.Bookmarked) qs["bookmarked"] = "true";
 
         return await http.GetFromJsonAsync<PagedResponse<IssueSummary>>(
             $"api/projects/{projectId}/issues?{qs}") ?? new PagedResponse<IssueSummary>([], 0, 1, query.PageSize);

@@ -27,7 +27,8 @@ public class IssuesController(
         [FromQuery] IssueSortBy sortBy = IssueSortBy.LastSeen,
         [FromQuery] bool sortDesc = true,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 50)
+        [FromQuery] int pageSize = 50,
+        [FromQuery] bool bookmarked = false)
     {
         if (await projectService.GetProjectByIdAsync(projectId) is null)
             return NotFound();
@@ -42,7 +43,8 @@ public class IssuesController(
             SortBy = sortBy,
             SortDescending = sortDesc,
             Page = page,
-            PageSize = Math.Clamp(pageSize, 1, 100)
+            PageSize = Math.Clamp(pageSize, 1, 100),
+            BookmarkedByUserId = bookmarked ? GetUserId() : null
         };
 
         return Ok(await issueService.GetIssueSummariesAsync(projectId, query));

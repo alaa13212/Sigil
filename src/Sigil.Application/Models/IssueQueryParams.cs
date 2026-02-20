@@ -13,4 +13,8 @@ public record IssueQueryParams
     public bool SortDescending { get; init; } = true;
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 50;
+    public Guid? BookmarkedByUserId { get; init; }
+
+    // Client-side only: when true, server uses the current user's ID as BookmarkedByUserId
+    public bool Bookmarked { get; init; }
 }

@@ -125,7 +125,7 @@
                                         <td>@f.ProjectName</td>
                                         <td class="text-xs opacity-70 whitespace-nowrap">@f.ReceivedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
                                         <td class="text-xs text-error">
-                                            <div class="max-w-sm truncate" title="@f.Error">@f.Error</div>
+                                            <div class="line-clamp-1" title="@f.Error">@f.Error</div>
                                         </td>
                                         <td>
                                             <button class="btn btn-warning btn-xs" @onclick="() => RetrySingle(f.Id)" disabled="@retryingIds.Contains(f.Id)">

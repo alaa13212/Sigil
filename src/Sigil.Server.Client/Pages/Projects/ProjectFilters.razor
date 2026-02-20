@@ -126,7 +126,7 @@
                             <td class="opacity-70">@(filter.Description ?? "—")</td>
                             <td class="font-mono text-sm">@filter.Field</td>
                             <td class="text-sm">@filter.Operator</td>
-                            <td class="font-mono text-sm max-w-xs truncate" title="@filter.Value">@filter.Value</td>
+                            <td class="font-mono text-sm line-clamp-1" title="@filter.Value">@filter.Value</td>
                             <td>
                                 <span class="badge badge-sm badge-error">
                                     @filter.Action
