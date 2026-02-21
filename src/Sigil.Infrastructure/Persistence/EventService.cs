@@ -22,36 +22,45 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         return existing;
     }
 
-    public IEnumerable<CapturedEvent> BulkCreateEventsEntities(IEnumerable<ParsedEvent> capturedEvent, Project project,
+    public List<CapturedEvent> BulkCreateEventsEntities(IEnumerable<ParsedEvent> parsedEvents, Project project,
         Issue issue,
         Dictionary<string, Release> releases, Dictionary<string, EventUser> users,
-        Dictionary<string, TagValue> tagValues)
+        Dictionary<string, Dictionary<string, int>> tagValues)
     {
-        return capturedEvent.Select(e => new CapturedEvent
+        List<CapturedEvent> capturedEvents = new List<CapturedEvent>();
+        List<EventTag> eventTags = new List<EventTag>();
+        foreach (var parsedEvent in parsedEvents)
         {
-            EventId = e.EventId,
-            Timestamp = e.Timestamp,
-            ReceivedAt = e.ReceivedAt,
-            ProcessedAt = DateTime.UtcNow,
-            Message = e.Message,
-            Level = e.Level,
-            Logger = e.Logger,
-            Platform = e.Platform,
-            ReleaseId = e.Release != null ? releases[e.Release].Id : 0,
-            Extra = e.Extra,
-            ProjectId = project.Id,
-            Issue = issue,
-            UserId = e.User != null? users[e.User.UniqueIdentifier!].UniqueIdentifier : null,
-            StackFrames = MakeStackFrames(e),
-            Tags = MakeTags(e.Tags, tagValues),
-            RawCompressedJson = compressionService.CompressString(e.RawJson),
+            var capturedEvent = new CapturedEvent
+            {
+                EventId = parsedEvent.EventId,
+                Timestamp = parsedEvent.Timestamp,
+                ReceivedAt = parsedEvent.ReceivedAt,
+                ProcessedAt = DateTime.UtcNow,
+                Message = parsedEvent.Message,
+                Level = parsedEvent.Level,
+                Logger = parsedEvent.Logger,
+                Platform = parsedEvent.Platform,
+                ReleaseId = parsedEvent.Release != null ? releases[parsedEvent.Release].Id : 0,
+                Extra = parsedEvent.Extra,
+                ProjectId = project.Id,
+                Issue = issue,
+                UserId = parsedEvent.User != null ? users[parsedEvent.User.UniqueIdentifier!].UniqueIdentifier : null,
+                StackFrames = MakeStackFrames(parsedEvent),
+                RawCompressedJson = compressionService.CompressString(parsedEvent.RawJson),
+            };
+            
+            capturedEvents.Add(capturedEvent);
+            eventTags.AddRange(MakeTags(capturedEvent, parsedEvent.Tags, tagValues));                                                                                             
+        }
 
-        });
+        dbContext.Events.AddRange(capturedEvents);
+        dbContext.EventTags.AddRange(eventTags);
+        return capturedEvents;
     }
 
-    public async Task<bool> SaveEventsAsync(IEnumerable<CapturedEvent> capturedEvents)
+    public async Task<bool> SaveEventsAsync()
     {
-        dbContext.Events.AddRange(capturedEvents);
         return await dbContext.SaveChangesAsync() > 0;
     }
 
@@ -187,12 +196,16 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         }).ToList();
     }
 
-    private static ICollection<TagValue> MakeTags(Dictionary<string, string>? eventTags, Dictionary<string, TagValue> tagValues)
+    private static IEnumerable<EventTag> MakeTags(CapturedEvent capturedEvent, Dictionary<string, string>? eventTags, Dictionary<string, Dictionary<string, int>> tagValues)
     {
         if (eventTags.IsNullOrEmpty())
             return [];
 
-        return eventTags.Select(tag => tagValues[$"{tag.Key}:{tag.Value}"]).ToList();
+        return eventTags.Select(tag => new EventTag
+        {
+            Event = capturedEvent,
+            TagValueId = tagValues[tag.Key][tag.Value]
+        });
     }
 
     public async Task<PagedResponse<EventSummary>> GetEventSummariesAsync(int issueId, int page = 1, int pageSize = 50)

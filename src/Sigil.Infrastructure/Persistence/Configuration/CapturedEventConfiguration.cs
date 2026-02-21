@@ -10,6 +10,11 @@ internal class CapturedEventConfiguration : IEntityTypeConfiguration<CapturedEve
     {
         builder.HasIndex(e => e.EventId).IsUnique();
         builder.HasIndex(e => new { e.IssueId, e.Timestamp });
+        
+        builder
+            .HasMany(e => e.Tags)
+            .WithMany(t => t.Events)
+            .UsingEntity<EventTag>();
     }
 }
 

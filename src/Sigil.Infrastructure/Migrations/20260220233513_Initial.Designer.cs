@@ -26,21 +26,6 @@ namespace Sigil.infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("CapturedEventTagValue", b =>
-                {
-                    b.Property<long>("EventsId")
-                        .HasColumnType("bigint");
-
-                    b.Property<int>("TagsId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("EventsId", "TagsId");
-
-                    b.HasIndex("TagsId");
-
-                    b.ToTable("CapturedEventTagValue");
-                });
-
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
                 {
                     b.Property<Guid>("Id")
@@ -445,6 +430,21 @@ namespace Sigil.infrastructure.Migrations
                     b.HasIndex("ProjectId", "Priority");
 
                     b.ToTable("EventFilters");
+                });
+
+            modelBuilder.Entity("Sigil.Domain.Entities.EventTag", b =>
+                {
+                    b.Property<long>("EventId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("TagValueId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("EventId", "TagValueId");
+
+                    b.HasIndex("TagValueId");
+
+                    b.ToTable("EventTags");
                 });
 
             modelBuilder.Entity("Sigil.Domain.Entities.EventUser", b =>
@@ -990,19 +990,12 @@ namespace Sigil.infrastructure.Migrations
                     b.Property<int>("ProjectId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("ProjectId1")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Replacement")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ProjectId");
-
-                    b.HasIndex("ProjectId1");
 
                     b.HasIndex("ProjectId", "Priority");
 
@@ -1140,21 +1133,6 @@ namespace Sigil.infrastructure.Migrations
                     b.ToTable("Passkeys");
                 });
 
-            modelBuilder.Entity("CapturedEventTagValue", b =>
-                {
-                    b.HasOne("Sigil.Domain.Entities.CapturedEvent", null)
-                        .WithMany()
-                        .HasForeignKey("EventsId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Sigil.Domain.Entities.TagValue", null)
-                        .WithMany()
-                        .HasForeignKey("TagsId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", null)
@@ -1286,6 +1264,25 @@ namespace Sigil.infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("Sigil.Domain.Entities.EventTag", b =>
+                {
+                    b.HasOne("Sigil.Domain.Entities.CapturedEvent", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Sigil.Domain.Entities.TagValue", "TagValue")
+                        .WithMany()
+                        .HasForeignKey("TagValueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Event");
+
+                    b.Navigation("TagValue");
                 });
 
             modelBuilder.Entity("Sigil.Domain.Entities.Issue", b =>
@@ -1480,14 +1477,10 @@ namespace Sigil.infrastructure.Migrations
             modelBuilder.Entity("Sigil.Domain.Entities.TextNormalizationRule", b =>
                 {
                     b.HasOne("Sigil.Domain.Entities.Project", "Project")
-                        .WithMany()
+                        .WithMany("Rules")
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("Sigil.Domain.Entities.Project", null)
-                        .WithMany("Rules")
-                        .HasForeignKey("ProjectId1");
 
                     b.Navigation("Project");
                 });

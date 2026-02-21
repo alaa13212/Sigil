@@ -15,17 +15,11 @@ internal class TagService(SigilDbContext dbContext, ITagCache tagCache) : ITagSe
         if (keys.IsEmpty())
             return [];
         
-        var (results, misses) = tagCache.TryGetMany(keys, k =>
-        {
-            tagCache.TryGetKey(k, out var v);
-            if (v is not null) dbContext.Attach(v);
-            return v;
-        });
+        var(results, misses) = tagCache.TryGetMany(keys, k => tagCache.TryGetKey(k, out var v) ? v : null);
 
         if (misses.Count > 0)
         {
             var fromDb = await dbContext.TagKeys
-                .AsTracking()
                 .Include(tk => tk.Values)
                 .Where(tk => misses.Contains(tk.Key))
                 .ToListAsync();
@@ -40,7 +34,10 @@ internal class TagService(SigilDbContext dbContext, ITagCache tagCache) : ITagSe
             {
                 dbContext.TagKeys.AddRange(newKeys);
                 await dbContext.SaveChangesAsync();
+                
                 fromDb.AddRange(newKeys);
+                foreach (TagKey tagKey in newKeys)
+                    dbContext.Entry(tagKey).State = EntityState.Detached;
             }
 
             foreach (TagKey tagKey in fromDb)
@@ -48,6 +45,7 @@ internal class TagService(SigilDbContext dbContext, ITagCache tagCache) : ITagSe
 
             results.AddRange(fromDb);
         }
+        
 
         return results;
     }
@@ -57,13 +55,11 @@ internal class TagService(SigilDbContext dbContext, ITagCache tagCache) : ITagSe
         if (tags.IsEmpty())
             return [];
 
-        var (results, misses) = tagCache.TryGetMany(tags, tag =>
-        {
-            tagCache.TryGetValue(tag.Key, tag.Value, out var tagValue);
-            if (tagValue is not null)
-                dbContext.Attach(tagValue);
-            return tagValue;
-        });
+        List<TagValue>? results;
+        List<KeyValuePair<string, string>>? misses;
+        
+        (results, misses) = tagCache.TryGetMany(tags, tag => tagCache.TryGetValue(tag.Key, tag.Value, out var tagValue) ? tagValue : null);
+
 
         if (misses.Count > 0)
         {
@@ -78,7 +74,6 @@ internal class TagService(SigilDbContext dbContext, ITagCache tagCache) : ITagSe
 
             var keys = misses.Select(t => t.Key).Distinct().ToList();
             var candidates = await dbContext.TagValues
-                .AsTracking()
                 .Include(tv => tv.TagKey)
                 .Where(tv => keys.Contains(tv.TagKey!.Key))
                 .ToListAsync();
@@ -89,7 +84,7 @@ internal class TagService(SigilDbContext dbContext, ITagCache tagCache) : ITagSe
 
             List<TagValue> newTagValues = misses
                 .Where(t => !existing.Any(tv => tv.TagKey!.Key == t.Key && tv.Value == t.Value))
-                .Select(t => new TagValue { TagKey = allTagKeys[t.Key], Value = t.Value })
+                .Select(t => new TagValue { TagKeyId = allTagKeys[t.Key].Id, Value = t.Value })
                 .ToList();
 
             if (newTagValues.Any())
@@ -97,6 +92,9 @@ internal class TagService(SigilDbContext dbContext, ITagCache tagCache) : ITagSe
                 dbContext.TagValues.AddRange(newTagValues);
                 await dbContext.SaveChangesAsync();
                 existing.AddRange(newTagValues);
+                
+                foreach (TagValue tagValue in newTagValues)
+                    dbContext.Entry(tagValue).State = EntityState.Detached;
             }
 
             foreach (TagValue tagValue in existing)

@@ -9,7 +9,6 @@ public class TextNormalizationRule
     [Key]
     public int Id { get; set; }
 
-    [ForeignKey(nameof(Project))]
     public int ProjectId { get; set; }
     public Project? Project { get; set; }
 

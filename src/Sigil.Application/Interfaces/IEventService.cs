@@ -9,8 +9,10 @@ public interface IEventService
 {
     // Ingestion
     Task<HashSet<string>> FindExistingEventIdsAsync(IEnumerable<string> eventIds);
-    IEnumerable<CapturedEvent> BulkCreateEventsEntities(IEnumerable<ParsedEvent> capturedEvent, Project project, Issue issue, Dictionary<string, Release> releases, Dictionary<string, EventUser> users, Dictionary<string, TagValue> tagValues);
-    Task<bool> SaveEventsAsync(IEnumerable<CapturedEvent> capturedEvents);
+    List<CapturedEvent> BulkCreateEventsEntities(IEnumerable<ParsedEvent> parsedEvents, Project project, Issue issue,
+        Dictionary<string, Release> releases, Dictionary<string, EventUser> users,
+        Dictionary<string, Dictionary<string, int>> tagValues);
+    Task<bool> SaveEventsAsync();
 
     // Entity access (internal use)
     Task<CapturedEvent?> GetEventByIdAsync(long eventId, bool includeStackFrames = false, bool includeTags = false);

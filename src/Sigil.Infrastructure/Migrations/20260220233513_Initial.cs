@@ -475,8 +475,7 @@ namespace Sigil.infrastructure.Migrations
                     Priority = table.Column<int>(type: "integer", nullable: false),
                     Enabled = table.Column<bool>(type: "boolean", nullable: false),
                     Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    ProjectId1 = table.Column<int>(type: "integer", nullable: true)
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -487,11 +486,6 @@ namespace Sigil.infrastructure.Migrations
                         principalTable: "Projects",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_TextNormalizationRules_Projects_ProjectId1",
-                        column: x => x.ProjectId1,
-                        principalTable: "Projects",
-                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -513,24 +507,6 @@ namespace Sigil.infrastructure.Migrations
                         name: "FK_AlertHistory_AlertRules_AlertRuleId",
                         column: x => x.AlertRuleId,
                         principalTable: "AlertRules",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "CapturedEventTagValue",
-                columns: table => new
-                {
-                    EventsId = table.Column<long>(type: "bigint", nullable: false),
-                    TagsId = table.Column<int>(type: "integer", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CapturedEventTagValue", x => new { x.EventsId, x.TagsId });
-                    table.ForeignKey(
-                        name: "FK_CapturedEventTagValue_TagValues_TagsId",
-                        column: x => x.TagsId,
-                        principalTable: "TagValues",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -575,6 +551,30 @@ namespace Sigil.infrastructure.Migrations
                         column: x => x.ReleaseId,
                         principalTable: "Releases",
                         principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "EventTags",
+                columns: table => new
+                {
+                    EventId = table.Column<long>(type: "bigint", nullable: false),
+                    TagValueId = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_EventTags", x => new { x.EventId, x.TagValueId });
+                    table.ForeignKey(
+                        name: "FK_EventTags_Events_EventId",
+                        column: x => x.EventId,
+                        principalTable: "Events",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_EventTags_TagValues_TagValueId",
+                        column: x => x.TagValueId,
+                        principalTable: "TagValues",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -789,11 +789,6 @@ namespace Sigil.infrastructure.Migrations
                 columns: new[] { "ProjectId", "Priority" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_CapturedEventTagValue_TagsId",
-                table: "CapturedEventTagValue",
-                column: "TagsId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_EventFilters_ProjectId",
                 table: "EventFilters",
                 column: "ProjectId");
@@ -828,6 +823,11 @@ namespace Sigil.infrastructure.Migrations
                 name: "IX_Events_UserId",
                 table: "Events",
                 column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EventTags_TagValueId",
+                table: "EventTags",
+                column: "TagValueId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_EventUsers_UniqueIdentifier",
@@ -985,19 +985,9 @@ namespace Sigil.infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_TextNormalizationRules_ProjectId",
-                table: "TextNormalizationRules",
-                column: "ProjectId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_TextNormalizationRules_ProjectId_Priority",
                 table: "TextNormalizationRules",
                 columns: new[] { "ProjectId", "Priority" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_TextNormalizationRules_ProjectId1",
-                table: "TextNormalizationRules",
-                column: "ProjectId1");
 
             migrationBuilder.CreateIndex(
                 name: "IX_UserClaims_UserId",
@@ -1038,14 +1028,6 @@ namespace Sigil.infrastructure.Migrations
                 principalTable: "Issues",
                 principalColumn: "Id",
                 onDelete: ReferentialAction.SetNull);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_CapturedEventTagValue_Events_EventsId",
-                table: "CapturedEventTagValue",
-                column: "EventsId",
-                principalTable: "Events",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Cascade);
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Events_Issues_IssueId",
@@ -1101,7 +1083,7 @@ namespace Sigil.infrastructure.Migrations
                 name: "AutoTagRules");
 
             migrationBuilder.DropTable(
-                name: "CapturedEventTagValue");
+                name: "EventTags");
 
             migrationBuilder.DropTable(
                 name: "IssueActivities");

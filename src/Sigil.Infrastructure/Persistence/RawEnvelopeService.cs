@@ -27,7 +27,6 @@ internal class RawEnvelopeService(SigilDbContext context) : IRawEnvelopeService
     public async Task<List<RawEnvelope>> FetchUnprocessedAsync(int batchSize)
     {
         return await context.RawEnvelopes
-            .AsTracking()
             .Where(e => e.Error == null)
             .OrderBy(e => e.ReceivedAt)
             .Take(batchSize)

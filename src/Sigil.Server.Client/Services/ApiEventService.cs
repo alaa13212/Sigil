@@ -138,11 +138,11 @@ public class ApiEventService(HttpClient http) : IEventService
     public Task<HashSet<string>> FindExistingEventIdsAsync(IEnumerable<string> eventIds) =>
         throw new NotSupportedException("Not available on client.");
 
-    public IEnumerable<CapturedEvent> BulkCreateEventsEntities(IEnumerable<ParsedEvent> capturedEvent, Project project,
+    public List<CapturedEvent> BulkCreateEventsEntities(IEnumerable<ParsedEvent> parsedEvents, Project project,
         Issue issue, Dictionary<string, Release> releases, Dictionary<string, EventUser> users,
-        Dictionary<string, TagValue> tagValues) =>
+        Dictionary<string, Dictionary<string, int>> tagValues) =>
         throw new NotSupportedException("Not available on client.");
 
-    public Task<bool> SaveEventsAsync(IEnumerable<CapturedEvent> capturedEvents) =>
+    public Task<bool> SaveEventsAsync() =>
         throw new NotSupportedException("Not available on client.");
 }

@@ -28,7 +28,6 @@ public static class ServiceCollectionExtensions
         {
             options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
             options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
-            options.EnableSensitiveDataLogging(true);
         });
         
         services.AddScoped<IDatabaseMigrator, EfDatabaseMigrator>();

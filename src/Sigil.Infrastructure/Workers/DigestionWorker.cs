@@ -73,7 +73,7 @@ internal class DigestionWorker(
             {
                 try
                 {
-                    parsedEvents.AddRange(parser.Parse(raw.ProjectId, raw.RawData, raw.ReceivedAt));
+                    parsedEvents.AddRange(await parser.Parse(raw.ProjectId, raw.RawData, raw.ReceivedAt));
                     successIds.Add(raw.Id);
                 }
                 catch (Exception ex)

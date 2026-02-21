@@ -8,12 +8,10 @@ internal class TextNormalizationRuleConfiguration : IEntityTypeConfiguration<Tex
 {
     public void Configure(EntityTypeBuilder<TextNormalizationRule> builder)
     {
-        builder.HasIndex(r => r.ProjectId);
         builder.HasIndex(r => new { r.ProjectId, r.Priority });
 
         builder.HasOne(r => r.Project)
-            .WithMany()
-            .HasForeignKey(r => r.ProjectId)
+            .WithMany(p => p.Rules)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

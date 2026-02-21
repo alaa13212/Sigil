@@ -22,12 +22,10 @@ internal class IssueService(
     {
         List<IGrouping<string, ParsedEvent>> groupings = eventsByFingerprint.ToList();
 
-        var (results, misses) = issueCache.TryGetMany(groupings, g =>
-        {
-            issueCache.TryGet(project.Id, g.Key, out Issue? cached);
-            if (cached is not null) dbContext.Attach(cached);
-            return cached;
-        });
+        var (results, misses) = issueCache.TryGetMany(groupings, 
+            g => issueCache.TryGet(project.Id, g.Key, out Issue? cached) ? cached : null);
+        
+        dbContext.AttachRange(results);
 
         if (misses.Count > 0)
         {

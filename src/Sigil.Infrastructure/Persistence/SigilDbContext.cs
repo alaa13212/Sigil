@@ -13,6 +13,7 @@ internal class SigilDbContext(DbContextOptions<SigilDbContext> options) : SaveSu
     public DbSet<Release> Releases => Set<Release>();
     public DbSet<Issue> Issues => Set<Issue>();
     public DbSet<CapturedEvent> Events => Set<CapturedEvent>();
+    public DbSet<EventTag> EventTags => Set<EventTag>();
     public DbSet<EventUser> EventUsers => Set<EventUser>();
     public DbSet<StackFrame> StackFrames => Set<StackFrame>();
     public DbSet<TagKey> TagKeys => Set<TagKey>();
