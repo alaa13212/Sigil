@@ -92,7 +92,7 @@
         {
             int? teamId = int.TryParse(selectedTeamId, out var tid) ? tid : null;
             var project = await ProjectService.CreateProjectAsync(name, platform, teamId);
-            Navigation.NavigateTo($"/projects/{project.Id}/settings");
+            Navigation.NavigateTo($"/projects/{project.Id}/settings", forceLoad: true);
         }
         catch
         {
