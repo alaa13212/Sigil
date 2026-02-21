@@ -93,8 +93,12 @@ internal class TagService(SigilDbContext dbContext, ITagCache tagCache) : ITagSe
                 await dbContext.SaveChangesAsync();
                 existing.AddRange(newTagValues);
                 
+                Dictionary<int, TagKey> allTagKeysById = allTagKeys.Select(tk => tk.Value).ToDictionary(tv => tv.Id);
                 foreach (TagValue tagValue in newTagValues)
+                {
                     dbContext.Entry(tagValue).State = EntityState.Detached;
+                    tagValue.TagKey = allTagKeysById[tagValue.TagKeyId];
+                }
             }
 
             foreach (TagValue tagValue in existing)
