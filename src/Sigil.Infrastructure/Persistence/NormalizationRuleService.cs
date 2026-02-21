@@ -26,6 +26,9 @@ internal class NormalizationRuleService(
         new (@"\b\d{13}\b", "{epochms}", "Epoch millis"),
         
         new (@"\b([Tt][Rr][Uu][Ee]|[Ff][Aa][Ll][Ss][Ee])\b", "{bool}", "Boolean Values"),
+        
+        new (@"\b\d+\b", "{int}", "Numbers"),
+        new (@"\b[0-9A-Fa-f]{8,}\b", "{hex}", "Hexadecimal Numbers"),
 
         // Quoted strings
         new (@"""([^""\{\}:]*?)""", "\"{str}\"", "Quoted Strings (Souble Quotes)"),
@@ -33,11 +36,7 @@ internal class NormalizationRuleService(
         
         // Generic key-value pattern: "Key: value," or "Key: value)" or "Key: value]" or "Key: value}"
         // This normalizes variable values in structured messages
-        new (@"(:\s*)[^,(){}\[\]]+\b(?=\s*[,)}\]])", "$1{val}", "Catch-all: Value of a Key: Value Pair"),
-        
-        // Generic numbers
-        new (@"\b\d+\b", "{int}", "Numbers"),
-        new (@"\b[0-9A-Fa-f]{8,}\b", "{hex}", "Hexadecimal Numbers"),
+        new (@"(:\s*)\b(?=[^,(){}\[\]]*[^\d,(){}\[\]])[^,(){}\[\]]+\b(?=\s*[,)}\]])", "$1{val}", "Catch-all: Value of a Key: Value Pair"),
     ];
 
     public List<TextNormalizationRule> CreateDefaultRulesPreset()
