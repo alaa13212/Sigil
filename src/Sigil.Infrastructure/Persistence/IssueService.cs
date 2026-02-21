@@ -53,7 +53,7 @@ internal class IssueService(
                     newIssues.Add(new Issue
                     {
                         ProjectId = project.Id,
-                        Title = representativeEvent.NormalizedMessage ?? "Unknown Error",
+                        Title = representativeEvent.NormalizedMessage ?? "{no message}",
                         ExceptionType = representativeEvent.ExceptionType,
                         Level = representativeEvent.Level,
                         Priority = Priority.Low,
