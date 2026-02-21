@@ -64,9 +64,9 @@ internal class IssueService(
                         OccurrenceCount = 0,
                         Culprit = representativeEvent.Culprit,
                     });
-                    
-                    newIssues.ForEach(i => i.Activities.Add(new IssueActivity { Action = IssueActivityAction.Created, Timestamp = dateTime.UtcNow, Issue = i }));
                 }
+                
+                newIssues.ForEach(i => i.Activities.Add(new IssueActivity { Action = IssueActivityAction.Created, Timestamp = dateTime.UtcNow, Issue = i }));
 
                 dbContext.Issues.AddRange(newIssues);
                 await dbContext.SaveChangesAsync();
