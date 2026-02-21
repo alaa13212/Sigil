@@ -52,12 +52,11 @@
                                     <td>@user.CreatedAt.ToString("yyyy-MM-dd")</td>
                                     <td>@(user.LastLogin?.ToString("yyyy-MM-dd HH:mm") ?? "Never")</td>
                                     <td>
-                                        @if (!user.IsActivated && user.ActivationToken is not null)
+                                        @if (user is { IsActivated: false, ActivationUri: not null })
                                         {
-                                            var link = $"{Nav.BaseUri}activate?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(user.ActivationToken)}";
                                             <div class="flex items-center gap-1">
                                                 <span class="text-xs opacity-60">Invite link</span>
-                                                <CopyButton Text="@link" />
+                                                <CopyButton Text="@user.ActivationUri" />
                                             </div>
                                         }
                                     </td>

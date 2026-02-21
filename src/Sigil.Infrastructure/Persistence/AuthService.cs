@@ -2,13 +2,15 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Auth;
+using Sigil.Domain;
 using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Persistence;
 
 internal class AuthService(
     UserManager<User> userManager,
-    SignInManager<User> signInManager) : IAuthService
+    SignInManager<User> signInManager,
+    IAppConfigService configService) : IAuthService
 {
     public async Task<AuthResult> LoginAsync(LoginRequest request)
     {
@@ -51,7 +53,8 @@ internal class AuthService(
             if (!u.EmailConfirmed)
                 token = await userManager.GeneratePasswordResetTokenAsync(u);
 
-            result.Add(new UserInfo(u.Id, u.Email!, u.DisplayName, u.CreatedAt, u.LastLogin, [], u.EmailConfirmed, token));
+            string activationUri = await GetActivationUri(u.Email!, token!);
+            result.Add(new UserInfo(u.Id, u.Email!, u.DisplayName, u.CreatedAt, u.LastLogin, [], u.EmailConfirmed, activationUri));
         }
         return result;
     }
@@ -72,7 +75,14 @@ internal class AuthService(
             return InviteResult.Failure(result.Errors.Select(e => e.Description));
 
         var token = await userManager.GeneratePasswordResetTokenAsync(user);
-        return InviteResult.Success(user.Email!, token);
+        var activationUri = await GetActivationUri(user.Email, token);
+        return InviteResult.Success(user.Email, activationUri);
+    }
+
+    private async Task<string> GetActivationUri(string email, string token)
+    {
+        string? hostUri = await configService.GetAsync(AppConfigKeys.HostUrl);
+        return $"{hostUri}activate?email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}";
     }
 
     public async Task<AuthResult> ActivateAccountAsync(ActivateRequest request)

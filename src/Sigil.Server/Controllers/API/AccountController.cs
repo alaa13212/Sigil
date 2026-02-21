@@ -45,7 +45,7 @@ public class AccountController(IAuthService authService) : SigilController
         if (!result.Succeeded)
             return BadRequest(new { errors = result.Errors });
 
-        return Ok(new { result.Email, result.ActivationToken });
+        return Ok(new { result.Email, result.ActivationUri });
     }
 
     [AllowAnonymous]

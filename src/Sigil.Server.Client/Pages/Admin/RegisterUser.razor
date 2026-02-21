@@ -71,7 +71,7 @@
         {
             var result = await AuthService.InviteUserAsync(new InviteRequest(email, displayName));
             if (result.Succeeded)
-                inviteLink = $"{Nav.BaseUri}activate?email={Uri.EscapeDataString(result.Email!)}&token={Uri.EscapeDataString(result.ActivationToken!)}";
+                inviteLink = result.ActivationUri;
             else
                 error = string.Join(", ", result.Errors);
         }

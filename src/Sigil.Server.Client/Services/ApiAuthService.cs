@@ -46,7 +46,7 @@ public class ApiAuthService(HttpClient http, AuthenticationStateProvider authSta
         }
 
         var result = await response.Content.ReadFromJsonAsync<InviteBody>();
-        return InviteResult.Success(result!.Email, result.ActivationToken);
+        return InviteResult.Success(result!.Email, result.ActivationUri);
     }
 
     public async Task<AuthResult> ActivateAccountAsync(ActivateRequest request)
@@ -62,5 +62,5 @@ public class ApiAuthService(HttpClient http, AuthenticationStateProvider authSta
     }
 
     private record ErrorBody(IReadOnlyList<string> Errors);
-    private record InviteBody(string Email, string ActivationToken);
+    private record InviteBody(string Email, string ActivationUri);
 }
