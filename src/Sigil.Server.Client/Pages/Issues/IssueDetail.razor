@@ -674,7 +674,7 @@ else
     private HashSet<int> similarSelected = [];
     private bool mergeFromSimilarLoading;
     private string similarMergeError = "";
-    private bool CanMerge => issue?.MergeSet != null ? similarSelected.Count >= 1 : similarSelected.Count >= 2; 
+    private bool CanMerge => similarSelected.Count > 0; 
 
     private enum Tab { SuggestedEvent, Events, Activity, Similar }
 
