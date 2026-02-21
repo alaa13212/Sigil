@@ -14,7 +14,7 @@
     <div class="flex items-center justify-between">
         <div>
             <h2 class="text-lg font-bold">Message Normalization Rules</h2>
-            <p class="text-sm opacity-60 mt-1">Custom rules are applied after the built-in defaults (UUIDs, numbers, emails, etc.). Lower priority number = applied first.</p>
+            <p class="text-sm opacity-60 mt-1">Custom rules are applied after the built-in defaults (UUIDs, numbers, emails, etc.). Higher priority number = applied first.</p>
         </div>
         <button class="btn btn-primary btn-sm" @onclick="() => showAddForm = !showAddForm">
             @(showAddForm ? "Cancel" : "Add Rule")
