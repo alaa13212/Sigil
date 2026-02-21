@@ -95,25 +95,6 @@ Open **http://localhost:8080** and complete the setup wizard to create your admi
 
 Sigil accepts events from any Sentry SDK. After creating a project, copy its DSN from the project settings page or the setup wizard.
 
-**DSN format**: `https://{apiKey}@{host}/api/{projectId}`
-
-```csharp
-// .NET
-SentrySdk.Init(o => o.Dsn = "https://YOUR_KEY@YOUR_HOST/api/YOUR_PROJECT_ID");
-```
-
-```javascript
-// JavaScript
-Sentry.init({ dsn: "https://YOUR_KEY@YOUR_HOST/api/YOUR_PROJECT_ID" });
-```
-
-```python
-# Python
-sentry_sdk.init(dsn="https://YOUR_KEY@YOUR_HOST/api/YOUR_PROJECT_ID")
-```
-
----
-
 ## Configuration
 
 Configuration via environment variables (see `.env.example`):
@@ -155,7 +136,13 @@ Batch worker tuning in `appsettings.json`:
 dotnet build
 
 # Run
-dotnet run --project src/Sigil.Server/Sigil.Server.csproj
+dotnet watch --project src/Sigil.Server/Sigil.Server.csproj
+```
+
+Make sure Tailwinds is running
+
+```bash
+src/Sigil.Server/Tools/tailwindcss -i src/Sigil.Server/Styles/input.css -o src/Sigil.Server/wwwroot/css/site.css --watch
 ```
 
 ### Database Migrations
