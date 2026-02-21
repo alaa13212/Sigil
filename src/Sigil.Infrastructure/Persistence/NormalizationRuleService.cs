@@ -22,7 +22,6 @@ internal class NormalizationRuleService(
         new (@"/[A-Za-z0-9\-_]+(?:/[A-Za-z0-9\-_]+)*", "{urlpath}", "URL Paths"),
         new ("""(?:(?:[A-Za-z]:\\|\\\\)[^\\/:*?"<>|\r\n]+(?:\\[^\\/:*?"<>|\r\n]+)*|/(?:[^/\0]+/)*[^/\0]*)""", "{filepath}", "File Paths"),
 
-        new (@"\b[0-9A-Fa-f]{8,}\b", "{hex}", "Hexadecimal Numbers"),
         new (@"\b\d{10}\b", "{epoch}", "Epoch seconds"),
         new (@"\b\d{13}\b", "{epochms}", "Epoch millis"),
         
@@ -38,6 +37,7 @@ internal class NormalizationRuleService(
         
         // Generic numbers
         new (@"\b\d+\b", "{int}", "Numbers"),
+        new (@"\b[0-9A-Fa-f]{8,}\b", "{hex}", "Hexadecimal Numbers"),
     ];
 
     public List<TextNormalizationRule> CreateDefaultRulesPreset()
