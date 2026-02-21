@@ -53,7 +53,7 @@ internal class AuthService(
             if (!u.EmailConfirmed)
                 token = await userManager.GeneratePasswordResetTokenAsync(u);
 
-            string activationUri = await GetActivationUri(u.Email!, token!);
+            string? activationUri = await GetActivationUri(u.Email!, token);
             result.Add(new UserInfo(u.Id, u.Email!, u.DisplayName, u.CreatedAt, u.LastLogin, [], u.EmailConfirmed, activationUri));
         }
         return result;
@@ -76,11 +76,14 @@ internal class AuthService(
 
         var token = await userManager.GeneratePasswordResetTokenAsync(user);
         var activationUri = await GetActivationUri(user.Email, token);
-        return InviteResult.Success(user.Email, activationUri);
+        return InviteResult.Success(user.Email, activationUri!);
     }
 
-    private async Task<string> GetActivationUri(string email, string token)
+    private async Task<string?> GetActivationUri(string email, string? token)
     {
+        if(token is null)
+            return null;
+        
         string? hostUri = await configService.GetAsync(AppConfigKeys.HostUrl);
         return $"{hostUri}activate?email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}";
     }
