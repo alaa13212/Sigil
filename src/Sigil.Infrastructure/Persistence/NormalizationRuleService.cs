@@ -27,9 +27,6 @@ internal class NormalizationRuleService(
         
         new (@"\b([Tt][Rr][Uu][Ee]|[Ff][Aa][Ll][Ss][Ee])\b", "{bool}", "Boolean Values"),
         
-        new (@"\b\d+\b", "{int}", "Numbers"),
-        new (@"\b[0-9A-Fa-f]{8,}\b", "{hex}", "Hexadecimal Numbers"),
-
         // Quoted strings
         new (@"""([^""\{\}:]*?)""", "\"{str}\"", "Quoted Strings (Souble Quotes)"),
         new (@"'([^'\{\}:]*?)'", "'{str}'", "Quoted Strings (Single Quotes)"),
@@ -37,6 +34,9 @@ internal class NormalizationRuleService(
         // Generic key-value pattern: "Key: value," or "Key: value)" or "Key: value]" or "Key: value}"
         // This normalizes variable values in structured messages
         new (@"(:\s*)\b(?=[^,(){}\[\]]*[^\d,(){}\[\]])[^,(){}\[\]]+\b(?=\s*[,)}\]])", "$1{val}", "Catch-all: Value of a Key: Value Pair"),
+        
+        new (@"\b\d+\b", "{int}", "Numbers"),
+        new (@"\b[0-9A-Fa-f]{8,}\b", "{hex}", "Hexadecimal Numbers"),
     ];
 
     public List<TextNormalizationRule> CreateDefaultRulesPreset()
