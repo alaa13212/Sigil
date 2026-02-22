@@ -42,7 +42,7 @@
             <input class="btn btn-sm btn-square" type="reset" value="x" @onclick="() => SetStatusFilter(null)"/>
             @foreach (var s in statusOptions)
             {
-                <input class="btn btn-sm" type="radio" name="status" @onclick="() => SetStatusFilter(s.Value)" aria-label="@s.Label"/>
+                <input class="btn btn-sm" type="radio" name="status" checked="@(statusFilter == s.Value)" @onclick="() => SetStatusFilter(s.Value)" aria-label="@s.Label"/>
             }
         </form>
         
@@ -179,7 +179,7 @@
     private int currentPage = 1;
 
     // Filters
-    private IssueStatus? statusFilter;
+    private IssueStatus? statusFilter = IssueStatus.Open;
     private string severityFilter = "";
     private IssueSortBy sortBy = IssueSortBy.LastSeen;
     private string searchText = "";
