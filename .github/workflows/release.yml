@@ -1,0 +1,39 @@
+﻿name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Docker build
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & Push Docker
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          IMAGE=ghcr.io/alaa13212/sigil
+
+          docker build -t $IMAGE:$VERSION -t $IMAGE:latest .
+          docker push --all-tags $IMAGE
+
+      # Create GitHub Release + upload assets
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Sigil ${{ github.ref_name }}
+          files: |
+            deploy/docker-compose.yml
+            deploy/.env.example
+            deploy/install.sh

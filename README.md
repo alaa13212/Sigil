@@ -8,6 +8,16 @@ Built with .NET 10, PostgreSQL, and Blazor.
 
 ---
 
+## Quick Start
+Run the following line in your terminal and then follow the on-screen instructions:
+```bash
+curl -fsSL https://github.com/alaa13212/sigil/releases/latest/download/install.sh | sh
+```
+
+Open **http://localhost:8080** and complete the setup wizard to create your admin account and first project.
+
+---
+
 ## Features
 
 ### Event Ingestion & Processing
@@ -66,28 +76,6 @@ Built with .NET 10, PostgreSQL, and Blazor.
   5. First team and project creation with platform selection
   6. Integration guide with DSN and SDK code snippets
 - Setup route is disabled after completion
-
-### Deployment
-
-- **Docker Compose**: One step setup for Sigil server + PostgreSQL database
-
-
----
-
-## Quick Start
-
-```bash
-git clone https://github.com/AliDev-ir/Sigil.git
-cd sigil
-
-# Copy and edit environment config
-cp .env.example .env
-
-# Start Sigil + PostgreSQL
-docker compose up -d
-```
-
-Open **http://localhost:8080** and complete the setup wizard to create your admin account and first project.
 
 ---
 
