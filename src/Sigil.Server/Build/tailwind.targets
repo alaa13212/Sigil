@@ -13,7 +13,7 @@
     </Target>
 
     <!-- Build Tailwind when building the project -->
-    <Target Name="BuildTailwind" AfterTargets="EnsureTailwind" BeforeTargets="Build" Condition="'$(Configuration)' == 'Release' AND '$(RunTailwind)' != 'false'">
+    <Target Name="BuildTailwind" AfterTargets="EnsureTailwind" BeforeTargets="ComputeFilesToPublish">
         <Message Text="Running Tailwind production build..." Importance="high" />
 
         <!-- Windows -->
