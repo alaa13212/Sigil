@@ -26,8 +26,6 @@ RUN dotnet restore src/Sigil.Server/Sigil.Server.csproj
 # Copy all source
 COPY src/ src/
 
-RUN src/Sigil.Server/Tools/tailwindcss -i src/Sigil.Server/Styles/input.css -o src/Sigil.Server/wwwroot/css/site.css --minify
-
 # Publish
 RUN dotnet publish src/Sigil.Server/Sigil.Server.csproj \
       -c Release \
