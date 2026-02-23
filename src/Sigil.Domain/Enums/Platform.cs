@@ -1,4 +1,4 @@
-﻿namespace Sigil.Domain.Enums;
+namespace Sigil.Domain.Enums;
 
 public enum Platform
 {

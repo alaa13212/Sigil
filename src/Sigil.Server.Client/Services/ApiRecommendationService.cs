@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Json;
+using System.Net.Http.Json;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Recommendations;
 using Sigil.Domain.Entities;

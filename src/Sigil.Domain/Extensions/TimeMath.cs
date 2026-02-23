@@ -1,4 +1,4 @@
-﻿namespace Sigil.Domain.Extensions;
+namespace Sigil.Domain.Extensions;
 
 public static class TimeMath
 {

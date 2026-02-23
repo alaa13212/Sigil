@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations.Schema;
 using Sigil.Domain.Enums;
 
 namespace Sigil.Domain.Entities;

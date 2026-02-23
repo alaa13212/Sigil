@@ -1,3 +1,3 @@
-﻿namespace Sigil.Infrastructure;
+namespace Sigil.Infrastructure;
 
 internal class AssemblyMarker;

@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Sigil.Domain.Enums;
 using Sigil.Domain.Extensions;
 using Sigil.Domain.Ingestion;

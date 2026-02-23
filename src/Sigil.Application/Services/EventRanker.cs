@@ -1,4 +1,4 @@
-﻿using Sigil.Application.Interfaces;
+using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Ingestion;
 

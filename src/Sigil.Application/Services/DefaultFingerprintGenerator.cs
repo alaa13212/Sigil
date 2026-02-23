@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Sigil.Application.Interfaces;
 using Sigil.Domain.Extensions;
 using Sigil.Domain.Ingestion;

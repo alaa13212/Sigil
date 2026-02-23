@@ -1,4 +1,4 @@
-﻿namespace Sigil.Application.Interfaces;
+namespace Sigil.Application.Interfaces;
 
 public interface IDateTime
 {

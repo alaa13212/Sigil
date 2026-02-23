@@ -1,4 +1,4 @@
-﻿using Sigil.Application.Interfaces;
+using Sigil.Application.Interfaces;
 
 namespace Sigil.Infrastructure.Services;
 

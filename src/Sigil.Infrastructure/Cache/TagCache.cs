@@ -1,4 +1,4 @@
-﻿using Sigil.Application.Interfaces;
+using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Cache;

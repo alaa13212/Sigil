@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Services;
 using Sigil.Domain.Interfaces;

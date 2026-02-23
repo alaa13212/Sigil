@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Sigil.Domain.Extensions;
 using Sigil.Domain.Ingestion;
 using Sigil.Domain.Interfaces;

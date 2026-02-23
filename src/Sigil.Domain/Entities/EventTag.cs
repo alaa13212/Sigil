@@ -1,4 +1,4 @@
-﻿namespace Sigil.Domain.Entities;
+namespace Sigil.Domain.Entities;
 
 public class EventTag
 {

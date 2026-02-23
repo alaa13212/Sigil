@@ -1,4 +1,4 @@
-﻿<component name="ProjectRunConfigurationManager">
+<component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Watch Tailwind" type="ShConfigurationType">
     <option name="SCRIPT_TEXT" value="Tools\tailwindcss -i Styles/input.css -o wwwroot/css/site.css --watch" />
     <option name="INDEPENDENT_SCRIPT_PATH" value="true" />

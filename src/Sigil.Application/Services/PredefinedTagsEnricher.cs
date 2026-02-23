@@ -1,4 +1,4 @@
-﻿using Sigil.Domain.Enums;
+using Sigil.Domain.Enums;
 using Sigil.Domain.Ingestion;
 using Sigil.Domain.Interfaces;
 

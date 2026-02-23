@@ -1,4 +1,4 @@
-﻿using Sigil.Domain.Entities;
+using Sigil.Domain.Entities;
 
 namespace Sigil.Domain.Interfaces;
 

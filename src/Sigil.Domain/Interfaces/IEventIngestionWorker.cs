@@ -1,4 +1,4 @@
-﻿using Sigil.Domain.Ingestion;
+using Sigil.Domain.Ingestion;
 
 namespace Sigil.Domain.Interfaces;
 

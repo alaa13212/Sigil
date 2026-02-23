@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Sigil.Domain.Extensions;
 using Sigil.Domain.Ingestion;
 using Sigil.Domain.Interfaces;

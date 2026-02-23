@@ -1,4 +1,4 @@
-﻿namespace Sigil.Infrastructure.Parsing.Models;
+namespace Sigil.Infrastructure.Parsing.Models;
 
 [Serializable]
 internal class SentryStacktrace

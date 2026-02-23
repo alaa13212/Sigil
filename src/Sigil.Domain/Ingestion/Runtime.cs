@@ -1,4 +1,4 @@
-﻿namespace Sigil.Domain.Ingestion;
+namespace Sigil.Domain.Ingestion;
 
 public record Runtime(string Name, string Version)
 {
