@@ -85,7 +85,7 @@ internal class AuthService(
             return null;
         
         string? hostUri = await configService.GetAsync(AppConfigKeys.HostUrl);
-        return $"{hostUri}activate?email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}";
+        return $"{hostUri}/activate?email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}";
     }
 
     public async Task<AuthResult> ActivateAccountAsync(ActivateRequest request)
