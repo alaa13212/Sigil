@@ -29,7 +29,7 @@ public record ReleaseDetailResponse(
 
 public record ReleaseIssueSummary(
     int IssueId,
-    string Title,
+    string? Title,
     string? ExceptionType,
     int EventCount,
     bool IsNew,

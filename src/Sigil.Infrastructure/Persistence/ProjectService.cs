@@ -109,7 +109,7 @@ internal class ProjectService(SigilDbContext dbContext, IAppConfigService appCon
             .OrderBy(p => p.Events.Max(e => e.Timestamp))
             .Select(p => new ProjectOverviewResponse(
                 p.Id, p.Name, p.Platform,
-                p.Issues.Count,
+                p.Issues.Count(i => i.MergeSetId == null || i.MergeSet!.PrimaryIssueId == i.Id),
                 p.Events.Count))
             .ToListAsync();
     }

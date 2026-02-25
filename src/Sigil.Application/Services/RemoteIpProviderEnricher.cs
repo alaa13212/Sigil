@@ -7,14 +7,12 @@ namespace Sigil.Application.Services;
 
 public class RemoteIpProviderEnricher(IHttpContextAccessor httpContextAccessor) : IEventEnricher
 {
-    public Task Enrich(ParsedEvent parsedEvent, int projectId)
+    public void Enrich(ParsedEvent parsedEvent, EventParsingContext context)
     {
         if (parsedEvent.User is { IpAddress: "{{auto}}" })
         {
             string? userIpAddress = httpContextAccessor.HttpContext.Connection.RemoteIpAddress?.ToString();
             parsedEvent.User.IpAddress = userIpAddress.IsNullOrEmpty() ? null : userIpAddress;
         }
-        
-        return Task.CompletedTask;
     }
 }

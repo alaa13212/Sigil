@@ -53,7 +53,7 @@ internal class IssueService(
                     newIssues.Add(new Issue
                     {
                         ProjectId = project.Id,
-                        Title = representativeEvent.NormalizedMessage ?? "{no message}",
+                        Title = representativeEvent.NormalizedMessage,
                         ExceptionType = representativeEvent.ExceptionType,
                         Level = representativeEvent.Level,
                         Priority = Priority.Low,
@@ -177,11 +177,23 @@ internal class IssueService(
         {
             issue.ResolvedAt = dateTime.UtcNow;
             issue.ResolvedById = userId;
+            issue.ResolvedInReleaseId = null;
+        }
+        else if (status == IssueStatus.ResolvedInFuture)
+        {
+            issue.ResolvedAt = dateTime.UtcNow;
+            issue.ResolvedById = userId;
+            var latestRelease = await dbContext.Releases
+                .Where(r => r.ProjectId == issue.ProjectId)
+                .OrderByDescending(r => r.FirstSeenAt)
+                .FirstOrDefaultAsync();
+            issue.ResolvedInReleaseId = latestRelease?.Id;
         }
         else if (status == IssueStatus.Open)
         {
             issue.ResolvedAt = null;
             issue.ResolvedById = null;
+            issue.ResolvedInReleaseId = null;
 
             // Remove ignore filter when reopening
             if (issue.IgnoreFilterId.HasValue)

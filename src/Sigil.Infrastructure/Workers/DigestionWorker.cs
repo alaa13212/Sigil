@@ -61,19 +61,23 @@ internal class DigestionWorker(
         var parser = scope.ServiceProvider.GetRequiredService<IEventParser>();
         var rawEnvelopeService = scope.ServiceProvider.GetRequiredService<IRawEnvelopeService>();
         var digestionService = scope.ServiceProvider.GetRequiredService<IDigestionService>();
+        var contextBuilder = scope.ServiceProvider.GetRequiredService<IEventParsingContextBuilder>();
         var dbContext = scope.ServiceProvider.GetRequiredService<SigilDbContext>();
-        
+
         foreach (var group in batch.GroupBy(r => r.ProjectId))
         {
             var successIds = new List<long>();
             var failures = new List<(long Id, string Error)>();
             var parsedEvents = new List<ParsedEvent>();
 
+            // Build context once per project — pre-loads normalization rules, auto-tag rules, and inbound filters
+            var context = await contextBuilder.BuildAsync(group.Key);
+
             foreach (var raw in group)
             {
                 try
                 {
-                    parsedEvents.AddRange(await parser.Parse(raw.ProjectId, raw.RawData, raw.ReceivedAt));
+                    parsedEvents.AddRange(await parser.Parse(context, raw.RawData, raw.ReceivedAt));
                     successIds.Add(raw.Id);
                 }
                 catch (Exception ex)
@@ -90,15 +94,15 @@ internal class DigestionWorker(
             {
                 try
                 {
-                    await digestionService.BulkDigestAsync(group.Key, parsedEvents, ct);
+                    await digestionService.BulkDigestAsync(context, parsedEvents, ct);
                     await rawEnvelopeService.DeleteAsync(successIds);
                 }
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "Digestion failed for project {ProjectId}. {Count} envelopes left unprocessed",
                         group.Key, successIds.Count);
-                    
-                    // Leave unprocessed will be retried later
+
+                    // Leave unprocessed — will be retried on next wake
                     dbContext.ChangeTracker.Clear();
                     await rawEnvelopeService.BulkMarkFailedAsync(successIds.Select(id => (id, ex.Message)));
                 }

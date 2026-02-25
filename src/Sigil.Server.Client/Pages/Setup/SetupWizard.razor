@@ -161,7 +161,7 @@
 
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Password</legend>
-                        <input type="password" class="input w-full" placeholder="Min 8 characters" @bind="adminPassword" />
+                        <input type="password" class="input w-full" placeholder="Min 8 chars, uppercase, digit, special" @bind="adminPassword" />
                     </fieldset>
 
                     <fieldset class="fieldset">
@@ -428,6 +428,26 @@
         if (adminPassword.Length < 8)
         {
             adminError = "Password must be at least 8 characters.";
+            return;
+        }
+        if (!adminPassword.Any(char.IsUpper))
+        {
+            adminError = "Password must contain at least one uppercase letter.";
+            return;
+        }
+        if (!adminPassword.Any(char.IsLower))
+        {
+            adminError = "Password must contain at least one lowercase letter.";
+            return;
+        }
+        if (!adminPassword.Any(char.IsDigit))
+        {
+            adminError = "Password must contain at least one digit.";
+            return;
+        }
+        if (!adminPassword.Any(c => !char.IsLetterOrDigit(c)))
+        {
+            adminError = "Password must contain at least one special character.";
             return;
         }
         if (adminPassword != adminPasswordConfirm)

@@ -26,4 +26,5 @@ public interface IEventService
     Task<IssueEventDetailResponse?> GetIssueEventDetailAsync(int issueId, long eventId);
     Task<List<BreadcrumbResponse>> GetBreadcrumbsAsync(long eventId);
     Task<EventNavigationResponse> GetAdjacentEventIdsAsync(int issueId, long currentEventId);
+    Task<EventNavigationResponse> GetMergeGroupEventNavigationAsync(int mergeSetId, long currentEventId);
 }

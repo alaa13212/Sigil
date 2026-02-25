@@ -19,9 +19,9 @@ public class DigestionService(
     IWorker<PostDigestionWork> postDigestionQueue
 ) : IDigestionService
 {
-    public async Task BulkDigestAsync(int projectId, List<ParsedEvent> parsedEvents, CancellationToken ct = default)
+    public async Task BulkDigestAsync(EventParsingContext context, List<ParsedEvent> parsedEvents, CancellationToken ct = default)
     {
-        var project = await projectService.GetProjectByIdAsync(projectId);
+        var project = await projectService.GetProjectByIdAsync(context.ProjectId);
         ArgumentNullException.ThrowIfNull(project);
 
         var existingIds = await eventService.FindExistingEventIdsAsync(parsedEvents.Select(e => e.EventId));
@@ -29,13 +29,12 @@ public class DigestionService(
         if (parsedEvents.Count == 0)
             return;
 
-        List<EventFilter> filters = await eventFilterService.GetRawFiltersForProjectAsync(projectId);
-        if (filters.Count > 0)
-            parsedEvents.RemoveAll(e => eventFilterService.ShouldRejectEvent(e, filters));
+        if (context.InboundFilters.Count > 0)
+            parsedEvents.RemoveAll(e => eventFilterService.ShouldRejectEvent(e, context.InboundFilters));
         if (parsedEvents.Count == 0)
             return;
 
-        Dictionary<string, Release> releases = (await releaseService.BulkGetOrCreateReleasesAsync(projectId, parsedEvents)).ToDictionary(r => r.RawName);
+        Dictionary<string, Release> releases = (await releaseService.BulkGetOrCreateReleasesAsync(context.ProjectId, parsedEvents)).ToDictionary(r => r.RawName);
 
         List<KeyValuePair<string, string>> requiredTags = parsedEvents.Where(item => item.Tags != null).SelectMany(item => item.Tags!).Distinct().ToList();
         Dictionary<string, Dictionary<string, int>> tagValues = (await tagService.BulkGetOrCreateTagsAsync(requiredTags))
@@ -52,7 +51,11 @@ public class DigestionService(
 
         // Track alert signals before mutation
         HashSet<int> newIssueIds = issues.Values.Where(i => i.OccurrenceCount == 0).Select(i => i.Id).ToHashSet();
-        HashSet<int> regressionIssueIds = issues.Values.Where(i => i.Status == IssueStatus.Resolved).Select(i => i.Id).ToHashSet();
+        HashSet<int> regressionIssueIds = issues.Values
+            .Where(i => i.Status == IssueStatus.Resolved ||
+                        (i.Status == IssueStatus.ResolvedInFuture && IsReleaseRegression(i, issueGrouping[i.Fingerprint], releases)))
+            .Select(i => i.Id)
+            .ToHashSet();
 
         foreach (IGrouping<string, ParsedEvent> group in issueGrouping)
         {
@@ -67,10 +70,22 @@ public class DigestionService(
         await eventService.SaveEventsAsync();
 
         postDigestionQueue.TryEnqueue(new PostDigestionWork(
-            projectId,
+            context.ProjectId,
             issues.Values.Select(i => i.Id).ToList(),
             newIssueIds,
             regressionIssueIds));
+    }
+
+    private static bool IsReleaseRegression(Issue issue, IEnumerable<ParsedEvent> events, Dictionary<string, Release> releases)
+    {
+        // No release recorded when resolved → any event is a regression
+        if (!issue.ResolvedInReleaseId.HasValue) return true;
+        // Any event with a different (or missing) release counts as a regression
+        return events.Any(e =>
+        {
+            if (e.Release == null) return true;
+            return releases.GetValueOrDefault(e.Release)?.Id != issue.ResolvedInReleaseId;
+        });
     }
 
     private static void UpdateIssueWithParsedEvents(IGrouping<string, ParsedEvent> group, Dictionary<string, Dictionary<string, int>> tagValues, Issue issue)

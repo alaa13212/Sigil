@@ -11,7 +11,7 @@
 @inject ITagValueFormatter TagValueFormatter
 @inject NavigationManager Navigation
 
-<PageTitle>@(issue?.Title ?? "Issue") — Sigil</PageTitle>
+<PageTitle>@(string.IsNullOrEmpty(issue?.Title) ? "Issue" : issue.Title) — Sigil</PageTitle>
 
 @if (loading)
 {
@@ -25,7 +25,15 @@ else if (issue is null)
 }
 else
 {
-    <PageBreadcrumb Items="@([ new PageBreadcrumb.BreadcrumbItem("Projects", "/"), new PageBreadcrumb.BreadcrumbItem("Issues", $"/projects/{issue.ProjectId}/issues"), new PageBreadcrumb.BreadcrumbItem(issue.Title) ])" />
+    <PageBreadcrumb Items="@([ new PageBreadcrumb.BreadcrumbItem("Projects", "/"), new PageBreadcrumb.BreadcrumbItem("Issues", $"/projects/{issue.ProjectId}/issues"), new PageBreadcrumb.BreadcrumbItem(string.IsNullOrEmpty(issue.Title) ? "No message" : issue.Title) ])" />
+
+    @if (issue.MergeSet is not null && issue.MergeSet.PrimaryIssueId != IssueId)
+    {
+        <div class="alert alert-info mb-4">
+            This issue is part of a <a href="/projects/@ProjectId/issues/@issue.MergeSet.PrimaryIssueId" class="link">merged group</a>.
+            Viewing individual issue data.
+        </div>
+    }
 
     <div class="flex flex-col lg:flex-row gap-6">
         <!-- Left column: main content -->
@@ -33,7 +41,14 @@ else
             <!-- Title and exception type -->
             <div>
                 <div class="flex items-start gap-2">
-                    <h1 class="text-2xl font-bold break-words flex-1">@issue.Title</h1>
+                    @if (!string.IsNullOrEmpty(issue.Title))
+                    {
+                        <h1 class="text-2xl font-bold break-words flex-1">@issue.Title</h1>
+                    }
+                    else
+                    {
+                        <h1 class="text-2xl font-bold break-words flex-1 opacity-50 italic">No message</h1>
+                    }
                     <button class="btn btn-ghost btn-sm mt-0.5 shrink-0" @onclick="ToggleBookmark"
                             title="@(isBookmarked ? "Remove bookmark" : "Bookmark this issue")">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 @(isBookmarked ? "text-warning" : "opacity-40")"
@@ -102,6 +117,12 @@ else
                     {
                         <div class="alert">
                             <span class="font-mono text-sm break-words">@eventDetail.Message</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert">
+                            <span class="opacity-50 italic text-sm">No message</span>
                         </div>
                     }
 
@@ -370,8 +391,8 @@ else
                                                 {
                                                     <span class="badge badge-primary badge-sm">Primary</span>
                                                 }
-                                                <a href="/projects/@ProjectId/issues/@member.IssueId" class="font-semibold text-sm hover:underline line-clamp-1">
-                                                    @member.Title
+                                                <a href="@($"/projects/{ProjectId}/issues/{member.IssueId}{(member.IsPrimary ? "" : "?no-redirect=true")}")" class="font-semibold text-sm hover:underline line-clamp-1">
+                                                    @(string.IsNullOrEmpty(member.Title) ? "No message" : member.Title)
                                                 </a>
                                             </div>
                                             <div class="text-xs opacity-60 mt-0.5 font-mono">@member.Fingerprint</div>
@@ -470,7 +491,7 @@ else
                                                     {
                                                         <span class="opacity-80">@sim.ExceptionType: </span>
                                                     }
-                                                    @sim.Title
+                                                    @(string.IsNullOrEmpty(sim.Title) ? "No message" : sim.Title)
                                                 </div>
                                                 @if (!string.IsNullOrEmpty(sim.Culprit))
                                                 {
@@ -505,6 +526,12 @@ else
                         {
                             <button class="btn btn-success btn-sm" @onclick="() => UpdateStatus(IssueStatus.Resolved)" disabled="@actionLoading">
                                 Resolve
+                            </button>
+                        }
+                        @if (issue.Status != IssueStatus.ResolvedInFuture)
+                        {
+                            <button class="btn btn-accent btn-sm" @onclick="() => UpdateStatus(IssueStatus.ResolvedInFuture)" disabled="@actionLoading">
+                                Next Release
                             </button>
                         }
                         @if (issue.Status != IssueStatus.Open)
@@ -644,6 +671,7 @@ else
     [Parameter] public int ProjectId { get; set; }
     [Parameter] public int IssueId { get; set; }
     [SupplyParameterFromQuery(Name = "tab")] public string? TabParam { get; set; }
+    [SupplyParameterFromQuery(Name = "no-redirect")] public bool NoRedirect { get; set; }
 
     private IssueDetailResponse? issue;
     private EventDetailResponse? eventDetail;
@@ -674,12 +702,19 @@ else
     private HashSet<int> similarSelected = [];
     private bool mergeFromSimilarLoading;
     private string similarMergeError = "";
-    private bool CanMerge => similarSelected.Count > 0; 
+    private bool CanMerge => similarSelected.Count > 0;
+    private Guid currentUserId;
+
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
 
     private enum Tab { SuggestedEvent, Events, Activity, Similar }
 
     protected override async Task OnParametersSetAsync()
     {
+        var authState = await AuthState;
+        var userIdStr = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        currentUserId = userIdStr is not null ? Guid.Parse(userIdStr) : Guid.Empty;
+
         loading = true;
         events = null;
         activities = null;
@@ -691,8 +726,8 @@ else
 
         await LoadIssue();
 
-        // Redirect non-primary merged issues to primary
-        if (issue?.MergeSet is not null && issue.MergeSet.PrimaryIssueId != IssueId)
+        // Redirect non-primary merged issues to primary (unless suppressed)
+        if (!NoRedirect && issue?.MergeSet is not null && issue.MergeSet.PrimaryIssueId != IssueId)
         {
             Navigation.NavigateTo($"/projects/{ProjectId}/issues/{issue.MergeSet.PrimaryIssueId}", replace: true);
             return;
@@ -726,7 +761,10 @@ else
             {
                 var combined = await EventService.GetIssueEventDetailAsync(IssueId, issue.SuggestedEvent.Id);
                 eventDetail = combined?.Event;
-                navigation = combined?.Navigation;
+                // Use merge group navigation for primary issues in a merge set
+                navigation = issue.MergeSet is not null && issue.MergeSet.PrimaryIssueId == IssueId && combined is not null
+                    ? await EventService.GetMergeGroupEventNavigationAsync(issue.MergeSet.Id, issue.SuggestedEvent.Id)
+                    : combined?.Navigation;
                 breadcrumbs = combined?.Breadcrumbs ?? [];
             }
             else
@@ -736,7 +774,7 @@ else
                 breadcrumbs = [];
             }
 
-            isBookmarked = await BookmarkService.IsBookmarkedAsync(IssueId, Guid.Empty);
+            isBookmarked = await BookmarkService.IsBookmarkedAsync(IssueId, currentUserId);
         }
         catch
         {
@@ -749,7 +787,7 @@ else
 
     private async Task ToggleBookmark()
     {
-        isBookmarked = await BookmarkService.ToggleBookmarkAsync(IssueId, Guid.Empty);
+        isBookmarked = await BookmarkService.ToggleBookmarkAsync(IssueId, currentUserId);
     }
 
     private async Task NavigateEvent(long eventId)
@@ -761,7 +799,10 @@ else
             if (combined is not null)
             {
                 eventDetail = combined.Event;
-                navigation = combined.Navigation;
+                // Use merge group navigation if the issue is the primary of a merge set
+                navigation = issue?.MergeSet is not null && issue.MergeSet.PrimaryIssueId == IssueId
+                    ? await EventService.GetMergeGroupEventNavigationAsync(issue.MergeSet.Id, eventId)
+                    : combined.Navigation;
                 breadcrumbs = combined.Breadcrumbs;
             }
         }
@@ -898,7 +939,7 @@ else
         memberActionError = "";
         try
         {
-            await MergeSetService.RemoveIssueAsync(issue.MergeSet.Id, issueId, Guid.Empty);
+            await MergeSetService.RemoveIssueAsync(issue.MergeSet.Id, issueId, currentUserId);
             await LoadIssue();
         }
         catch (Exception ex)
@@ -931,11 +972,11 @@ else
             if (issue?.MergeSet is not null)
             {
                 // Already in a merge set — add all selected issues
-                await MergeSetService.BulkAddIssuesAsync(issue.MergeSet.Id, similarSelected.ToList(), Guid.Empty);
+                await MergeSetService.BulkAddIssuesAsync(issue.MergeSet.Id, similarSelected.ToList(), currentUserId);
             }
             else
             {
-                await MergeSetService.CreateAsync(ProjectId, allIds, Guid.Empty);
+                await MergeSetService.CreateAsync(ProjectId, allIds, currentUserId);
             }
 
             Navigation.NavigateTo($"/projects/{ProjectId}/issues/{IssueId}?tab=members", forceLoad: false);

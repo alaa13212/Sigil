@@ -135,6 +135,19 @@ public class ApiEventService(HttpClient http) : IEventService
         }
     }
 
+    public async Task<EventNavigationResponse> GetMergeGroupEventNavigationAsync(int mergeSetId, long currentEventId)
+    {
+        try
+        {
+            return await http.GetFromJsonAsync<EventNavigationResponse>(
+                $"api/mergesets/{mergeSetId}/events/{currentEventId}/adjacent") ?? new EventNavigationResponse(null, null);
+        }
+        catch (HttpRequestException)
+        {
+            return new EventNavigationResponse(null, null);
+        }
+    }
+
     public Task<HashSet<string>> FindExistingEventIdsAsync(IEnumerable<string> eventIds) =>
         throw new NotSupportedException("Not available on client.");
 

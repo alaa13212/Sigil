@@ -49,9 +49,9 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
                 StackFrames = MakeStackFrames(parsedEvent),
                 RawCompressedJson = compressionService.CompressString(parsedEvent.RawJson),
             };
-            
+
             capturedEvents.Add(capturedEvent);
-            eventTags.AddRange(MakeTags(capturedEvent, parsedEvent.Tags, tagValues));                                                                                             
+            eventTags.AddRange(MakeTags(capturedEvent, parsedEvent.Tags, tagValues));
         }
 
         dbContext.Events.AddRange(capturedEvents);
@@ -110,78 +110,82 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         var json = compressionService.DecompressToString(compressed);
         return Encoding.UTF8.GetBytes(json);
     }
-    
-    public async Task<string?> GetEventMarkdownAsync(long eventId)                                                                                                               
-    {                                                                                                                                                                            
-        var evt = await GetEventDetailAsync(eventId);                                                                                                                            
-        if (evt is null) return null;                                                                                                                                            
-                                                                                                                                                                                 
-        var sb = new StringBuilder();                                                                                                                                            
-                                                                                                                                                                                 
-        sb.AppendLine($"# Event {evt.Id}");                                                                                                                                      
-        sb.AppendLine();                                                                                                                                                         
-        sb.AppendLine($"**Level:** {evt.Level}  ");                                                                                                                              
-        sb.AppendLine($"**Timestamp:** {evt.Timestamp:yyyy-MM-dd HH:mm:ss} UTC  ");                                                                                              
-        sb.AppendLine($"**Platform:** {evt.Platform}  ");                                                                                                                        
-        if (!string.IsNullOrEmpty(evt.Release))                                                                                                                                  
-            sb.AppendLine($"**Release:** {evt.Release}  ");                                                                                                                      
-        if (!string.IsNullOrEmpty(evt.Environment))                                                                                                                              
-            sb.AppendLine($"**Environment:** {evt.Environment}  ");                                                                                                              
-        if (!string.IsNullOrEmpty(evt.EventId))                                                                                                                                  
-            sb.AppendLine($"**Event ID:** `{evt.EventId}`  ");                                                                                                                   
-                                                                                                                                                                                 
-        if (!string.IsNullOrEmpty(evt.Message))                                                                                                                                  
-        {                                                                                                                                                                        
-            sb.AppendLine();                                                                                                                                                     
-            sb.AppendLine("## Exception");                                                                                                                                       
-            sb.AppendLine();                                                                                                                                                     
-            sb.AppendLine($"```");                                                                                                                                               
-            sb.AppendLine(evt.Message);                                                                                                                                          
-            sb.AppendLine("```");                                                                                                                                                
-        }                                                                                                                                                                        
-                                                                                                                                                                                 
-        if (evt.StackFrames.Count > 0)                                                                                                                                           
-        {                                                                                                                                                                        
-            sb.AppendLine();                                                                                                                                                     
-            sb.AppendLine("## Stack Trace");                                                                                                                                     
-            sb.AppendLine();                                                                                                                                                     
-            sb.AppendLine("```");                                                                                                                                                
-            foreach (var frame in evt.StackFrames)                                                                                                                               
-            {                                                                                                                                                                    
-                var location = frame.Filename is not null                                                                                                                        
-                    ? $" in {frame.Filename}{(frame.LineNumber.HasValue ? $":{frame.LineNumber}" : "")}"                                                                         
-                    : "";                                                                                                                                                        
-                var inApp = frame.InApp ? "" : " [external]";                                                                                                                    
-                sb.AppendLine($"  at {frame.Function ?? "?"}{location}{inApp}");                                                                                                 
-            }                                                                                                                                                                    
-            sb.AppendLine("```");                                                                                                                                                
-        }                                                                                                                                                                        
-                                                                                                                                                                                 
-        if (evt.User is not null)                                                                                                                                                
-        {                                                                                                                                                                        
-            sb.AppendLine();                                                                                                                                                     
-            sb.AppendLine("## User");                                                                                                                                            
-            sb.AppendLine();                                                                                                                                                     
-            if (!string.IsNullOrEmpty(evt.User.Identifier)) sb.AppendLine($"- **ID:** {evt.User.Identifier}");                                                                   
-            if (!string.IsNullOrEmpty(evt.User.Username))   sb.AppendLine($"- **Username:** {evt.User.Username}");                                                               
-            if (!string.IsNullOrEmpty(evt.User.Email))      sb.AppendLine($"- **Email:** {evt.User.Email}");                                                                     
-            if (!string.IsNullOrEmpty(evt.User.IpAddress))  sb.AppendLine($"- **IP:** {evt.User.IpAddress}");                                                                    
-        }                                                                                                                                                                        
-                                                                                                                                                                                 
-        var displayTags = evt.Tags.Where(t => t.Key != "environment").ToList();                                                                                                  
-        if (displayTags.Count > 0)                                                                                                                                               
-        {                                                                                                                                                                        
-            sb.AppendLine();                                                                                                                                                     
-            sb.AppendLine("## Tags");                                                                                                                                            
-            sb.AppendLine();                                                                                                                                                     
-            sb.AppendLine("| Key | Value |");                                                                                                                                    
-            sb.AppendLine("|-----|-------|");                                                                                                                                    
-            foreach (var tag in displayTags)                                                                                                                                     
-                sb.AppendLine($"| {tag.Key} | {tag.Value} |");                                                                                                                   
-        }                                                                                                                                                                        
-                                                                                                                                                                                 
-        return sb.ToString();                                                                                                                                                    
-    }   
+
+    public async Task<string?> GetEventMarkdownAsync(long eventId)
+    {
+        var evt = await GetEventDetailAsync(eventId);
+        if (evt is null) return null;
+
+        var sb = new StringBuilder();
+
+        sb.AppendLine($"# Event {evt.Id}");
+        sb.AppendLine();
+        sb.AppendLine($"**Level:** {evt.Level}  ");
+        sb.AppendLine($"**Timestamp:** {evt.Timestamp:yyyy-MM-dd HH:mm:ss} UTC  ");
+        sb.AppendLine($"**Platform:** {evt.Platform}  ");
+        if (!string.IsNullOrEmpty(evt.Release))
+            sb.AppendLine($"**Release:** {evt.Release}  ");
+        if (!string.IsNullOrEmpty(evt.Environment))
+            sb.AppendLine($"**Environment:** {evt.Environment}  ");
+        if (!string.IsNullOrEmpty(evt.EventId))
+            sb.AppendLine($"**Event ID:** `{evt.EventId}`  ");
+
+        sb.AppendLine();
+        sb.AppendLine("## Exception");
+        sb.AppendLine();
+        if (!string.IsNullOrEmpty(evt.Message))
+        {
+            sb.AppendLine("```");
+            sb.AppendLine(evt.Message);
+            sb.AppendLine("```");
+        }
+        else
+        {
+            sb.AppendLine("_No message_");
+        }
+
+        if (evt.StackFrames.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Stack Trace");
+            sb.AppendLine();
+            sb.AppendLine("```");
+            foreach (var frame in evt.StackFrames)
+            {
+                var location = frame.Filename is not null
+                    ? $" in {frame.Filename}{(frame.LineNumber.HasValue ? $":{frame.LineNumber}" : "")}"
+                    : "";
+                var inApp = frame.InApp ? "" : " [external]";
+                sb.AppendLine($"  at {frame.Function ?? "?"}{location}{inApp}");
+            }
+            sb.AppendLine("```");
+        }
+
+        if (evt.User is not null)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## User");
+            sb.AppendLine();
+            if (!string.IsNullOrEmpty(evt.User.Identifier)) sb.AppendLine($"- **ID:** {evt.User.Identifier}");
+            if (!string.IsNullOrEmpty(evt.User.Username))   sb.AppendLine($"- **Username:** {evt.User.Username}");
+            if (!string.IsNullOrEmpty(evt.User.Email))      sb.AppendLine($"- **Email:** {evt.User.Email}");
+            if (!string.IsNullOrEmpty(evt.User.IpAddress))  sb.AppendLine($"- **IP:** {evt.User.IpAddress}");
+        }
+
+        var displayTags = evt.Tags.Where(t => t.Key != "environment").ToList();
+        if (displayTags.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Tags");
+            sb.AppendLine();
+            sb.AppendLine("| Key | Value |");
+            sb.AppendLine("|-----|-------|");
+            foreach (var tag in displayTags)
+                sb.AppendLine($"| {tag.Key} | {tag.Value} |");
+        }
+
+        return sb.ToString();
+    }
 
     private static ICollection<StackFrame> MakeStackFrames(ParsedEvent parsedEvent)
     {
@@ -228,7 +232,7 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
             .Where(tv => tv.TagKey != null)
             .Select(tv => new TagSummary(tv.TagKey!.Key, tv.Value))
             .ToList();
-        
+
         var stackFrames = e.StackFrames
             .Select(f => new StackFrameResponse(f.Function, f.Filename, f.LineNumber, f.ColumnNumber, f.Module, f.InApp))
             .ToList();
@@ -273,6 +277,28 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         // Next = older event (ordered by timestamp desc, the one after current)
         var previousId = await dbContext.Events
             .Where(e => e.IssueId == issueId && (e.Timestamp < currentTimestamp || (e.Timestamp == currentTimestamp && e.Id < currentEventId)))
+            .OrderByDescending(e => e.Timestamp).ThenByDescending(e => e.Id)
+            .Select(e => (long?)e.Id)
+            .FirstOrDefaultAsync();
+
+        return new EventNavigationResponse(previousId, nextId);
+    }
+
+    public async Task<EventNavigationResponse> GetMergeGroupEventNavigationAsync(int mergeSetId, long currentEventId)
+    {
+        var currentTimestamp = await dbContext.Events
+            .Where(e => e.Id == currentEventId)
+            .Select(e => e.Timestamp)
+            .FirstOrDefaultAsync();
+
+        var nextId = await dbContext.Events
+            .Where(e => e.Issue!.MergeSetId == mergeSetId && (e.Timestamp > currentTimestamp || (e.Timestamp == currentTimestamp && e.Id > currentEventId)))
+            .OrderBy(e => e.Timestamp).ThenBy(e => e.Id)
+            .Select(e => (long?)e.Id)
+            .FirstOrDefaultAsync();
+
+        var previousId = await dbContext.Events
+            .Where(e => e.Issue!.MergeSetId == mergeSetId && (e.Timestamp < currentTimestamp || (e.Timestamp == currentTimestamp && e.Id < currentEventId)))
             .OrderByDescending(e => e.Timestamp).ThenByDescending(e => e.Id)
             .Select(e => (long?)e.Id)
             .FirstOrDefaultAsync();

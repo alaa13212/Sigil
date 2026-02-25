@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
+using Sigil.Domain.Enums;
 using Sigil.Domain.Ingestion;
 
 namespace Sigil.Infrastructure.Persistence;
@@ -35,6 +36,15 @@ internal partial class ReleaseService(SigilDbContext dbContext, IReleaseCache re
 
                 foreach (Release newRelease in newReleases)
                     dbContext.Entry(newRelease).State = EntityState.Detached;
+
+                // A new release has shipped — auto-transition "resolved in next release" issues to Resolved
+                var newReleaseIds = newReleases.Select(r => r.Id).ToList();
+                await dbContext.Issues
+                    .Where(i => i.ProjectId == projectId &&
+                                i.Status == IssueStatus.ResolvedInFuture &&
+                                (i.ResolvedInReleaseId == null || !newReleaseIds.Contains(i.ResolvedInReleaseId.Value)))
+                    .ExecuteUpdateAsync(s => s.SetProperty(i => i.Status, IssueStatus.Resolved)
+                                              .SetProperty(i => i.ResolvedInReleaseId, (int?)null));
             }
 
             foreach (Release release in fromDb)

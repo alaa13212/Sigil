@@ -4,7 +4,7 @@ public record MergeSetResponse(int Id, int PrimaryIssueId, List<MergeSetMember> 
 
 public record MergeSetMember(
     int IssueId,
-    string Title,
+    string? Title,
     string? ExceptionType,
     string Fingerprint,
     int OccurrenceCount,

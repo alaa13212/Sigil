@@ -9,8 +9,8 @@ public class Issue
     [Key]
     public int Id { get; set; }
 
-    [Required, MaxLength(1000)]
-    public required string Title { get; set; }
+    [MaxLength(1000)]
+    public string? Title { get; set; }
     
     [Required, StringLength(64)]
     public required string Fingerprint { get; set; }
@@ -27,6 +27,7 @@ public class Issue
     public DateTime FirstSeen { get; set; }
     public DateTime LastSeen { get; set; }
     public DateTime? ResolvedAt { get; set; }
+    public int? ResolvedInReleaseId { get; set; }
     public int OccurrenceCount { get; set; }
     
     public Severity Level { get; set; }

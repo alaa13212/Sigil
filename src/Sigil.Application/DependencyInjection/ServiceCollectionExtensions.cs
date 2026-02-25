@@ -13,11 +13,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMessageNormalizer, MessageNormalizer>();
         
         services.AddSingleton<IEventEnricher, PredefinedTagsEnricher>();
-        services.AddScoped<IEventEnricher, NormalizedMessageEnricher>();
+        services.AddSingleton<IEventEnricher, NormalizedMessageEnricher>();
         services.AddSingleton<IEventEnricher, RemoteIpProviderEnricher>();
         services.AddSingleton<IEventEnricher, EventUserUniqueIdentifierEnricher>();
         services.AddSingleton<IEventEnricher, FingerprintEventEnricher>();
-        services.AddScoped<IEventEnricher, AutoTagsEventEnricher>();
+        services.AddSingleton<IEventEnricher, AutoTagsEventEnricher>();
         
         services.AddSingleton<IInternalTagValueFormatter, ReleaseTagValueFormatter>();
         services.AddSingleton<ITagValueFormatter, CompositeTagValueFormatter>();

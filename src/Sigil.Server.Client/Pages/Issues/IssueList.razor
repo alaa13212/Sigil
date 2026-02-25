@@ -145,7 +145,14 @@
                                     {
                                         <span class="opacity-80">@issue.ExceptionType: </span>
                                     }
-                                    <p class="line-clamp-1">@issue.Title</p>
+                                    @if (!string.IsNullOrEmpty(issue.Title))
+                                    {
+                                        <p class="line-clamp-1">@issue.Title</p>
+                                    }
+                                    else
+                                    {
+                                        <p class="line-clamp-1 opacity-50 italic">No message</p>
+                                    }
                                 </div>
                                 @if (!string.IsNullOrEmpty(issue.Culprit))
                                 {
@@ -187,6 +194,9 @@
 
     // Bookmark state: IDs of bookmarked issues in the current page
     private HashSet<int> bookmarkedIssueIds = [];
+    private Guid currentUserId;
+
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
 
     private int recommendationCount;
 
@@ -194,6 +204,7 @@
     [
         ("Open", IssueStatus.Open),
         ("Resolved", IssueStatus.Resolved),
+        ("Next Release", IssueStatus.ResolvedInFuture),
         ("Ignored", IssueStatus.Ignored),
     ];
 
@@ -207,6 +218,10 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        var authState = await AuthState;
+        var userIdStr = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        currentUserId = userIdStr is not null ? Guid.Parse(userIdStr) : Guid.Empty;
+
         var targetPage = Math.Max(1, PageParam);
 
         if (Response is not null && Response.Page == targetPage)
@@ -246,7 +261,7 @@
             Response = await IssueService.GetIssueSummariesAsync(ProjectId, query);
 
             // Load bookmark states for visible issues
-            var bookmarked = await BookmarkService.GetBookmarkedIssuesAsync(Guid.Empty);
+            var bookmarked = await BookmarkService.GetBookmarkedIssuesAsync(currentUserId);
             bookmarkedIssueIds = bookmarked.Select(i => i.Id).ToHashSet();
             projectNotFound = false;
         }
@@ -312,7 +327,7 @@
 
     private async Task ToggleIssueBookmark(int issueId)
     {
-        var isNowBookmarked = await BookmarkService.ToggleBookmarkAsync(issueId, Guid.Empty);
+        var isNowBookmarked = await BookmarkService.ToggleBookmarkAsync(issueId, currentUserId);
         if (isNowBookmarked)
             bookmarkedIssueIds.Add(issueId);
         else

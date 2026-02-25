@@ -6,7 +6,7 @@ namespace Sigil.Application.Models.Issues;
 
 public record IssueSummary(
     int Id,
-    string Title,
+    string? Title,
     string? ExceptionType,
     string? Culprit,
     IssueStatus Status,
@@ -22,7 +22,7 @@ public record IssueSummary(
 public record IssueDetailResponse(
     int Id,
     int ProjectId,
-    string Title,
+    string? Title,
     string? ExceptionType,
     string? Culprit,
     string Fingerprint,
