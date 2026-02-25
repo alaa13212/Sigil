@@ -1,4 +1,3 @@
-using Fido2NetLib;
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;

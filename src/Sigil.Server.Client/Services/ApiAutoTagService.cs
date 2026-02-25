@@ -2,7 +2,6 @@ using System.Net.Http.Json;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.AutoTags;
 using Sigil.Domain.Entities;
-using Sigil.Domain.Ingestion;
 
 namespace Sigil.Server.Client.Services;
 

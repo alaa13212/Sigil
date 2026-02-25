@@ -1,0 +1,10 @@
+@inject ITagValueFormatter TagValueFormatter
+
+<a href="/projects/@ProjectId/issues?q=@Uri.EscapeDataString($"{Key}:{Value}")"
+   class="link link-hover font-mono text-sm">@TagValueFormatter.Format(Key, Value)</a>
+
+@code {
+    [Parameter, EditorRequired] public int ProjectId { get; set; }
+    [Parameter, EditorRequired] public string Key { get; set; } = "";
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+}

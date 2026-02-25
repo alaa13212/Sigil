@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Application.Models.Filters;
-using Sigil.Application.Services;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 using Sigil.Domain.Ingestion;

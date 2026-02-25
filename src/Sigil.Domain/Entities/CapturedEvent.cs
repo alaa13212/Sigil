@@ -19,6 +19,12 @@ public class CapturedEvent
     [MaxLength(1000)]
     public string? Message { get; set; }
 
+    [MaxLength(500)]
+    public string? ExceptionType { get; set; }
+
+    [MaxLength(500)]
+    public string? Culprit { get; set; }
+
     public Severity Level { get; set; }
 
     [MaxLength(500)]

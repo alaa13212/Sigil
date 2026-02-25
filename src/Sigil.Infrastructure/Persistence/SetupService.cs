@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Auth;
 using Sigil.Domain;
@@ -134,6 +133,14 @@ internal class SetupService(
         project.Rules.ForEach(r => r.Project = project);
         dbContext.Projects.Add(project);
         await dbContext.SaveChangesAsync();
+        
+        dbContext.ProjectConfigs.Add(new ProjectConfig
+        {
+            ProjectId = project.Id,
+            Key = ProjectConfigKeys.HighVolumeThreshold,
+            Value = "1000",
+            UpdatedAt = DateTime.UtcNow
+        });
 
         // Save host URL config if provided
         if (!string.IsNullOrWhiteSpace(request.HostUrl))

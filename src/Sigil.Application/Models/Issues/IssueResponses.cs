@@ -17,7 +17,8 @@ public record IssueSummary(
     int OccurrenceCount,
     string? AssignedToName,
     int? MergeSetId = null,
-    int MergeSetSize = 0);
+    int MergeSetSize = 0,
+    ISet<string>? SystemTagKeys = null);
 
 public record IssueDetailResponse(
     int Id,

@@ -62,6 +62,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAlertService, AlertService>();
         services.AddScoped<IReleaseHealthService, ReleaseHealthService>();
         services.AddScoped<IRecommendationService, RecommendationService>();
+        services.AddScoped<IProjectConfigService, ProjectConfigService>();
+        
+        services.AddSingleton<IStackFrameCleaner, CSharpStackFrameCleaner>();
+        services.AddSingleton<IStackFrameCleaner, JavaStackFrameCleaner>();
+        services.AddSingleton<IStackFrameCleaner, JavaScriptStackFrameCleaner>();
+        services.AddSingleton<IStackFrameCleaner, PythonStackFrameCleaner>();
+        services.AddSingleton<StackFrameCleanerService>();
+        
         services.AddAllImplementations<IProjectAnalyzer>();
         
         services.AddHttpClient<SlackAlertSender>();
@@ -89,6 +97,7 @@ public static class ServiceCollectionExtensions
             options.Add<IEventFilterCache>(500, TimeSpan.FromHours(1));
             options.Add<IAutoTagRuleCache>(500, TimeSpan.FromHours(1));
             options.Add<INormalizationRuleCache>(500, TimeSpan.FromHours(1));
+            options.Add<IProjectConfigCache>(200, TimeSpan.FromMinutes(30));
         });
 
         services.AddScoped<IAppConfigCache, AppConfigCache>();
@@ -100,6 +109,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEventFilterCache, EventFilterCache>();
         services.AddScoped<IAutoTagRuleCache, AutoTagRuleCache>();
         services.AddScoped<INormalizationRuleCache, NormalizationRuleCache>();
+        services.AddScoped<IProjectConfigCache, ProjectConfigCache>();
     }
     
     private static void AddIdentityServices(this IServiceCollection services)

@@ -38,6 +38,8 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
                 ReceivedAt = parsedEvent.ReceivedAt,
                 ProcessedAt = DateTime.UtcNow,
                 Message = parsedEvent.Message,
+                ExceptionType = parsedEvent.ExceptionType,
+                Culprit = parsedEvent.Culprit,
                 Level = parsedEvent.Level,
                 Logger = parsedEvent.Logger,
                 Platform = parsedEvent.Platform,
@@ -116,6 +118,8 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         var evt = await GetEventDetailAsync(eventId);
         if (evt is null) return null;
 
+        var breadcrumbs = await GetBreadcrumbsAsync(eventId);
+
         var sb = new StringBuilder();
 
         sb.AppendLine($"# Event {evt.Id}");
@@ -133,13 +137,18 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         sb.AppendLine();
         sb.AppendLine("## Exception");
         sb.AppendLine();
+        if (!string.IsNullOrEmpty(evt.ExceptionType))
+            sb.AppendLine($"**Type:** `{evt.ExceptionType}`  ");
+        if (!string.IsNullOrEmpty(evt.Culprit))
+            sb.AppendLine($"**Culprit:** `{evt.Culprit}`  ");
         if (!string.IsNullOrEmpty(evt.Message))
         {
+            sb.AppendLine();
             sb.AppendLine("```");
             sb.AppendLine(evt.Message);
             sb.AppendLine("```");
         }
-        else
+        else if (evt.ExceptionType is null)
         {
             sb.AppendLine("_No message_");
         }
@@ -182,6 +191,34 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
             sb.AppendLine("|-----|-------|");
             foreach (var tag in displayTags)
                 sb.AppendLine($"| {tag.Key} | {tag.Value} |");
+        }
+
+        if (evt.Extra is { Count: > 0 })
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Extra Data");
+            sb.AppendLine();
+            sb.AppendLine("| Key | Value |");
+            sb.AppendLine("|-----|-------|");
+            foreach (var (key, value) in evt.Extra)
+                sb.AppendLine($"| {key} | {value} |");
+        }
+
+        if (breadcrumbs.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Breadcrumbs");
+            sb.AppendLine();
+            sb.AppendLine("| Timestamp | Category | Message | Level |");
+            sb.AppendLine("|-----------|----------|---------|-------|");
+            foreach (var crumb in breadcrumbs)
+            {
+                var ts = crumb.Timestamp.HasValue ? crumb.Timestamp.Value.ToString("HH:mm:ss") : "";
+                var cat = crumb.Category ?? "";
+                var msg = crumb.Message?.Replace("|", "\\|") ?? "";
+                var lvl = crumb.Level ?? "";
+                sb.AppendLine($"| {ts} | {cat} | {msg} | {lvl} |");
+            }
         }
 
         return sb.ToString();
@@ -244,7 +281,7 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         var environment = tags.FirstOrDefault(t => t.Key == "environment")?.Value;
 
         return new EventDetailResponse(
-            e.Id, e.EventId, e.IssueId, e.Message, e.Level,
+            e.Id, e.EventId, e.IssueId, e.Message, e.ExceptionType, e.Culprit, e.Level,
             e.Timestamp, e.Platform, e.Release?.RawName,
             environment, user, stackFrames, tags, e.Extra);
     }

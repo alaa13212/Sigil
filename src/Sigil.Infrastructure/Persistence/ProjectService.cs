@@ -24,6 +24,17 @@ internal class ProjectService(SigilDbContext dbContext, IAppConfigService appCon
 
         dbContext.Projects.Add(project);
         await dbContext.SaveChangesAsync();
+
+        // Seed default project config
+        dbContext.ProjectConfigs.Add(new ProjectConfig
+        {
+            ProjectId = project.Id,
+            Key = ProjectConfigKeys.HighVolumeThreshold,
+            Value = "1000",
+            UpdatedAt = DateTime.UtcNow
+        });
+        await dbContext.SaveChangesAsync();
+
         projectCache.Set(project);
         projectCache.InvalidateList();
         return project;

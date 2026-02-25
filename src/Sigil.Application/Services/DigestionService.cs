@@ -1,5 +1,6 @@
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
+using Sigil.Domain;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 using Sigil.Domain.Extensions;
@@ -36,7 +37,14 @@ public class DigestionService(
 
         Dictionary<string, Release> releases = (await releaseService.BulkGetOrCreateReleasesAsync(context.ProjectId, parsedEvents)).ToDictionary(r => r.RawName);
 
-        List<KeyValuePair<string, string>> requiredTags = parsedEvents.Where(item => item.Tags != null).SelectMany(item => item.Tags!).Distinct().ToList();
+        var userTagPairs = parsedEvents.Where(item => item.Tags != null).SelectMany(item => item.Tags!).Distinct().ToList();
+        var systemTagPairs = new List<KeyValuePair<string, string>>
+        {
+            new(SystemTags.Regression, "true"),
+            new(SystemTags.Reopened,   "true"),
+            new(SystemTags.HighVolume, "true"),
+        };
+        List<KeyValuePair<string, string>> requiredTags = [.. userTagPairs, .. systemTagPairs];
         Dictionary<string, Dictionary<string, int>> tagValues = (await tagService.BulkGetOrCreateTagsAsync(requiredTags))
             .ToLookup(t => t.TagKey!.Key)
             .ToDictionary(g => g.Key!, g => g.ToDictionary(tv => tv.Value, tv => tv.Id));
@@ -57,6 +65,8 @@ public class DigestionService(
             .Select(i => i.Id)
             .ToHashSet();
 
+        var now = DateTime.UtcNow;
+
         foreach (IGrouping<string, ParsedEvent> group in issueGrouping)
         {
             Issue issue = issues[group.Key];
@@ -65,6 +75,20 @@ public class DigestionService(
 
             List<CapturedEvent> eventsEntities = eventService.BulkCreateEventsEntities(group, project, issue, releases, eventUsers, tagValues);
             issue.SuggestedEvent = eventRanker.GetMostRelevantEvent(eventsEntities.Union(issue.SuggestedEvent != null ? [issue.SuggestedEvent] : []));
+        }
+
+        // Apply system tags
+        foreach (var issueId in regressionIssueIds)
+        {
+            var issue = issues.Values.First(i => i.Id == issueId);
+            AddSystemTag(issue, SystemTags.Regression, tagValues, now);
+            AddSystemTag(issue, SystemTags.Reopened, tagValues, now);
+        }
+
+        foreach (var issue in issues.Values)
+        {
+            if (issue.OccurrenceCount > context.HighVolumeThreshold)
+                AddSystemTag(issue, SystemTags.HighVolume, tagValues, now);
         }
 
         await eventService.SaveEventsAsync();
@@ -103,6 +127,30 @@ public class DigestionService(
             issue.OccurrenceCount++;
             issue.FirstSeen = TimeMath.Earlier(issue.FirstSeen, parsedEvent.Timestamp);
             issue.LastSeen = TimeMath.Later(issue.LastSeen, parsedEvent.Timestamp);
+        }
+    }
+
+    private static void AddSystemTag(Issue issue, string tagKey, Dictionary<string, Dictionary<string, int>> tagValues, DateTime timestamp)
+    {
+        if (!tagValues.TryGetValue(tagKey, out var valueMap)) return;
+        if (!valueMap.TryGetValue("true", out var tagValueId)) return;
+
+        var existing = issue.Tags.FirstOrDefault(t => t.TagValueId == tagValueId);
+        if (existing is null)
+        {
+            issue.Tags.Add(new IssueTag
+            {
+                Issue = issue,
+                TagValueId = tagValueId,
+                OccurrenceCount = 1,
+                FirstSeen = timestamp,
+                LastSeen = timestamp,
+            });
+        }
+        else
+        {
+            existing.OccurrenceCount++;
+            existing.LastSeen = TimeMath.Later(existing.LastSeen, timestamp);
         }
     }
 

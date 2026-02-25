@@ -1,4 +1,8 @@
+@using Sigil.Application
 @using Sigil.Application.Models.Events
+@using Sigil.Application.Services
+@inject StackFrameCleanerService FrameCleaner
+@inject IUserPreferenceService Preferences
 
 @if (Frames.Count == 0)
 {
@@ -6,28 +10,181 @@
 }
 else
 {
-    <div class="space-y-1">
-        @foreach (var frame in Frames)
-        {
-            var bgClass = frame.InApp ? "bg-base-200" : "opacity-50";
-            <div class="@bgClass rounded px-3 py-1 text-sm font-mono">
-                <div class="font-semibold">@(frame.Function ?? "(unknown)")</div>
-                @if (!string.IsNullOrEmpty(frame.Filename))
+    <!-- Header bar -->
+    <div class="flex items-center justify-between mb-2">
+        <span class="text-xs opacity-60">
+            @Frames.Count frames (@Frames.Count(f => f.InApp) in-app)
+        </span>
+        <div class="flex items-center gap-2">
+            <label class="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+                <input type="checkbox" class="checkbox checkbox-xs" @bind="_cleanTrace" @bind:after="SaveCleanPreference" />
+                Clean names
+            </label>
+            @if (_interactive)
+            {
+                <label class="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+                    <input type="checkbox" class="checkbox checkbox-xs" @bind="_hideExternal" />
+                    Hide external
+                </label>
+            }
+            <button class="btn btn-xs btn-ghost" @onclick="ToggleMode" title="@(_interactive ? "Switch to simple view" : "Switch to interactive view")">
+                @(_interactive ? "Simple" : "Interactive")
+            </button>
+        </div>
+    </div>
+
+    @if (_interactive)
+    {
+        <!-- Interactive view: collapse consecutive external frames -->
+        <div class="space-y-1">
+            @{
+                var groups = GroupFrames(Frames, _hideExternal);
+            }
+            @foreach (var group in groups)
+            {
+                @if (group.IsCollapsed)
                 {
-                    <div class="text-xs opacity-70">
-                        @frame.Filename@(frame.LineNumber.HasValue ? $":{frame.LineNumber}" : "")
-                        @if (!string.IsNullOrEmpty(frame.Module))
+                    <div class="text-xs opacity-40 px-3 py-1 font-mono italic cursor-pointer hover:opacity-70"
+                         @onclick="() => group.Expanded = !group.Expanded">
+                        @if (group.Expanded)
                         {
-                            <span class="ml-2 opacity-50">in @frame.Module</span>
+                            @foreach (var frame in group.Frames)
+                            {
+                                <div class="opacity-50 rounded px-3 py-1 text-sm font-mono">
+                                    <div>@MethodName(frame)</div>
+                                    @if (!string.IsNullOrEmpty(frame.Filename))
+                                    {
+                                        <div class="text-xs opacity-70">@frame.Filename@(frame.LineNumber.HasValue ? $":{frame.LineNumber}" : "")</div>
+                                    }
+                                </div>
+                            }
+                            <div class="mt-1 text-primary">▲ hide @group.Frames.Count framework frame@(group.Frames.Count == 1 ? "" : "s")</div>
+                        }
+                        else
+                        {
+                            <span>▶ @group.Frames.Count framework frame@(group.Frames.Count == 1 ? "" : "s")</span>
                         }
                     </div>
                 }
-            </div>
-        }
-    </div>
+                else
+                {
+                    @foreach (var frame in group.Frames)
+                    {
+                        <div class="bg-base-200 rounded px-3 py-1 text-sm font-mono">
+                            <div class="font-semibold">@MethodName(frame)</div>
+                            @if (!string.IsNullOrEmpty(frame.Filename))
+                            {
+                                <div class="text-xs opacity-70">
+                                    @frame.Filename@(frame.LineNumber.HasValue ? $":{frame.LineNumber}" : "")@(frame.ColumnNumber.HasValue ? $":{frame.ColumnNumber}" : "")
+                                    @if (!string.IsNullOrEmpty(frame.Module))
+                                    {
+                                        <span class="ml-2 opacity-50">in @frame.Module</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            }
+        </div>
+    }
+    else
+    {
+        <!-- Simple view: flat list -->
+        <div class="space-y-1">
+            @foreach (var frame in Frames)
+            {
+                var bgClass = frame.InApp ? "bg-base-200" : "opacity-50";
+                <div class="@bgClass rounded px-3 py-1 text-sm font-mono">
+                    <div class="font-semibold">@MethodName(frame)</div>
+                    @if (!string.IsNullOrEmpty(frame.Filename))
+                    {
+                        <div class="text-xs opacity-70">
+                            @frame.Filename@(frame.LineNumber.HasValue ? $":{frame.LineNumber}" : "")@(frame.ColumnNumber.HasValue ? $":{frame.ColumnNumber}" : "")
+                            @if (!string.IsNullOrEmpty(frame.Module))
+                            {
+                                <span class="ml-2 opacity-50">in @frame.Module</span>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
 }
 
 @code {
-    [Parameter, EditorRequired]
-    public List<StackFrameResponse> Frames { get; set; } = [];
+    [Parameter, EditorRequired] public List<StackFrameResponse> Frames { get; set; } = [];
+    [Parameter] public Platform Platform { get; set; } = Platform.Other;
+
+    private bool _interactive;
+    private bool _hideExternal = true;
+    private bool _cleanTrace = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var modeTask  = Preferences.GetAsync(UserPreferenceKeys.StackTraceMode);
+        var cleanTask = Preferences.GetAsync(UserPreferenceKeys.StackTraceClean);
+        await Task.WhenAll(modeTask, cleanTask);
+        _interactive = modeTask.Result == "interactive";
+        _cleanTrace  = cleanTask.Result != "false";
+    }
+
+    private async Task ToggleMode()
+    {
+        _interactive = !_interactive;
+        await Preferences.SetAsync(UserPreferenceKeys.StackTraceMode, _interactive ? "interactive" : "simple");
+    }
+
+    private async Task SaveCleanPreference()
+        => await Preferences.SetAsync(UserPreferenceKeys.StackTraceClean, _cleanTrace ? "true" : "false");
+
+    private string MethodName(StackFrameResponse frame)
+        => _cleanTrace
+            ? FrameCleaner.CleanMethodName(Platform, frame.Function)
+            : frame.Function ?? "(unknown)";
+
+    private static List<FrameGroup> GroupFrames(List<StackFrameResponse> frames, bool hideExternal)
+    {
+        var groups = new List<FrameGroup>();
+        FrameGroup? current = null;
+
+        foreach (var frame in frames)
+        {
+            var isExternal = !frame.InApp;
+            var collapse = isExternal && hideExternal;
+
+            if (collapse)
+            {
+                if (current is { IsCollapsed: true })
+                {
+                    current.Frames.Add(frame);
+                }
+                else
+                {
+                    current = new FrameGroup { IsCollapsed = true };
+                    current.Frames.Add(frame);
+                    groups.Add(current);
+                }
+            }
+            else
+            {
+                if (current is null || current.IsCollapsed)
+                {
+                    current = new FrameGroup { IsCollapsed = false };
+                    groups.Add(current);
+                }
+                current.Frames.Add(frame);
+            }
+        }
+
+        return groups;
+    }
+
+    private class FrameGroup
+    {
+        public bool IsCollapsed { get; set; }
+        public bool Expanded { get; set; }
+        public List<StackFrameResponse> Frames { get; } = [];
+    }
 }

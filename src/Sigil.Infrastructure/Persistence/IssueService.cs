@@ -4,6 +4,7 @@ using Sigil.Application.Models;
 using Sigil.Application.Models.Events;
 using Sigil.Application.Models.Issues;
 using Sigil.Application.Models.MergeSets;
+using Sigil.Domain;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 using Sigil.Domain.Ingestion;
@@ -129,13 +130,20 @@ internal class IssueService(
         if (query.BookmarkedByUserId.HasValue)
             q = q.Where(i => dbContext.IssueBookmarks.Any(b => b.IssueId == i.Id && b.UserId == query.BookmarkedByUserId.Value));
 
-        if (!string.IsNullOrWhiteSpace(query.Search))
+        var (freeText, tagFilters) = ParseSearch(query.Search);
+        if (!string.IsNullOrEmpty(freeText))
         {
-            var search = query.Search.ToLower();
+            var search = freeText.ToLower();
             q = q.Where(i =>
                 i.Title.ToLower().Contains(search) ||
                 (i.ExceptionType != null && i.ExceptionType.ToLower().Contains(search)) ||
                 (i.Culprit != null && i.Culprit.ToLower().Contains(search)));
+        }
+        foreach (var (tagKey, tagValue) in tagFilters)
+        {
+            var k = tagKey;
+            var v = tagValue;
+            q = q.Where(i => i.Tags.Any(t => t.TagValue!.TagKey!.Key == k && t.TagValue.Value == v));
         }
 
         int totalCount = await q.CountAsync();
@@ -302,9 +310,23 @@ internal class IssueService(
                 .ToDictionaryAsync(x => x.Id, x => x.Count)
             : new Dictionary<int, int>();
 
+        var issueIds = items.Select(i => i.Id).ToList();
+        Dictionary<int, HashSet<string>> systemTagsByIssue = [];
+        if (issueIds.Count > 0)
+        {
+            var rows = await dbContext.IssueTags
+                .Where(t => issueIds.Contains(t.IssueId) && t.TagValue!.TagKey!.Key.StartsWith(SystemTags.Prefix))
+                .Select(t => new { t.IssueId, Key = t.TagValue!.TagKey!.Key })
+                .ToListAsync();
+            systemTagsByIssue = rows
+                .GroupBy(r => r.IssueId)
+                .ToDictionary(g => g.Key, g => g.Select(r => r.Key).ToHashSet());
+        }
+
         var summaries = items.Select(i =>
         {
             var ms = i.MergeSet;
+            systemTagsByIssue.TryGetValue(i.Id, out var stags);
             return new IssueSummary(
                 i.Id, i.Title, i.ExceptionType, i.Culprit,
                 i.Status, i.Priority,
@@ -314,7 +336,8 @@ internal class IssueService(
                 ms?.OccurrenceCount ?? i.OccurrenceCount,
                 i.AssignedTo?.DisplayName,
                 i.MergeSetId,
-                i.MergeSetId.HasValue ? memberCounts.GetValueOrDefault(i.MergeSetId.Value, 0) : 0);
+                i.MergeSetId.HasValue ? memberCounts.GetValueOrDefault(i.MergeSetId.Value, 0) : 0,
+                stags);
         }).ToList();
 
         return new PagedResponse<IssueSummary>(summaries, totalCount, query.Page, query.PageSize);
@@ -417,5 +440,25 @@ internal class IssueService(
     {
         public string? FirstRelease { get; set; }
         public string? LastRelease { get; set; }
+    }
+
+    private static (string? FreeText, List<(string Key, string Value)> TagFilters) ParseSearch(string? search)
+    {
+        if (string.IsNullOrWhiteSpace(search)) return (null, []);
+
+        var parts = search.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var tagFilters = new List<(string Key, string Value)>();
+        var freeTextParts = new List<string>();
+
+        foreach (var part in parts)
+        {
+            var colonIdx = part.IndexOf(':');
+            if (colonIdx > 0 && colonIdx < part.Length - 1)
+                tagFilters.Add((part[..colonIdx], part[(colonIdx + 1)..]));
+            else
+                freeTextParts.Add(part);
+        }
+
+        return (freeTextParts.Count > 0 ? string.Join(' ', freeTextParts) : null, tagFilters);
     }
 }

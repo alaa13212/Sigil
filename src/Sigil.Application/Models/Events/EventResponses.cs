@@ -16,6 +16,8 @@ public record EventDetailResponse(
     string? EventId,
     int IssueId,
     string? Message,
+    string? ExceptionType,
+    string? Culprit,
     Severity Level,
     DateTime Timestamp,
     Platform Platform,

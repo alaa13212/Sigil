@@ -16,6 +16,11 @@ builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredServ
 builder.Services.AddSingleton<IMessageNormalizer, MessageNormalizer>();
 builder.Services.AddSingleton<IInternalTagValueFormatter, ReleaseTagValueFormatter>();
 builder.Services.AddSingleton<ITagValueFormatter, CompositeTagValueFormatter>();
+builder.Services.AddSingleton<IStackFrameCleaner, CSharpStackFrameCleaner>();
+builder.Services.AddSingleton<IStackFrameCleaner, JavaStackFrameCleaner>();
+builder.Services.AddSingleton<IStackFrameCleaner, JavaScriptStackFrameCleaner>();
+builder.Services.AddSingleton<IStackFrameCleaner, PythonStackFrameCleaner>();
+builder.Services.AddSingleton<StackFrameCleanerService>();
 
 builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 builder.Services.AddScoped<IAuthService, ApiAuthService>();
@@ -35,5 +40,6 @@ builder.Services.AddScoped<IAlertService, ApiAlertService>();
 builder.Services.AddScoped<IAutoTagService, ApiAutoTagService>();
 builder.Services.AddScoped<INormalizationRuleService, ApiNormalizationRuleService>();
 builder.Services.AddScoped<IReleaseHealthService, ApiReleaseHealthService>();
+builder.Services.AddScoped<IUserPreferenceService, LocalStoragePreferenceService>();
 
 await builder.Build().RunAsync();

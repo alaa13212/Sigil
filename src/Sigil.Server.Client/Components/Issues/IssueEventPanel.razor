@@ -28,30 +28,36 @@
         <span>@EventDetail.Timestamp.ToString("yyyy-MM-dd HH:mm:ss UTC")</span>
     </div>
 
-    @if (!string.IsNullOrEmpty(EventDetail.Message))
-    {
-        <div class="alert">
+    <div class="alert flex-col items-start gap-0.5">
+        @if (!string.IsNullOrEmpty(EventDetail.ExceptionType))
+        {
+            <div class="font-mono text-sm font-semibold opacity-70">@EventDetail.ExceptionType</div>
+        }
+        @if (!string.IsNullOrEmpty(EventDetail.Message))
+        {
             <span class="font-mono text-sm break-words">@EventDetail.Message</span>
-        </div>
-    }
-    else
-    {
-        <div class="alert">
+        }
+        else if (string.IsNullOrEmpty(EventDetail.ExceptionType))
+        {
             <span class="opacity-50 italic text-sm">No message</span>
-        </div>
-    }
+        }
+        @if (!string.IsNullOrEmpty(EventDetail.Culprit))
+        {
+            <div class="text-xs opacity-50 mt-0.5">@EventDetail.Culprit</div>
+        }
+    </div>
 
     @if (EventDetail.StackFrames.Count > 0)
     {
         <div class="card bg-base-200">
             <div class="card-body p-4 overflow-auto">
                 <h2 class="card-title text-base">Stack Trace</h2>
-                <StackTraceViewer Frames="EventDetail.StackFrames" />
+                <StackTraceViewer Frames="EventDetail.StackFrames" Platform="EventDetail.Platform" />
             </div>
         </div>
     }
 
-    <EventContextCards EventDetail="EventDetail" />
+    <EventContextCards EventDetail="EventDetail" ProjectId="ProjectId" />
 
     @if (Breadcrumbs is { Count: > 0 })
     {

@@ -82,7 +82,16 @@
                         {
                             <tr>
                                 <td class="opacity-60 w-1/3">@tag.Key</td>
-                                <td class="font-mono">@TagValueFormatter.Format(tag.Key, tag.Value)</td>
+                                <td>
+                                    @if (ProjectId > 0)
+                                    {
+                                        <TagLink ProjectId="ProjectId" Key="@tag.Key" Value="@tag.Value" />
+                                    }
+                                    else
+                                    {
+                                        <span class="font-mono">@TagValueFormatter.Format(tag.Key, tag.Value)</span>
+                                    }
+                                </td>
                             </tr>
                         }
                         </tbody>
@@ -114,4 +123,5 @@
 
 @code {
     [Parameter, EditorRequired] public EventDetailResponse EventDetail { get; set; } = default!;
+    [Parameter] public int ProjectId { get; set; }
 }

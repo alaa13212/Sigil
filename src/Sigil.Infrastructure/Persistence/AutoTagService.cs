@@ -1,10 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
-using Sigil.Application.Models;
 using Sigil.Application.Models.AutoTags;
-using Sigil.Application.Services;
+using Sigil.Domain;
 using Sigil.Domain.Entities;
-using Sigil.Domain.Ingestion;
 
 namespace Sigil.Infrastructure.Persistence;
 
@@ -24,6 +22,9 @@ internal class AutoTagService(
 
     public async Task<AutoTagRuleResponse> CreateRuleAsync(int projectId, CreateAutoTagRuleRequest request)
     {
+        if (SystemTags.IsSystemTag(request.TagKey))
+            throw new InvalidOperationException($"Cannot use the reserved '{SystemTags.Prefix}' prefix for auto-tag rules.");
+
         var rule = new AutoTagRule
         {
             ProjectId = projectId,
@@ -46,6 +47,9 @@ internal class AutoTagService(
 
     public async Task<AutoTagRuleResponse?> UpdateRuleAsync(int ruleId, UpdateAutoTagRuleRequest request)
     {
+        if (SystemTags.IsSystemTag(request.TagKey))
+            throw new InvalidOperationException($"Cannot use the reserved '{SystemTags.Prefix}' prefix for auto-tag rules.");
+
         var rule = await dbContext.AutoTagRules.AsTracking().FirstOrDefaultAsync(r => r.Id == ruleId);
         if (rule is null) return null;
 

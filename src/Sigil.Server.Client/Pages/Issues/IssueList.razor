@@ -1,6 +1,7 @@
 @page "/projects/{ProjectId:int}/issues"
 @attribute [Authorize]
 @using Sigil.Application.Models.Issues
+@using Sigil.Domain
 @inject IIssueService IssueService
 @inject IBookmarkService BookmarkService
 @inject IRecommendationService RecommendationService
@@ -82,6 +83,23 @@
                @bind="searchText" @bind:event="oninput" @onkeydown="OnSearchKeyDown" />
     </div>
 
+    <!-- Active tag filter chips -->
+    @{
+        var activeTagFilters = ParseTagFiltersFromSearch(SearchParam);
+    }
+    @if (activeTagFilters.Count > 0)
+    {
+        <div class="flex flex-wrap gap-2">
+            @foreach (var (key, value) in activeTagFilters)
+            {
+                <div class="badge badge-lg badge-outline gap-2">
+                    <span class="font-mono">@key: @value</span>
+                    <button class="btn btn-xs btn-circle btn-ghost" @onclick="ClearSearch" title="Remove filter">×</button>
+                </div>
+            }
+        </div>
+    }
+
     <!-- Content -->
     @if (loading)
     {
@@ -107,6 +125,7 @@
                         <th>Issue</th>
                         <th>Severity</th>
                         <th>Status</th>
+                        <th>Priority</th>
                         <th class="text-right">Events</th>
                         <th>Last Seen</th>
                         <th>Assigned</th>
@@ -141,6 +160,17 @@
                                             @issue.MergeSetSize
                                         </span>
                                     }
+                                    @if (issue.SystemTagKeys is not null)
+                                    {
+                                        @foreach (var tagKey in issue.SystemTagKeys)
+                                        {
+                                            var label = tagKey[SystemTags.Prefix.Length..];
+                                            var css = tagKey == SystemTags.Regression ? "badge-error"
+                                                    : tagKey == SystemTags.HighVolume  ? "badge-info"
+                                                    : "badge-warning";
+                                            <span class="badge badge-sm break-keep @css">@label</span>
+                                        }
+                                    }
                                     @if (!string.IsNullOrEmpty(issue.ExceptionType))
                                     {
                                         <span class="opacity-80">@issue.ExceptionType: </span>
@@ -161,6 +191,7 @@
                             </td>
                             <td><SeverityBadge Level="issue.Level" /></td>
                             <td><StatusBadge Status="issue.Status" /></td>
+                            <td class="text-sm @(@issue.Priority == Priority.Low? "opacity-70" : "")">@issue.Priority</td>
                             <td class="text-right font-mono">@issue.OccurrenceCount</td>
                             <td><RelativeTime Value="issue.LastSeen" /></td>
                             <td class="text-sm opacity-70">@(issue.AssignedToName ?? "—")</td>
@@ -178,12 +209,14 @@
 @code {
     [Parameter] public int ProjectId { get; set; }
     [SupplyParameterFromQuery(Name = "page")] public int PageParam { get; set; } = 1;
+    [SupplyParameterFromQuery(Name = "q")] public string? SearchParam { get; set; }
 
     private const int PageSize = 50;
     [PersistentState] public PagedResponse<IssueSummary>? Response { get; set; }
     private bool loading = true;
     private bool projectNotFound;
     private int currentPage = 1;
+    private string? _lastSearchParam; // track URL search to detect changes
 
     // Filters
     private IssueStatus? statusFilter = IssueStatus.Open;
@@ -223,8 +256,14 @@
         currentUserId = userIdStr is not null ? Guid.Parse(userIdStr) : Guid.Empty;
 
         var targetPage = Math.Max(1, PageParam);
+        var searchChanged = SearchParam != _lastSearchParam;
+        _lastSearchParam = SearchParam;
 
-        if (Response is not null && Response.Page == targetPage)
+        // Sync searchText from URL on navigation (e.g. from a TagLink click)
+        if (searchChanged)
+            searchText = SearchParam ?? "";
+
+        if (Response is not null && Response.Page == targetPage && !searchChanged)
         {
             currentPage = targetPage;
             loading = false;
@@ -304,13 +343,16 @@
         }
     }
 
-    private async Task OnSearchKeyDown(KeyboardEventArgs e)
+    private void OnSearchKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
-        {
-            currentPage = 1;
-            await LoadIssues();
-        }
+            ApplySearch();
+    }
+
+    private void ApplySearch()
+    {
+        var q = string.IsNullOrWhiteSpace(searchText) ? "" : $"&q={Uri.EscapeDataString(searchText)}";
+        Navigation.NavigateTo($"/projects/{ProjectId}/issues?page=1{q}", forceLoad: false);
     }
 
     private void OnPageChanged(int newPage)
@@ -323,6 +365,25 @@
         bookmarkedFilter = !bookmarkedFilter;
         currentPage = 1;
         await LoadIssues();
+    }
+
+    private static List<(string Key, string Value)> ParseTagFiltersFromSearch(string? search)
+    {
+        if (string.IsNullOrWhiteSpace(search)) return [];
+        var result = new List<(string, string)>();
+        foreach (var part in search.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var idx = part.IndexOf(':');
+            if (idx > 0 && idx < part.Length - 1)
+                result.Add((part[..idx], part[(idx + 1)..]));
+        }
+        return result;
+    }
+
+    private void ClearSearch()
+    {
+        searchText = "";
+        Navigation.NavigateTo($"/projects/{ProjectId}/issues?page=1", forceLoad: false);
     }
 
     private async Task ToggleIssueBookmark(int issueId)

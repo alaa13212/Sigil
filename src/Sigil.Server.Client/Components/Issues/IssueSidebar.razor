@@ -1,64 +1,61 @@
 @using Sigil.Application.Models.Issues
+@using Sigil.Domain
 @inject IIssueService IssueService
 @inject ITagValueFormatter TagValueFormatter
 
 <div class="w-full lg:w-72 space-y-4">
-    <!-- Status actions -->
+    <!-- Status + Priority -->
     <div class="card bg-base-200">
-        <div class="card-body p-4 space-y-3">
-            <div class="flex items-center gap-2">
-                <span class="text-sm font-semibold">Status</span>
-                <StatusBadge Status="Issue.Status" />
-            </div>
-            <div class="flex flex-wrap gap-1">
-                @if (Issue.Status != IssueStatus.Resolved)
-                {
-                    <button class="btn btn-success btn-sm" @onclick="() => UpdateStatus(IssueStatus.Resolved)" disabled="@_loading">
-                        Resolve
-                    </button>
-                }
-                @if (Issue.Status != IssueStatus.ResolvedInFuture)
-                {
-                    <button class="btn btn-accent btn-sm" @onclick="() => UpdateStatus(IssueStatus.ResolvedInFuture)" disabled="@_loading">
-                        Next Release
-                    </button>
-                }
-                @if (Issue.Status != IssueStatus.Open)
-                {
-                    <button class="btn btn-info btn-sm" @onclick="() => UpdateStatus(IssueStatus.Open)" disabled="@_loading">
-                        Reopen
-                    </button>
-                }
-                @if (Issue.Status != IssueStatus.Ignored)
-                {
-                    <button class="btn btn-ghost btn-sm" @onclick="() => UpdateStatus(IssueStatus.Ignored)" disabled="@_loading">
-                        Ignore
-                    </button>
-                }
-            </div>
-            @if (Issue.Status != IssueStatus.Ignored)
-            {
-                <label class="flex items-center gap-2 text-xs cursor-pointer">
-                    <input type="checkbox" class="checkbox checkbox-xs" @bind="_ignoreFutureEvents" />
-                    Also ignore future events with this fingerprint
+        <div class="card-body p-0 divide-y divide-base-300">
+            <!-- Status row -->
+            <div class="dropdown dropdown-end w-full">
+                <label tabindex="0" class="btn btn-ghost btn-sm w-full justify-between rounded-t-2xl rounded-b-none px-4 h-11" aria-disabled="@_loading">
+                    <span class="text-sm opacity-60">Status</span>
+                    <div class="flex items-center gap-1.5">
+                        <StatusBadge Status="Issue.Status" />
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </div>
                 </label>
-            }
-        </div>
-    </div>
-
-    <!-- Priority -->
-    <div class="card bg-base-200">
-        <div class="card-body p-4">
-            <fieldset class="fieldset">
-                <legend class="fieldset-legend">Priority</legend>
-                <select class="select select-sm w-full" value="@Issue.Priority"
-                        @onchange="OnPrioritySelectChanged" disabled="@_loading">
+                <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box w-full shadow z-10 p-1">
+                    @if (Issue.Status != IssueStatus.Open)
+                    {
+                        <li><button @onclick="() => UpdateStatus(IssueStatus.Open)" disabled="@_loading">Reopen</button></li>
+                    }
+                    @if (Issue.Status != IssueStatus.Resolved)
+                    {
+                        <li><button @onclick="() => UpdateStatus(IssueStatus.Resolved)" disabled="@_loading">Resolve</button></li>
+                    }
+                    @if (Issue.Status != IssueStatus.ResolvedInFuture)
+                    {
+                        <li><button @onclick="() => UpdateStatus(IssueStatus.ResolvedInFuture)" disabled="@_loading">Resolve in Next Release</button></li>
+                    }
+                    @if (Issue.Status != IssueStatus.Ignored)
+                    {
+                        <li><button @onclick="() => UpdateStatus(IssueStatus.Ignored)" disabled="@_loading">Ignore</button></li>
+                        <li><button @onclick="() => UpdateStatusIgnoreFuture(IssueStatus.Ignored)" disabled="@_loading">Ignore + future events</button></li>
+                    }
+                </ul>
+            </div>
+            <!-- Priority row -->
+            <div class="dropdown dropdown-end w-full">
+                <label tabindex="0" class="btn btn-ghost btn-sm w-full justify-between rounded-b-2xl rounded-t-none px-4 h-11" aria-disabled="@_loading">
+                    <span class="text-sm opacity-60">Priority</span>
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-sm">@Issue.Priority</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </div>
+                </label>
+                <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box w-full shadow z-10 p-1">
                     @foreach (var p in Enum.GetValues<Priority>())
                     {
-                        <option value="@p">@p</option>
+                        <li><button @onclick="() => SetPriority(p)" disabled="@_loading" class="@(p == Issue.Priority ? "active" : "")">@p</button></li>
                     }
-                </select>
-            </fieldset>
+                </ul>
+            </div>
         </div>
     </div>
 
@@ -108,12 +105,32 @@
     </div>
 
     <!-- Tags with frequency bars -->
-    @if (Issue.Tags.Count > 0)
+    @{
+        var systemTags = Issue.Tags.Where(t => SystemTags.IsSystemTag(t.Key)).ToList();
+        var userTags   = Issue.Tags.Where(t => !SystemTags.IsSystemTag(t.Key)).OrderBy(t => t.Key).ToList();
+    }
+
+    @if (systemTags.Count > 0)
+    {
+        <div class="card bg-base-200">
+            <div class="card-body p-4 space-y-2">
+                <span class="text-sm font-semibold">System Flags</span>
+                <div class="flex flex-wrap gap-1">
+                    @foreach (var tag in systemTags)
+                    {
+                        <span class="badge badge-sm badge-warning">@tag.Key[@SystemTags.Prefix.Length..]</span>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (userTags.Count > 0)
     {
         <div class="card bg-base-200">
             <div class="card-body p-4 space-y-3">
                 <span class="text-sm font-semibold">Tags</span>
-                @foreach (var group in Issue.Tags.OrderBy(t => t.Key))
+                @foreach (var group in userTags)
                 {
                     <div class="space-y-1">
                         <div class="text-xs font-semibold opacity-70">@group.Key</div>
@@ -126,7 +143,9 @@
                             var pct = group.TotalCount > 0 ? (double)tagVal.Count / group.TotalCount * 100 : 0;
                             <div class="space-y-0.5">
                                 <div class="flex justify-between text-xs">
-                                    <span class="font-mono line-clamp-1" title="@tagVal.Value">@TagValueFormatter.Format(group.Key, tagVal.Value)</span>
+                                    <span class="font-mono line-clamp-1" title="@tagVal.Value">
+                                        <TagLink ProjectId="Issue.ProjectId" Key="@group.Key" Value="@tagVal.Value" />
+                                    </span>
                                     <span class="opacity-50 shrink-0 ml-2">@pct.ToString("F0")%</span>
                                 </div>
                                 <div class="w-full bg-base-300 rounded-full h-1">
@@ -160,16 +179,13 @@
     [Parameter] public EventCallback<Priority> OnPriorityChanged { get; set; }
 
     private bool _loading;
-    private bool _ignoreFutureEvents;
 
     private async Task UpdateStatus(IssueStatus status)
     {
         _loading = true;
         try
         {
-            var ignoreFuture = status == IssueStatus.Ignored && _ignoreFutureEvents;
-            await IssueService.UpdateIssueStatusAsync(Issue.Id, status, ignoreFutureEvents: ignoreFuture);
-            _ignoreFutureEvents = false;
+            await IssueService.UpdateIssueStatusAsync(Issue.Id, status);
             await OnStatusChanged.InvokeAsync(status);
         }
         finally
@@ -178,20 +194,31 @@
         }
     }
 
-    private async Task OnPrioritySelectChanged(ChangeEventArgs e)
+    private async Task UpdateStatusIgnoreFuture(IssueStatus status)
     {
-        if (Enum.TryParse<Priority>(e.Value?.ToString(), out var priority))
+        _loading = true;
+        try
         {
-            _loading = true;
-            try
-            {
-                await IssueService.UpdateIssuePriorityAsync(Issue.Id, priority);
-                await OnPriorityChanged.InvokeAsync(priority);
-            }
-            finally
-            {
-                _loading = false;
-            }
+            await IssueService.UpdateIssueStatusAsync(Issue.Id, status, ignoreFutureEvents: true);
+            await OnStatusChanged.InvokeAsync(status);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SetPriority(Priority priority)
+    {
+        _loading = true;
+        try
+        {
+            await IssueService.UpdateIssuePriorityAsync(Issue.Id, priority);
+            await OnPriorityChanged.InvokeAsync(priority);
+        }
+        finally
+        {
+            _loading = false;
         }
     }
 }
