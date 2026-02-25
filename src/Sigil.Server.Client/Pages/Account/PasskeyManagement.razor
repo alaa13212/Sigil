@@ -28,7 +28,7 @@
                     <input type="text" class="input w-full" placeholder="e.g. Laptop, Phone, Bitwarden"
                            @bind="_newPasskeyName" @bind:event="oninput"/>
                 </fieldset>
-                <button class="btn btn-primary" @onclick="RegisterPasskey" disabled="@(_registering || string.IsNullOrWhiteSpace(_newPasskeyName))">
+                <button class="btn btn-primary mb-1" @onclick="RegisterPasskey" disabled="@(_registering || string.IsNullOrWhiteSpace(_newPasskeyName))">
                     @if (_registering)
                     {
                         <span class="loading loading-spinner loading-sm"></span>
