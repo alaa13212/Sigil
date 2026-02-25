@@ -1,11 +1,12 @@
 using System.Text.RegularExpressions;
+using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Domain.Enums;
 using Sigil.Domain.Ingestion;
 
 namespace Sigil.Application.Services;
 
-public class RuleEngine
+public class RuleEngine : IRuleEngine
 {
     public bool Evaluate(RuleCondition condition, ParsedEvent evt)
     {

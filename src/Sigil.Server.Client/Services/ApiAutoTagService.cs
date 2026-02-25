@@ -34,6 +34,4 @@ public class ApiAutoTagService(HttpClient http) : IAutoTagService
     public Task<List<AutoTagRule>> GetRawRulesForProjectAsync(int projectId) =>
         throw new NotSupportedException("Not available on client.");
 
-    public void ApplyRules(ParsedEvent parsedEvent, List<AutoTagRule> rules) =>
-        throw new NotSupportedException("Not available on client.");
 }

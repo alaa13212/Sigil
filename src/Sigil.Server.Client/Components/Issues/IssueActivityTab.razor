@@ -1,0 +1,119 @@
+@using Sigil.Application.Models.Issues
+@inject IIssueActivityService ActivityService
+
+<!-- Comment form -->
+<div class="card bg-base-200">
+    <div class="card-body p-4 space-y-2">
+        <textarea class="textarea textarea-bordered w-full text-sm" rows="3"
+                  placeholder="Add a comment…"
+                  @bind="_commentText" disabled="@_commentLoading"></textarea>
+        <div class="flex items-center gap-2">
+            <button class="btn btn-primary btn-sm" @onclick="SubmitComment"
+                    disabled="@(_commentLoading || string.IsNullOrWhiteSpace(_commentText))">
+                @if (_commentLoading)
+                {
+                    <span class="loading loading-spinner loading-xs"></span>
+                }
+                Comment
+            </button>
+            @if (!string.IsNullOrEmpty(_commentError))
+            {
+                <span class="text-sm text-error">@_commentError</span>
+            }
+        </div>
+    </div>
+</div>
+
+@if (_activities is null || _activities.Items.Count == 0)
+{
+    <EmptyState Title="No activity yet" />
+}
+else
+{
+    <ul class="timeline timeline-vertical timeline-compact">
+        @foreach (var act in _activities.Items)
+        {
+            <li>
+                <div class="timeline-start text-xs opacity-60">
+                    <RelativeTime Value="act.Timestamp" />
+                </div>
+                <div class="timeline-middle">
+                    <div class="w-2 h-2 rounded-full bg-base-content opacity-40"></div>
+                </div>
+                <div class="timeline-end text-sm pb-4">
+                    <span class="font-medium">@FormatAction(act.Action)</span>
+                    @if (!string.IsNullOrEmpty(act.UserName))
+                    {
+                        <span class="opacity-70"> by @act.UserName</span>
+                    }
+                    else
+                    {
+                        <span class="opacity-70"> by Sigil</span>
+                    }
+                    @if (!string.IsNullOrEmpty(act.Message))
+                    {
+                        <div class="text-xs opacity-60 mt-0.5 whitespace-pre-wrap">@act.Message</div>
+                    }
+                </div>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired] public int IssueId { get; set; }
+
+    private PagedResponse<ActivityResponse>? _activities;
+    private string _commentText = "";
+    private bool _commentLoading;
+    private string _commentError = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _commentText = "";
+        _commentError = "";
+        await LoadActivity();
+    }
+
+    private async Task LoadActivity()
+    {
+        try { _activities = await ActivityService.GetActivitySummariesAsync(IssueId); }
+        catch { _activities = null; }
+    }
+
+    private async Task SubmitComment()
+    {
+        if (string.IsNullOrWhiteSpace(_commentText)) return;
+        _commentLoading = true;
+        _commentError = "";
+        try
+        {
+            await ActivityService.AddCommentAsync(IssueId, _commentText.Trim());
+            _commentText = "";
+            await LoadActivity();
+        }
+        catch (Exception ex)
+        {
+            _commentError = ex.Message;
+        }
+        finally
+        {
+            _commentLoading = false;
+        }
+    }
+
+    private static string FormatAction(IssueActivityAction action) => action switch
+    {
+        IssueActivityAction.Created    => "Issue created",
+        IssueActivityAction.Resolved   => "Resolved",
+        IssueActivityAction.Unresolved => "Reopened",
+        IssueActivityAction.Ignored    => "Ignored",
+        IssueActivityAction.Assigned   => "Assigned",
+        IssueActivityAction.Unassigned => "Unassigned",
+        IssueActivityAction.Commented  => "Commented",
+        IssueActivityAction.Merged     => "Merged into group",
+        IssueActivityAction.Unmerged   => "Removed from group",
+        IssueActivityAction.Bookmarked => "Bookmarked",
+        _                              => action.ToString()
+    };
+}

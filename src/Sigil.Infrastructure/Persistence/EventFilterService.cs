@@ -9,7 +9,7 @@ using Sigil.Domain.Ingestion;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class EventFilterService(SigilDbContext dbContext, IEventFilterCache filterCache, IDateTime dateTime, RuleEngine ruleEngine) : IEventFilterService
+internal class EventFilterService(SigilDbContext dbContext, IEventFilterCache filterCache, IDateTime dateTime, IRuleEngine ruleEngine) : IEventFilterService
 {
     public async Task<List<EventFilterResponse>> GetFiltersAsync(int projectId)
     {

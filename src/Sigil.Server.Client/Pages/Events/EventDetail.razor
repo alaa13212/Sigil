@@ -2,7 +2,7 @@
 @attribute [Authorize]
 @using Sigil.Application.Models.Events
 @inject IEventService EventService
-@inject ITagValueFormatter TagValueFormatter
+@inject NavigationManager Navigation
 
 <PageTitle>Event — Sigil</PageTitle>
 
@@ -44,19 +44,12 @@ else
     }
 
     <!-- Tabs -->
-    <div role="tablist" class="tabs tabs-bordered mb-4">
-        <a role="tab" href="/projects/@ProjectId/issues/@IssueId/events/@EventId?tab=details"
-           class="tab @(activeTab == Tab.Details ? "tab-active" : "")">Details</a>
-        <a role="tab" href="/projects/@ProjectId/issues/@IssueId/events/@EventId?tab=breadcrumbs"
-           class="tab @(activeTab == Tab.Breadcrumbs ? "tab-active" : "")">Breadcrumbs</a>
-        <a role="tab" href="/projects/@ProjectId/issues/@IssueId/events/@EventId?tab=raw"
-           class="tab @(activeTab == Tab.Raw ? "tab-active" : "")">Raw JSON</a>
-    </div>
+    <TabBar TTab="Tab" Tabs="@_tabs" ActiveTab="activeTab"
+            OnTabChanged="SetActiveTab" TabLabel="GetTabLabel" Class="mb-4" />
 
     @if (activeTab == Tab.Details)
     {
         <div class="flex flex-col md:flex-row gap-4">
-            <!-- Stack Trace -->
             @if (evt.StackFrames.Count > 0)
             {
                 <div class="card bg-base-200 mb-4 flex-1">
@@ -66,122 +59,7 @@ else
                     </div>
                 </div>
             }
-
-            <div class="flex flex-col gap-4">
-                <!-- Tags -->
-                @if (evt.Tags.Count > 0)
-                {
-                    <div class="card bg-base-200">
-                        <div class="card-body p-4">
-                            <h2 class="card-title text-base">Tags</h2>
-                            <div class="overflow-x-auto">
-                                <table class="table table-sm">
-                                    <thead>
-                                        <tr>
-                                            <th>Key</th>
-                                            <th>Value</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var tag in evt.Tags)
-                                        {
-                                            <tr>
-                                                <td class="opacity-70">@tag.Key</td>
-                                                <td class="font-mono">@TagValueFormatter.Format(tag.Key, tag.Value)</td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                }
-
-                <!-- User info -->
-                @if (evt.User is not null)
-                {
-                    <div class="card bg-base-200">
-                        <div class="card-body p-4">
-                            <h2 class="card-title text-base">User</h2>
-                            <div class="space-y-1 text-sm">
-                                @if (!string.IsNullOrEmpty(evt.User.Username))
-                                {
-                                    <div class="flex justify-between">
-                                        <span class="opacity-60">Username</span>
-                                        <span>@evt.User.Username</span>
-                                    </div>
-                                }
-                                @if (!string.IsNullOrEmpty(evt.User.Email))
-                                {
-                                    <div class="flex justify-between">
-                                        <span class="opacity-60">Email</span>
-                                        <span>@evt.User.Email</span>
-                                    </div>
-                                }
-                                @if (!string.IsNullOrEmpty(evt.User.IpAddress))
-                                {
-                                    <div class="flex justify-between">
-                                        <span class="opacity-60">IP Address</span>
-                                        <span class="font-mono">@evt.User.IpAddress</span>
-                                    </div>
-                                }
-                                @if (!string.IsNullOrEmpty(evt.User.Identifier))
-                                {
-                                    <div class="flex justify-between">
-                                        <span class="opacity-60">ID</span>
-                                        <span class="font-mono">@evt.User.Identifier</span>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    </div>
-                }
-
-                <!-- Context -->
-                <div class="card bg-base-200">
-                    <div class="card-body p-4">
-                        <h2 class="card-title text-base">Context</h2>
-                        <div class="space-y-1 text-sm">
-                            <div class="flex justify-between">
-                                <span class="opacity-60">Platform</span>
-                                <span>@evt.Platform</span>
-                            </div>
-                            @if (!string.IsNullOrEmpty(evt.Release))
-                            {
-                                <div class="flex justify-between">
-                                    <span class="opacity-60">Release</span>
-                                    <span class="font-mono">@evt.Release</span>
-                                </div>
-                            }
-                            @if (!string.IsNullOrEmpty(evt.Environment))
-                            {
-                                <div class="flex justify-between">
-                                    <span class="opacity-60">Environment</span>
-                                    <span>@evt.Environment</span>
-                                </div>
-                            }
-                        </div>
-                    </div>
-                </div>
-
-                @if (evt.Extra is { Count: > 0 })
-                {
-                    <div class="card bg-base-200">
-                        <div class="card-body p-4">
-                            <h2 class="card-title text-base">Extra</h2>
-                            <div class="space-y-1 text-sm">
-                                @foreach (var (key, value) in evt.Extra)
-                                {
-                                    <div class="flex justify-between gap-4">
-                                        <span class="opacity-60 font-mono shrink-0">@key</span>
-                                        <span class="font-mono text-right break-all">@value</span>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    </div>
-                }
-            </div>
+            <EventContextCards EventDetail="evt" />
         </div>
     }
     else if (activeTab == Tab.Breadcrumbs)
@@ -207,9 +85,10 @@ else
     private EventDetailResponse? evt;
     private List<BreadcrumbResponse> breadcrumbs = [];
     private bool loading = true;
-
     private Tab activeTab = Tab.Details;
+
     private enum Tab { Details, Breadcrumbs, Raw }
+    private static readonly Tab[] _tabs = [Tab.Details, Tab.Breadcrumbs, Tab.Raw];
 
     protected override async Task OnParametersSetAsync()
     {
@@ -242,4 +121,24 @@ else
             loading = false;
         }
     }
+
+    private void SetActiveTab(Tab tab)
+    {
+        var tabStr = tab switch
+        {
+            Tab.Details     => "details",
+            Tab.Breadcrumbs => "breadcrumbs",
+            Tab.Raw         => "raw",
+            _               => "details"
+        };
+        Navigation.NavigateTo($"/projects/{ProjectId}/issues/{IssueId}/events/{EventId}?tab={tabStr}", forceLoad: false);
+    }
+
+    private static string GetTabLabel(Tab tab) => tab switch
+    {
+        Tab.Details     => "Details",
+        Tab.Breadcrumbs => "Breadcrumbs",
+        Tab.Raw         => "Raw JSON",
+        _               => tab.ToString()
+    };
 }

@@ -16,60 +16,10 @@
             <h2 class="text-lg font-bold">Message Normalization Rules</h2>
             <p class="text-sm opacity-60 mt-1">Custom rules are applied after the built-in defaults (UUIDs, numbers, emails, etc.). Higher priority number = applied first.</p>
         </div>
-        <button class="btn btn-primary btn-sm" @onclick="() => showAddForm = !showAddForm">
-            @(showAddForm ? "Cancel" : "Add Rule")
+        <button class="btn btn-primary btn-sm" @onclick="() => { _editingRule = null; _modalOpen = true; }">
+            Add Rule
         </button>
     </div>
-
-    @if (showAddForm)
-    {
-        <div class="card bg-base-200">
-            <div class="card-body p-5 space-y-4">
-                <h2 class="font-semibold text-base">New Rule</h2>
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Pattern <span class="opacity-50">(regex)</span></legend>
-                        <input type="text" class="input input-sm w-full font-mono"
-                               placeholder="e.g. \border-\d+"
-                               @bind="newPattern" />
-                    </fieldset>
-
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Replacement</legend>
-                        <input type="text" class="input input-sm w-full font-mono"
-                               placeholder="e.g. {order_id}"
-                               @bind="newReplacement" />
-                    </fieldset>
-
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Priority</legend>
-                        <input type="number" class="input input-sm w-full" @bind="newPriority" min="0" />
-                        <p class="fieldset-label text-xs">Lower number = applied first</p>
-                    </fieldset>
-
-                    <fieldset class="fieldset sm:col-span-2">
-                        <legend class="fieldset-legend">Description <span class="opacity-50">(optional)</span></legend>
-                        <input type="text" class="input input-sm w-full"
-                               placeholder="What does this rule normalize?"
-                               @bind="newDescription" />
-                    </fieldset>
-                </div>
-
-                @if (!string.IsNullOrEmpty(formError))
-                {
-                    <div class="alert alert-error text-sm py-2">@formError</div>
-                }
-
-                <div class="flex gap-2">
-                    <button class="btn btn-primary btn-sm" @onclick="AddRule" disabled="@saving">
-                        @(saving ? "Saving…" : "Add Rule")
-                    </button>
-                    <button class="btn btn-ghost btn-sm" @onclick="() => showAddForm = false">Cancel</button>
-                </div>
-            </div>
-        </div>
-    }
 
     <!-- Preview -->
     <div class="card bg-base-200">
@@ -129,7 +79,11 @@
                                            checked="@rule.Enabled"
                                            @onchange="() => ToggleEnabled(rule)" />
                                 </td>
-                                <td>
+                                <td class="flex gap-1">
+                                    <button class="btn btn-ghost btn-xs"
+                                            @onclick="() => { _editingRule = rule; _modalOpen = true; }">
+                                        Edit
+                                    </button>
                                     <button class="btn btn-ghost btn-xs text-error"
                                             @onclick="() => DeleteRule(rule.Id)">
                                         Delete
@@ -144,21 +98,19 @@
     }
 </div>
 
+<NormalizationRuleFormModal IsOpen="_modalOpen" ProjectId="ProjectId"
+                             EditingRule="_editingRule" AllRules="rules"
+                             OnSaved="OnSaved" OnClosed="() => _modalOpen = false" />
+
 @code {
     [Parameter] public int ProjectId { get; set; }
 
     private List<TextNormalizationRule> rules = [];
     private bool loading = true;
-    private bool saving;
-    private bool showAddForm;
-    private string? formError;
     private string previewInput = "";
     private string? previewResult;
-
-    private string newPattern = "";
-    private string newReplacement = "";
-    private int newPriority;
-    private string? newDescription;
+    private bool _modalOpen;
+    private TextNormalizationRule? _editingRule;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -168,34 +120,26 @@
         loading = false;
     }
 
-    private async Task AddRule()
+    private void OnSaved(TextNormalizationRule saved)
     {
-        if (string.IsNullOrWhiteSpace(newPattern)) { formError = "Pattern is required."; return; }
-        if (string.IsNullOrWhiteSpace(newReplacement)) { formError = "Replacement is required."; return; }
+        var idx = rules.FindIndex(r => r.Id == saved.Id);
+        if (idx >= 0) rules[idx] = saved;
+        else rules.Add(saved);
+        rules.Sort((a, b) => b.Priority - a.Priority);
+        _modalOpen = false;
+    }
 
-        saving = true;
-        formError = null;
-        try
-        {
-            var request = new CreateNormalizationRuleRequest(
-                newPattern.Trim(), newReplacement.Trim(),
-                newPriority, true, newDescription?.Trim());
-            rules.Add(await NormalizationService.CreateRuleAsync(ProjectId, request));
-            rules.Sort((a, b) => b.Priority - a.Priority);
-            newPattern = ""; newReplacement = ""; newPriority = 0; newDescription = null;
-            showAddForm = false;
-        }
-        catch { formError = "Failed to create rule."; }
-        finally { saving = false; }
+    private void RunPreview()
+    {
+        previewResult = MessageNormalizer.NormalizeMessage(rules, previewInput);
     }
 
     private async Task ToggleEnabled(TextNormalizationRule rule)
     {
         try
         {
-            var request = new UpdateNormalizationRuleRequest(rule.Pattern, rule.Replacement, rule.Priority, !rule.Enabled, rule.Description);
-            
-            var updated = await NormalizationService.UpdateRuleAsync(rule.Id, request);
+            var req = new UpdateNormalizationRuleRequest(rule.Pattern, rule.Replacement, rule.Priority, !rule.Enabled, rule.Description);
+            var updated = await NormalizationService.UpdateRuleAsync(rule.Id, req);
             if (updated is not null)
             {
                 var idx = rules.IndexOf(rule);
@@ -213,11 +157,6 @@
                 rules.RemoveAll(r => r.Id == ruleId);
         }
         catch { /* ignore */ }
-    }
-
-    private void RunPreview()
-    {
-        previewResult = MessageNormalizer.NormalizeMessage(rules, previewInput);
     }
 
     private static string TruncateValue(string value) =>

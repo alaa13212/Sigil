@@ -1,6 +1,7 @@
 @page "/projects/{ProjectId:int}/settings/filters"
 @attribute [Authorize]
 @using Sigil.Application.Models.Filters
+@using Sigil.Server.Client.Components.Projects
 @inject IEventFilterService FilterService
 
 @layout ProjectSettingsLayout
@@ -13,79 +14,10 @@
             <h2 class="text-lg font-bold">Inbound Filters</h2>
             <p class="text-sm opacity-60 mt-1">Events matching a Reject rule are dropped before being stored.</p>
         </div>
-        <button class="btn btn-primary btn-sm" @onclick="() => showAddForm = !showAddForm">
-            @(showAddForm ? "Cancel" : "Add Filter")
+        <button class="btn btn-primary btn-sm" @onclick="() => { _editingFilter = null; _modalOpen = true; }">
+            Add Filter
         </button>
     </div>
-
-    @if (showAddForm)
-    {
-        <div class="card bg-base-200">
-            <div class="card-body p-5 space-y-4">
-                <h2 class="font-semibold text-base">New Filter</h2>
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Field</legend>
-                        <input type="text" class="input input-sm w-full font-mono"
-                               placeholder="exceptionType, message, release, tag:browser…"
-                               list="filter-fields"
-                               @bind="newField"/>
-                        <p class="fieldset-label text-xs block">
-                            Available: <code>exceptionType</code>, <code>message</code>, <code>release</code>,<br/>
-                            <code>environment</code>, <code>logger</code>, <code>fingerprint</code>, <code>tag:key</code>
-                        </p>
-                    </fieldset>
-
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Operator</legend>
-                        <select class="select select-sm w-full" @bind="newOperator">
-                            @foreach (var op in Enum.GetValues<FilterOperator>())
-                            {
-                                <option value="@op">@op</option>
-                            }
-                        </select>
-                    </fieldset>
-
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Value</legend>
-                        <input type="text" class="input input-sm w-full font-mono"
-                               placeholder="Pattern to match…"
-                               @bind="newValue"/>
-                    </fieldset>
-
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Action</legend>
-                        <select class="select select-sm w-full" @bind="newAction">
-                            @foreach (var action in Enum.GetValues<FilterAction>())
-                            {
-                                <option value="@action">@action</option>
-                            }
-                        </select>
-                    </fieldset>
-
-                    <fieldset class="fieldset sm:col-span-2">
-                        <legend class="fieldset-legend">Description <span class="opacity-50">(optional)</span></legend>
-                        <input type="text" class="input input-sm w-full"
-                               placeholder="What does this filter do?"
-                               @bind="newDescription"/>
-                    </fieldset>
-                </div>
-
-                @if (!string.IsNullOrEmpty(formError))
-                {
-                    <div class="alert alert-error text-sm py-2">@formError</div>
-                }
-
-                <div class="flex gap-2">
-                    <button class="btn btn-primary btn-sm" @onclick="AddFilter" disabled="@saving">
-                        @(saving ? "Saving…" : "Add Filter")
-                    </button>
-                    <button class="btn btn-ghost btn-sm" @onclick="() => showAddForm = false">Cancel</button>
-                </div>
-            </div>
-        </div>
-    }
 
     @if (loading)
     {
@@ -122,16 +54,18 @@
                             <td class="text-sm">@filter.Operator</td>
                             <td class="font-mono text-sm line-clamp-1" title="@filter.Value">@filter.Value</td>
                             <td>
-                                <span class="badge badge-sm badge-error">
-                                    @filter.Action
-                                </span>
+                                <span class="badge badge-sm badge-error">@filter.Action</span>
                             </td>
                             <td>
                                 <input type="checkbox" class="toggle toggle-sm"
                                        checked="@filter.Enabled"
                                        @onchange="() => ToggleEnabled(filter)"/>
                             </td>
-                            <td>
+                            <td class="flex gap-1">
+                                <button class="btn btn-ghost btn-xs"
+                                        @onclick="() => { _editingFilter = filter; _modalOpen = true; }">
+                                    Edit
+                                </button>
                                 <button class="btn btn-ghost btn-xs text-error"
                                         @onclick="() => DeleteFilter(filter.Id)">
                                     Delete
@@ -146,33 +80,17 @@
     }
 </div>
 
-<datalist id="filter-fields">
-
-    <option value="exceptionType" />
-    <option value="message" />
-    <option value="release" />
-    <option value="environment" />
-    <option value="logger" />
-    <option value="fingerprint" />
-    <option value="tag:" />
-
-</datalist>
+<FilterFormModal IsOpen="_modalOpen" ProjectId="ProjectId"
+                 EditingFilter="_editingFilter"
+                 OnSaved="OnSaved" OnClosed="() => _modalOpen = false" />
 
 @code {
     [Parameter] public int ProjectId { get; set; }
 
     private List<EventFilterResponse> filters = [];
     private bool loading = true;
-    private bool saving;
-    private bool showAddForm;
-    private string? formError;
-
-    // Add form fields
-    private string newField = "";
-    private FilterOperator newOperator = FilterOperator.Contains;
-    private string newValue = "";
-    private FilterAction newAction = FilterAction.Reject;
-    private string? newDescription;
+    private bool _modalOpen;
+    private EventFilterResponse? _editingFilter;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -183,64 +101,28 @@
 
     private async Task LoadFilters()
     {
-        try
-        {
-            filters = await FilterService.GetFiltersAsync(ProjectId);
-        }
-        catch
-        {
-            filters = [];
-        }
+        try { filters = await FilterService.GetFiltersAsync(ProjectId); }
+        catch { filters = []; }
     }
 
-    private async Task AddFilter()
+    private void OnSaved(EventFilterResponse saved)
     {
-        if (string.IsNullOrWhiteSpace(newField))
-        {
-            formError = "Field is required.";
-            return;
-        }
-        if (string.IsNullOrWhiteSpace(newValue))
-        {
-            formError = "Value is required.";
-            return;
-        }
-
-        saving = true;
-        formError = null;
-        try
-        {
-            var request = new CreateFilterRequest(newField.Trim(), newOperator, newValue.Trim(), newAction, true, 0, newDescription?.Trim());
-            var created = await FilterService.CreateFilterAsync(ProjectId, request);
-            filters.Add(created);
-            // Reset form
-            newField = "";
-            newValue = "";
-            newDescription = null;
-            newOperator = FilterOperator.Contains;
-            newAction = FilterAction.Reject;
-            showAddForm = false;
-        }
-        catch
-        {
-            formError = "Failed to create filter.";
-        }
-        finally
-        {
-            saving = false;
-        }
+        var idx = filters.FindIndex(f => f.Id == saved.Id);
+        if (idx >= 0) filters[idx] = saved;
+        else filters.Add(saved);
+        _modalOpen = false;
     }
 
     private async Task ToggleEnabled(EventFilterResponse filter)
     {
         try
         {
-            var request = new UpdateFilterRequest(filter.Field, filter.Operator, filter.Value, filter.Action, !filter.Enabled, filter.Priority, filter.Description);
-            var updated = await FilterService.UpdateFilterAsync(filter.Id, request);
+            var req = new UpdateFilterRequest(filter.Field, filter.Operator, filter.Value, filter.Action, !filter.Enabled, filter.Priority, filter.Description);
+            var updated = await FilterService.UpdateFilterAsync(filter.Id, req);
             if (updated is not null)
             {
-                var index = filters.IndexOf(filter);
-                if (index >= 0) filters[index] = updated;
+                var idx = filters.IndexOf(filter);
+                if (idx >= 0) filters[idx] = updated;
             }
         }
         catch { /* keep current state */ }

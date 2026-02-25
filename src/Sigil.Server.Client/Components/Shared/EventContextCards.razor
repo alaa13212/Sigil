@@ -1,0 +1,117 @@
+@using Sigil.Application.Models.Events
+@inject ITagValueFormatter TagValueFormatter
+
+<div class="flex flex-col gap-4">
+    <!-- Context -->
+    <div class="card bg-base-200">
+        <div class="card-body p-4">
+            <h2 class="card-title text-base">Context</h2>
+            <div class="space-y-1 text-sm">
+                <div class="flex justify-between">
+                    <span class="opacity-60">Platform</span>
+                    <span>@EventDetail.Platform</span>
+                </div>
+                @if (!string.IsNullOrEmpty(EventDetail.Release))
+                {
+                    <div class="flex justify-between">
+                        <span class="opacity-60">Release</span>
+                        <span class="font-mono">@EventDetail.Release</span>
+                    </div>
+                }
+                @if (!string.IsNullOrEmpty(EventDetail.Environment))
+                {
+                    <div class="flex justify-between">
+                        <span class="opacity-60">Environment</span>
+                        <span>@EventDetail.Environment</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- User -->
+    @if (EventDetail.User is not null)
+    {
+        <div class="card bg-base-200">
+            <div class="card-body p-4">
+                <h2 class="card-title text-base">User</h2>
+                <div class="space-y-1 text-sm">
+                    @if (!string.IsNullOrEmpty(EventDetail.User.Username))
+                    {
+                        <div class="flex justify-between">
+                            <span class="opacity-60">Username</span>
+                            <span>@EventDetail.User.Username</span>
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(EventDetail.User.Email))
+                    {
+                        <div class="flex justify-between">
+                            <span class="opacity-60">Email</span>
+                            <span>@EventDetail.User.Email</span>
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(EventDetail.User.IpAddress))
+                    {
+                        <div class="flex justify-between">
+                            <span class="opacity-60">IP</span>
+                            <span class="font-mono">@EventDetail.User.IpAddress</span>
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(EventDetail.User.Identifier))
+                    {
+                        <div class="flex justify-between">
+                            <span class="opacity-60">ID</span>
+                            <span class="font-mono">@EventDetail.User.Identifier</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Tags -->
+    @if (EventDetail.Tags.Count > 0)
+    {
+        <div class="card bg-base-200">
+            <div class="card-body p-4">
+                <h2 class="card-title text-base">Tags</h2>
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <tbody>
+                        @foreach (var tag in EventDetail.Tags.OrderBy(t => t.Key))
+                        {
+                            <tr>
+                                <td class="opacity-60 w-1/3">@tag.Key</td>
+                                <td class="font-mono">@TagValueFormatter.Format(tag.Key, tag.Value)</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Extra -->
+    @if (EventDetail.Extra is { Count: > 0 })
+    {
+        <div class="card bg-base-200">
+            <div class="card-body p-4">
+                <h2 class="card-title text-base">Extra</h2>
+                <div class="space-y-1 text-sm">
+                    @foreach (var (key, value) in EventDetail.Extra)
+                    {
+                        <div class="flex justify-between gap-4">
+                            <span class="opacity-60 font-mono shrink-0">@key</span>
+                            <span class="font-mono text-right break-all">@value</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public EventDetailResponse EventDetail { get; set; } = default!;
+}

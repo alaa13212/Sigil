@@ -19,7 +19,9 @@ else if (rawJson is not null)
             <a href="@($"events/{EventId}/raw")" class="btn btn-ghost btn-xs">Raw</a>
             <a href="@($"events/{EventId}/md")" class="btn btn-ghost btn-xs">Markdown</a>
         </div>
-        <pre class="bg-base-300 p-3 rounded text-xs overflow-x-auto overflow-y-auto"><code>@rawJson</code></pre>
+        <div class="bg-base-300 rounded text-xs overflow-x-auto overflow-y-auto max-h-[70vh]">
+            <CodeBlock Code="@(rawJson!)" Language="json" />
+        </div>
     </div>
 }
 

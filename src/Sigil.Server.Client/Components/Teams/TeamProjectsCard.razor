@@ -1,0 +1,48 @@
+@using Sigil.Application.Models.Teams
+
+<div class="card bg-base-200">
+    <div class="card-body p-5 space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="font-semibold">Projects</h2>
+            <a href="/projects/create?teamId=@TeamId" class="btn btn-ghost btn-xs">Create Project</a>
+        </div>
+
+        @if (Team.Projects.Count == 0)
+        {
+            <p class="text-sm opacity-60">No projects in this team yet.</p>
+        }
+        else
+        {
+            <div class="overflow-x-auto">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Platform</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var project in Team.Projects)
+                        {
+                            <tr>
+                                <td>@project.Name</td>
+                                <td>
+                                    <span class="badge badge-ghost badge-sm">@project.Platform</span>
+                                </td>
+                                <td class="text-right">
+                                    <a href="/projects/@project.Id/settings" class="btn btn-ghost btn-xs">Settings</a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int TeamId { get; set; }
+    [Parameter, EditorRequired] public TeamDetailResponse Team { get; set; } = default!;
+}

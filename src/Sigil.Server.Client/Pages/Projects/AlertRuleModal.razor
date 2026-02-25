@@ -1,14 +1,12 @@
 @using Sigil.Application.Models.Alerts
 @inject IAlertService AlertService
 
-@if (IsOpen)
-{
-    <div class="modal modal-open">
-        <div class="modal-box @(showTemplateStep ? "max-w-2xl" : "max-w-lg") space-y-4">
-            <h3 class="font-bold text-lg">@(EditingRule is null ? "New Alert Rule" : "Edit Alert Rule")</h3>
-
-            @if (showTemplateStep)
-            {
+<ModalBase IsOpen="IsOpen" OnClose="Close"
+           Title="@(EditingRule is null ? "New Alert Rule" : "Edit Alert Rule")"
+           Size="@(showTemplateStep ? ModalSize.Medium : ModalSize.Small)">
+    <div class="space-y-4">
+        @if (showTemplateStep)
+        {
                 <p class="text-sm opacity-60">Choose a starting point — you'll only need to fill in the notification channel.</p>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -183,9 +181,7 @@
                 </div>
             }
         </div>
-        <div class="modal-backdrop" @onclick="Close"></div>
-    </div>
-}
+</ModalBase>
 
 @code {
     [Parameter] public bool IsOpen { get; set; }

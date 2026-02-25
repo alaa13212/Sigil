@@ -1,0 +1,145 @@
+@using Sigil.Application.Models.Filters
+@inject IEventFilterService FilterService
+
+<ModalBase IsOpen="IsOpen" OnClose="OnClosed" Title="@(EditingFilter is null ? "New Filter" : "Edit Filter")" Size="ModalSize.Medium">
+    <div class="space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Field</legend>
+                <input type="text" class="input input-sm w-full font-mono"
+                       placeholder="exceptionType, message, release, tag:browser…"
+                       list="filter-modal-fields"
+                       @bind="_field" />
+                <p class="fieldset-label text-xs block">
+                    Available: <code>exceptionType</code>, <code>message</code>, <code>release</code>,<br/>
+                    <code>environment</code>, <code>logger</code>, <code>fingerprint</code>, <code>tag:key</code>
+                </p>
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Operator</legend>
+                <select class="select select-sm w-full" @bind="_operator">
+                    @foreach (var op in Enum.GetValues<FilterOperator>())
+                    {
+                        <option value="@op">@op</option>
+                    }
+                </select>
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Value</legend>
+                <input type="text" class="input input-sm w-full font-mono"
+                       placeholder="Pattern to match…"
+                       @bind="_value" />
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Action</legend>
+                <select class="select select-sm w-full" @bind="_action">
+                    @foreach (var action in Enum.GetValues<FilterAction>())
+                    {
+                        <option value="@action">@action</option>
+                    }
+                </select>
+            </fieldset>
+
+            <fieldset class="fieldset sm:col-span-2">
+                <legend class="fieldset-legend">Description <span class="opacity-50">(optional)</span></legend>
+                <input type="text" class="input input-sm w-full"
+                       placeholder="What does this filter do?"
+                       @bind="_description" />
+            </fieldset>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="alert alert-error text-sm py-2">@_error</div>
+        }
+
+        <div class="modal-action">
+            <button class="btn btn-ghost" @onclick="() => OnClosed.InvokeAsync()">Cancel</button>
+            <button class="btn btn-primary" @onclick="Save" disabled="@_saving">
+                @(_saving ? "Saving…" : (EditingFilter is null ? "Add Filter" : "Save"))
+            </button>
+        </div>
+    </div>
+</ModalBase>
+
+<datalist id="filter-modal-fields">
+    <option value="exceptionType" />
+    <option value="message" />
+    <option value="release" />
+    <option value="environment" />
+    <option value="logger" />
+    <option value="fingerprint" />
+    <option value="tag:" />
+</datalist>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter, EditorRequired] public int ProjectId { get; set; }
+    [Parameter] public EventFilterResponse? EditingFilter { get; set; }
+    [Parameter] public EventCallback<EventFilterResponse> OnSaved { get; set; }
+    [Parameter] public EventCallback OnClosed { get; set; }
+
+    private string _field = "";
+    private FilterOperator _operator = FilterOperator.Contains;
+    private string _value = "";
+    private FilterAction _action = FilterAction.Reject;
+    private string? _description;
+    private string _error = "";
+    private bool _saving;
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen) return;
+        if (EditingFilter is not null)
+        {
+            _field = EditingFilter.Field;
+            _operator = EditingFilter.Operator;
+            _value = EditingFilter.Value;
+            _action = EditingFilter.Action;
+            _description = EditingFilter.Description;
+        }
+        else
+        {
+            _field = ""; _value = ""; _description = null;
+            _operator = FilterOperator.Contains;
+            _action = FilterAction.Reject;
+        }
+        _error = "";
+    }
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(_field)) { _error = "Field is required."; return; }
+        if (string.IsNullOrWhiteSpace(_value)) { _error = "Value is required."; return; }
+
+        _saving = true;
+        _error = "";
+        try
+        {
+            EventFilterResponse result;
+            if (EditingFilter is null)
+            {
+                var req = new CreateFilterRequest(_field.Trim(), _operator, _value.Trim(), _action, true, 0, _description?.Trim());
+                result = await FilterService.CreateFilterAsync(ProjectId, req);
+            }
+            else
+            {
+                var req = new UpdateFilterRequest(_field.Trim(), _operator, _value.Trim(), _action, EditingFilter.Enabled, EditingFilter.Priority, _description?.Trim());
+                result = await FilterService.UpdateFilterAsync(EditingFilter.Id, req)
+                         ?? throw new InvalidOperationException("Filter not found.");
+            }
+            await OnSaved.InvokeAsync(result);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

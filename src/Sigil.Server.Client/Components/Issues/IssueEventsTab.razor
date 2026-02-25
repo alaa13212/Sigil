@@ -1,0 +1,67 @@
+@using Sigil.Application.Models.Events
+@inject IEventService EventService
+
+@if (_events is null || _events.Items.Count == 0)
+{
+    <EmptyState Title="No events" />
+}
+else
+{
+    <div class="overflow-x-auto">
+        <table class="table table-sebra table-sm">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Message</th>
+                    <th>Severity</th>
+                    <th>User</th>
+                    <th>Release</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var evt in _events.Items)
+                {
+                    <tr class="hover:bg-base-300 relative cursor-pointer">
+                        <td>
+                            <a href="/projects/@ProjectId/issues/@IssueId/events/@evt.Id" class="stretched-link"><RelativeTime Value="evt.Timestamp"/></a>
+                        </td>
+                        <td class="line-clamp-1">@(evt.Message ?? "—")</td>
+                        <td><SeverityBadge Level="evt.Level" /></td>
+                        <td class="text-sm opacity-70">@(evt.UserIdentifier ?? "—")</td>
+                        <td class="text-sm font-mono opacity-70">@(evt.Release ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <Pagination Page="_page" TotalCount="_events.TotalCount" PageSize="PageSize"
+                OnPageChanged="OnPageChanged" />
+}
+
+@code {
+    [Parameter, EditorRequired] public int ProjectId { get; set; }
+    [Parameter, EditorRequired] public int IssueId { get; set; }
+
+    private const int PageSize = 50;
+    private int _page = 1;
+    private PagedResponse<EventSummary>? _events;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _page = 1;
+        await LoadEvents();
+    }
+
+    private async Task LoadEvents()
+    {
+        try { _events = await EventService.GetEventSummariesAsync(IssueId, _page, PageSize); }
+        catch { _events = null; }
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _page = page;
+        await LoadEvents();
+    }
+}

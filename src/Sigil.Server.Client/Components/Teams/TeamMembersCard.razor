@@ -1,0 +1,135 @@
+@using Sigil.Application.Models.Auth
+@using Sigil.Application.Models.Teams
+@inject ITeamService TeamService
+
+<div class="card bg-base-200">
+    <div class="card-body p-5 space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="font-semibold">Members</h2>
+            <button class="btn btn-ghost btn-xs" @onclick="() => _showAdd = !_showAdd">
+                @(_showAdd ? "Cancel" : "Add Member")
+            </button>
+        </div>
+
+        @if (_showAdd)
+        {
+            <div class="flex gap-2 items-end">
+                <fieldset class="fieldset flex-1">
+                    <legend class="fieldset-legend">User</legend>
+                    <select class="select w-full" @bind="_selectedUserId">
+                        <option value="">Select a user...</option>
+                        @if (AllUsers is not null)
+                        {
+                            @foreach (var user in AllUsers.Where(u => Team.Members.All(m => m.UserId != u.Id)))
+                            {
+                                <option value="@user.Id">@(user.DisplayName ?? user.Email)</option>
+                            }
+                        }
+                    </select>
+                </fieldset>
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Role</legend>
+                    <select class="select" @bind="_selectedRole">
+                        @foreach (var role in Enum.GetValues<TeamRole>())
+                        {
+                            <option value="@role">@role</option>
+                        }
+                    </select>
+                </fieldset>
+                <button class="btn btn-primary" @onclick="AddMember" disabled="@_adding">Add</button>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <div class="alert alert-info text-sm">@_message</div>
+        }
+
+        <div class="overflow-x-auto">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var member in Team.Members)
+                    {
+                        <tr>
+                            <td>@(member.DisplayName ?? "—")</td>
+                            <td>@member.Email</td>
+                            <td>
+                                <span class="badge badge-ghost badge-sm">@member.Role</span>
+                            </td>
+                            <td class="text-right">
+                                <button class="btn btn-ghost btn-xs text-error"
+                                        @onclick="() => RemoveMember(member.UserId)">
+                                    Remove
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int TeamId { get; set; }
+    [Parameter, EditorRequired] public TeamDetailResponse Team { get; set; } = default!;
+    [Parameter] public List<UserInfo>? AllUsers { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private bool _showAdd;
+    private bool _adding;
+    private string _selectedUserId = "";
+    private TeamRole _selectedRole = TeamRole.Member;
+    private string? _message;
+
+    private async Task AddMember()
+    {
+        if (string.IsNullOrEmpty(_selectedUserId)) return;
+        _adding = true;
+        _message = null;
+        try
+        {
+            var added = await TeamService.AddMemberAsync(TeamId, Guid.Parse(_selectedUserId), _selectedRole);
+            if (added)
+            {
+                _selectedUserId = "";
+                _showAdd = false;
+                await OnChanged.InvokeAsync();
+            }
+            else
+            {
+                _message = "Could not add member. They may already be on the team.";
+            }
+        }
+        catch
+        {
+            _message = "Failed to add member.";
+        }
+        finally
+        {
+            _adding = false;
+        }
+    }
+
+    private async Task RemoveMember(Guid userId)
+    {
+        _message = null;
+        try
+        {
+            await TeamService.RemoveMemberAsync(TeamId, userId);
+            await OnChanged.InvokeAsync();
+        }
+        catch
+        {
+            _message = "Failed to remove member.";
+        }
+    }
+}

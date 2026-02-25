@@ -1,0 +1,20 @@
+@typeparam TTab where TTab : struct, Enum
+
+<div role="tablist" class="tabs tabs-bordered @Class">
+    @foreach (var tab in Tabs)
+    {
+        var isActive = EqualityComparer<TTab>.Default.Equals(tab, ActiveTab);
+        <a role="tab" class="tab @(isActive ? "tab-active" : "")"
+           @onclick="() => OnTabChanged.InvokeAsync(tab)">
+            @(TabLabel?.Invoke(tab) ?? tab.ToString())
+        </a>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TTab> Tabs { get; set; } = [];
+    [Parameter, EditorRequired] public TTab ActiveTab { get; set; }
+    [Parameter, EditorRequired] public EventCallback<TTab> OnTabChanged { get; set; }
+    [Parameter] public Func<TTab, string>? TabLabel { get; set; }
+    [Parameter] public string? Class { get; set; }
+}

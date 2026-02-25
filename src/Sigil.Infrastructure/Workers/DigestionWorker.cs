@@ -102,7 +102,6 @@ internal class DigestionWorker(
                     logger.LogError(ex, "Digestion failed for project {ProjectId}. {Count} envelopes left unprocessed",
                         group.Key, successIds.Count);
 
-                    // Leave unprocessed — will be retried on next wake
                     dbContext.ChangeTracker.Clear();
                     await rawEnvelopeService.BulkMarkFailedAsync(successIds.Select(id => (id, ex.Message)));
                 }

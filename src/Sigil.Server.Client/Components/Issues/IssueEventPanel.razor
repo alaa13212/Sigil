@@ -1,0 +1,75 @@
+@using Sigil.Application.Models.Events
+
+<!-- Navigation bar -->
+<div class="space-y-4">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+            <button class="btn btn-ghost btn-sm" disabled="@(Navigation?.PreviousEventId is null || Navigating)"
+                    @onclick="() => OnNavigateEvent.InvokeAsync(Navigation!.PreviousEventId!.Value)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+                Older
+            </button>
+            <button class="btn btn-ghost btn-sm" disabled="@(Navigation?.NextEventId is null || Navigating)"
+                    @onclick="() => OnNavigateEvent.InvokeAsync(Navigation!.NextEventId!.Value)">
+                Newer
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+            </button>
+        </div>
+        <a href="/projects/@ProjectId/issues/@IssueId/events/@EventDetail.Id" class="btn btn-ghost btn-sm">
+            View full event
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+        </a>
+    </div>
+
+    <div class="flex items-center gap-3 text-sm opacity-60">
+        <SeverityBadge Level="EventDetail.Level" />
+        <RelativeTime Value="EventDetail.Timestamp" />
+        <span>·</span>
+        <span>@EventDetail.Timestamp.ToString("yyyy-MM-dd HH:mm:ss UTC")</span>
+    </div>
+
+    @if (!string.IsNullOrEmpty(EventDetail.Message))
+    {
+        <div class="alert">
+            <span class="font-mono text-sm break-words">@EventDetail.Message</span>
+        </div>
+    }
+    else
+    {
+        <div class="alert">
+            <span class="opacity-50 italic text-sm">No message</span>
+        </div>
+    }
+
+    @if (EventDetail.StackFrames.Count > 0)
+    {
+        <div class="card bg-base-200">
+            <div class="card-body p-4 overflow-auto">
+                <h2 class="card-title text-base">Stack Trace</h2>
+                <StackTraceViewer Frames="EventDetail.StackFrames" />
+            </div>
+        </div>
+    }
+
+    <EventContextCards EventDetail="EventDetail" />
+
+    @if (Breadcrumbs is { Count: > 0 })
+    {
+        <div class="card bg-base-200">
+            <div class="card-body p-4">
+                <h2 class="card-title text-base">Breadcrumbs</h2>
+                <BreadcrumbsViewer Breadcrumbs="Breadcrumbs" EventTimestamp="EventDetail.Timestamp" />
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int ProjectId { get; set; }
+    [Parameter, EditorRequired] public int IssueId { get; set; }
+    [Parameter, EditorRequired] public EventDetailResponse EventDetail { get; set; } = default!;
+    [Parameter] public EventNavigationResponse? Navigation { get; set; }
+    [Parameter] public List<BreadcrumbResponse>? Breadcrumbs { get; set; }
+    [Parameter] public bool Navigating { get; set; }
+    [Parameter] public EventCallback<long> OnNavigateEvent { get; set; }
+}

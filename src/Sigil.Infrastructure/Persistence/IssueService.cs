@@ -375,8 +375,9 @@ internal class IssueService(
 
         return new IssueDetailResponse(
             issue.Id, issue.ProjectId, issue.Title, issue.ExceptionType, issue.Culprit,
-            issue.Fingerprint, issue.Status, issue.Priority, issue.Level,
-            issue.FirstSeen, issue.LastSeen, issue.OccurrenceCount,
+            issue.Fingerprint, issue.Status, issue.Priority, issue.MergeSet?.Level ?? issue.Level,
+            issue.MergeSet?.FirstSeen ?? issue.FirstSeen, issue.MergeSet?.LastSeen ?? issue.LastSeen,
+            issue.MergeSet?.OccurrenceCount ?? issue.OccurrenceCount,
             issue.AssignedTo?.DisplayName, issue.AssignedToId,
             issue.ResolvedBy?.DisplayName, issue.ResolvedAt,
             tagGroups, suggestedEvent,

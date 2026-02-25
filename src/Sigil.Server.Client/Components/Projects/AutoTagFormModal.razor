@@ -1,0 +1,170 @@
+@using Sigil.Application.Models.AutoTags
+@inject IAutoTagService AutoTagService
+
+<ModalBase IsOpen="IsOpen" OnClose="OnClosed" Title="@(EditingRule is null ? "New Auto-Tag Rule" : "Edit Auto-Tag Rule")" Size="ModalSize.Medium">
+    <div class="space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Field</legend>
+                <input type="text" class="input input-sm w-full font-mono"
+                       placeholder="exceptionType, message, release…"
+                       list="autotag-modal-fields"
+                       @bind="_field" />
+                <p class="fieldset-label text-xs block">
+                    Available: <code>exceptionType</code>, <code>message</code>, <code>normalizedMessage</code>, <code>release</code>,<br />
+                    <code>environment</code>, <code>logger</code>, <code>level</code>, <code>culprit</code>, <code>stacktrace</code>, <code>tag:key</code>
+                </p>
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Operator</legend>
+                <select class="select select-sm w-full" @bind="_operator">
+                    @foreach (var op in Enum.GetValues<FilterOperator>())
+                    {
+                        <option value="@op">@op</option>
+                    }
+                </select>
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Value</legend>
+                <input type="text" class="input input-sm w-full font-mono"
+                       placeholder="Pattern to match…"
+                       @bind="_value" />
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Priority</legend>
+                <input type="number" class="input input-sm w-full" @bind="_priority" min="0" />
+                <p class="fieldset-label text-xs">Lower number = applied first</p>
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Tag Key</legend>
+                <input type="text" class="input input-sm w-full font-mono"
+                       placeholder="e.g. category" pattern="[a-z0-9\-]"
+                       @bind="_tagKey" />
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Tag Value</legend>
+                <input type="text" class="input input-sm w-full font-mono"
+                       placeholder="e.g. database-error" pattern="[a-z0-9\-]"
+                       @bind="_tagValue" />
+            </fieldset>
+
+            <fieldset class="fieldset sm:col-span-2">
+                <legend class="fieldset-legend">Description <span class="opacity-50">(optional)</span></legend>
+                <input type="text" class="input input-sm w-full"
+                       placeholder="What does this rule do?"
+                       @bind="_description" />
+            </fieldset>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="alert alert-error text-sm py-2">@_error</div>
+        }
+
+        <div class="modal-action">
+            <button class="btn btn-ghost" @onclick="() => OnClosed.InvokeAsync()">Cancel</button>
+            <button class="btn btn-primary" @onclick="Save" disabled="@_saving">
+                @(_saving ? "Saving…" : (EditingRule is null ? "Add Rule" : "Save"))
+            </button>
+        </div>
+    </div>
+</ModalBase>
+
+<datalist id="autotag-modal-fields">
+    <option value="exceptionType" />
+    <option value="message" />
+    <option value="normalizedMessage" />
+    <option value="release" />
+    <option value="environment" />
+    <option value="logger" />
+    <option value="level" />
+    <option value="culprit" />
+    <option value="stacktrace" />
+    <option value="tag:" />
+</datalist>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter, EditorRequired] public int ProjectId { get; set; }
+    [Parameter] public AutoTagRuleResponse? EditingRule { get; set; }
+    [Parameter] public EventCallback<AutoTagRuleResponse> OnSaved { get; set; }
+    [Parameter] public EventCallback OnClosed { get; set; }
+
+    private string _field = "";
+    private FilterOperator _operator = FilterOperator.Contains;
+    private string _value = "";
+    private string _tagKey = "";
+    private string _tagValue = "";
+    private int _priority;
+    private string? _description;
+    private string _error = "";
+    private bool _saving;
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen) return;
+        if (EditingRule is not null)
+        {
+            _field = EditingRule.Field;
+            _operator = EditingRule.Operator;
+            _value = EditingRule.Value;
+            _tagKey = EditingRule.TagKey;
+            _tagValue = EditingRule.TagValue;
+            _priority = EditingRule.Priority;
+            _description = EditingRule.Description;
+        }
+        else
+        {
+            _field = ""; _value = ""; _tagKey = ""; _tagValue = "";
+            _description = null; _priority = 0;
+            _operator = FilterOperator.Contains;
+        }
+        _error = "";
+    }
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(_field))    { _error = "Field is required."; return; }
+        if (string.IsNullOrWhiteSpace(_value))    { _error = "Value is required."; return; }
+        if (string.IsNullOrWhiteSpace(_tagKey))   { _error = "Tag key is required."; return; }
+        if (string.IsNullOrWhiteSpace(_tagValue)) { _error = "Tag value is required."; return; }
+
+        _saving = true;
+        _error = "";
+        try
+        {
+            AutoTagRuleResponse result;
+            if (EditingRule is null)
+            {
+                var req = new CreateAutoTagRuleRequest(
+                    _field.Trim(), _operator, _value.Trim(),
+                    _tagKey.Trim(), _tagValue.Trim(),
+                    true, _priority, _description?.Trim());
+                result = await AutoTagService.CreateRuleAsync(ProjectId, req);
+            }
+            else
+            {
+                var req = new UpdateAutoTagRuleRequest(
+                    _field.Trim(), _operator, _value.Trim(),
+                    _tagKey.Trim(), _tagValue.Trim(),
+                    EditingRule.Enabled, _priority, _description?.Trim());
+                result = await AutoTagService.UpdateRuleAsync(EditingRule.Id, req)
+                         ?? throw new InvalidOperationException("Rule not found.");
+            }
+            await OnSaved.InvokeAsync(result);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

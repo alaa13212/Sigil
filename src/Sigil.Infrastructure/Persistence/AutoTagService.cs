@@ -11,8 +11,7 @@ namespace Sigil.Infrastructure.Persistence;
 internal class AutoTagService(
     SigilDbContext dbContext,
     IAutoTagRuleCache cache,
-    IDateTime dateTime,
-    RuleEngine ruleEngine) : IAutoTagService
+    IDateTime dateTime) : IAutoTagService
 {
     public async Task<List<AutoTagRuleResponse>> GetRulesForProjectAsync(int projectId)
     {
@@ -86,18 +85,6 @@ internal class AutoTagService(
 
         cache.Set(projectId, rules);
         return rules;
-    }
-
-    public void ApplyRules(ParsedEvent parsedEvent, List<AutoTagRule> rules)
-    {
-        foreach (var rule in rules.Where(r => r.Enabled))
-        {
-            if (ruleEngine.Evaluate(new RuleCondition(rule.Field, rule.Operator, rule.Value), parsedEvent))
-            {
-                parsedEvent.Tags ??= new Dictionary<string, string>();
-                parsedEvent.Tags[rule.TagKey] = rule.TagValue;
-            }
-        }
     }
 
     private static AutoTagRuleResponse ToResponse(AutoTagRule r) =>

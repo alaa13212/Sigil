@@ -1,0 +1,33 @@
+<div class="modal @(IsOpen ? "modal-open" : "")">
+    <div class="modal-box @SizeClass">
+        @if (!string.IsNullOrEmpty(Title))
+        {
+            <h3 class="font-bold text-lg mb-4">@Title</h3>
+        }
+        @ChildContent
+    </div>
+    <div class="modal-backdrop backdrop-blur-sm transition-all" @onclick="HandleBackdropClick"></div>
+</div>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public bool CloseOnBackdropClick { get; set; } = true;
+    [Parameter] public ModalSize Size { get; set; } = ModalSize.Medium;
+
+    private string SizeClass => Size switch
+    {
+        ModalSize.Small  => "max-w-md",
+        ModalSize.Medium => "max-w-2xl",
+        ModalSize.Large  => "max-w-4xl",
+        _                => "max-w-2xl"
+    };
+
+    private async Task HandleBackdropClick()
+    {
+        if (CloseOnBackdropClick)
+            await OnClose.InvokeAsync();
+    }
+}

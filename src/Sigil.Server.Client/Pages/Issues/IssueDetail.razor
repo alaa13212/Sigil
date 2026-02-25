@@ -2,13 +2,9 @@
 @attribute [Authorize]
 @using Sigil.Application.Models.Issues
 @using Sigil.Application.Models.Events
-@using Sigil.Domain.Extensions
 @inject IIssueService IssueService
-@inject IMergeSetService MergeSetService
 @inject IBookmarkService BookmarkService
 @inject IEventService EventService
-@inject IIssueActivityService ActivityService
-@inject ITagValueFormatter TagValueFormatter
 @inject NavigationManager Navigation
 
 <PageTitle>@(string.IsNullOrEmpty(issue?.Title) ? "Issue" : issue.Title) — Sigil</PageTitle>
@@ -29,16 +25,16 @@ else
 
     @if (issue.MergeSet is not null && issue.MergeSet.PrimaryIssueId != IssueId)
     {
-        <div class="alert alert-info mb-4">
-            This issue is part of a <a href="/projects/@ProjectId/issues/@issue.MergeSet.PrimaryIssueId" class="link">merged group</a>.
-            Viewing individual issue data.
+        <div class="alert alert-info mb-4 flex flex-col items-start gap-0">
+            <p>This issue is part of a <a href="/projects/@ProjectId/issues/@issue.MergeSet.PrimaryIssueId" class="link">merged group</a>.</p>
+            <p>Viewing individual issue data.</p>
         </div>
     }
 
     <div class="flex flex-col lg:flex-row gap-6">
         <!-- Left column: main content -->
         <div class="flex-1 min-w-0 space-y-4">
-            <!-- Title and exception type -->
+            <!-- Title, exception type, culprit -->
             <div>
                 <div class="flex items-start gap-2">
                     @if (!string.IsNullOrEmpty(issue.Title))
@@ -67,603 +63,36 @@ else
                 }
             </div>
 
-            <!-- Tabs -->
-            <div role="tablist" class="tabs tabs-bordered">
-                @if (issue.SuggestedEvent is not null && eventDetail is not null)
-                {
-                    <a role="tab" href="/projects/@ProjectId/issues/@IssueId?tab=event"
-                       class="tab @(activeTab == Tab.SuggestedEvent ? "tab-active" : "")">Event</a>
-                }
-                <a role="tab" href="/projects/@ProjectId/issues/@IssueId?tab=events"
-                   class="tab @(activeTab == Tab.Events ? "tab-active" : "")">Events</a>
-                <a role="tab" href="/projects/@ProjectId/issues/@IssueId?tab=activity"
-                   class="tab @(activeTab == Tab.Activity ? "tab-active" : "")">Activity</a>
-                <a role="tab" href="/projects/@ProjectId/issues/@IssueId?tab=similar"
-                   class="tab @(activeTab == Tab.Similar ? "tab-active" : "")">Similar</a>
-            </div>
+            <!-- Tab bar -->
+            <TabBar TTab="Tab" Tabs="_visibleTabs" ActiveTab="_activeTab"
+                    OnTabChanged="SetActiveTab" TabLabel="GetTabLabel" />
 
-            <!-- Suggested Event tab -->
-            @if (activeTab == Tab.SuggestedEvent && eventDetail is not null)
+            <!-- Tab content -->
+            @if (_activeTab == Tab.SuggestedEvent && eventDetail is not null)
             {
-                <div class="space-y-4">
-                    <!-- Navigation bar: Prev/Next + View full event -->
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <button class="btn btn-ghost btn-sm" disabled="@(navigation?.PreviousEventId is null || eventNavigating)"
-                                    @onclick="() => NavigateEvent(navigation!.PreviousEventId!.Value)">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
-                                Older
-                            </button>
-                            <button class="btn btn-ghost btn-sm" disabled="@(navigation?.NextEventId is null || eventNavigating)"
-                                    @onclick="() => NavigateEvent(navigation!.NextEventId!.Value)">
-                                Newer
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
-                            </button>
-                        </div>
-                        <a href="/projects/@ProjectId/issues/@IssueId/events/@eventDetail.Id" class="btn btn-ghost btn-sm">
-                            View full event
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                        </a>
-                    </div>
-
-                    <div class="flex items-center gap-3 text-sm opacity-60">
-                        <SeverityBadge Level="eventDetail.Level" />
-                        <RelativeTime Value="eventDetail.Timestamp" />
-                        <span>·</span>
-                        <span>@eventDetail.Timestamp.ToString("yyyy-MM-dd HH:mm:ss UTC")</span>
-                    </div>
-
-                    @if (!string.IsNullOrEmpty(eventDetail.Message))
-                    {
-                        <div class="alert">
-                            <span class="font-mono text-sm break-words">@eventDetail.Message</span>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="alert">
-                            <span class="opacity-50 italic text-sm">No message</span>
-                        </div>
-                    }
-
-                    @if (eventDetail.StackFrames.Count > 0)
-                    {
-                        <div class="card bg-base-200">
-                            <div class="card-body p-4 overflow-auto">
-                                <h2 class="card-title text-base">Stack Trace</h2>
-                                <StackTraceViewer Frames="eventDetail.StackFrames" />
-                            </div>
-                        </div>
-                    }
-
-                    <div class="grid grid-cols-fit-[400px] gap-4">
-                        <div class="card bg-base-200">
-                            <div class="card-body p-4">
-                                <h2 class="card-title text-base">Context</h2>
-                                <div class="space-y-1 text-sm">
-                                    <div class="flex justify-between">
-                                        <span class="opacity-60">Platform</span>
-                                        <span>@eventDetail.Platform</span>
-                                    </div>
-                                    @if (!string.IsNullOrEmpty(eventDetail.Release))
-                                    {
-                                        <div class="flex justify-between">
-                                            <span class="opacity-60">Release</span>
-                                            <span class="font-mono">@eventDetail.Release</span>
-                                        </div>
-                                    }
-                                    @if (!string.IsNullOrEmpty(eventDetail.Environment))
-                                    {
-                                        <div class="flex justify-between">
-                                            <span class="opacity-60">Environment</span>
-                                            <span>@eventDetail.Environment</span>
-                                        </div>
-                                    }
-                                </div>
-                            </div>
-                        </div>
-
-                        @if (eventDetail.User is not null)
-                        {
-                            <div class="card bg-base-200">
-                                <div class="card-body p-4">
-                                    <h2 class="card-title text-base">User</h2>
-                                    <div class="space-y-1 text-sm">
-                                        @if (!string.IsNullOrEmpty(eventDetail.User.Username))
-                                        {
-                                            <div class="flex justify-between">
-                                                <span class="opacity-60">Username</span>
-                                                <span>@eventDetail.User.Username</span>
-                                            </div>
-                                        }
-                                        @if (!string.IsNullOrEmpty(eventDetail.User.Email))
-                                        {
-                                            <div class="flex justify-between">
-                                                <span class="opacity-60">Email</span>
-                                                <span>@eventDetail.User.Email</span>
-                                            </div>
-                                        }
-                                        @if (!string.IsNullOrEmpty(eventDetail.User.IpAddress))
-                                        {
-                                            <div class="flex justify-between">
-                                                <span class="opacity-60">IP</span>
-                                                <span class="font-mono">@eventDetail.User.IpAddress</span>
-                                            </div>
-                                        }
-                                        @if (!string.IsNullOrEmpty(eventDetail.User.Identifier))
-                                        {
-                                            <div class="flex justify-between">
-                                                <span class="opacity-60">ID</span>
-                                                <span class="font-mono">@eventDetail.User.Identifier</span>
-                                            </div>
-                                        }
-                                    </div>
-                                </div>
-                            </div>
-                        }
-
-                        @if (eventDetail.Tags.Count > 0)
-                        {
-                            <div class="card bg-base-200">
-                                <div class="card-body p-4">
-                                    <h2 class="card-title text-base">Tags</h2>
-                                    <div class="overflow-x-auto">
-                                        <table class="table table-sm">
-                                            <tbody>
-                                            @foreach (var tag in eventDetail.Tags.OrderBy(t => t.Key))
-                                            {
-                                                <tr>
-                                                    <td class="opacity-60 w-1/3">@tag.Key</td>
-                                                    <td class="font-mono">@TagValueFormatter.Format(tag.Key, tag.Value)</td>
-                                                </tr>
-                                            }
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        }
-
-                        @if (eventDetail.Extra is { Count: > 0 })
-                        {
-                            <div class="card bg-base-200">
-                                <div class="card-body p-4">
-                                    <h2 class="card-title text-base">Extra</h2>
-                                    <div class="space-y-1 text-sm">
-                                        @foreach (var (key, value) in eventDetail.Extra)
-                                        {
-                                            <div class="flex justify-between gap-4">
-                                                <span class="opacity-60 font-mono shrink-0">@key</span>
-                                                <span class="font-mono text-right break-all">@value</span>
-                                            </div>
-                                        }
-                                    </div>
-                                </div>
-                            </div>
-                        }
-                    </div>
-
-                    <!-- Breadcrumbs -->
-                    @if (breadcrumbs.Count > 0)
-                    {
-                        <div class="card bg-base-200">
-                            <div class="card-body p-4">
-                                <h2 class="card-title text-base">Breadcrumbs</h2>
-                                <BreadcrumbsViewer Breadcrumbs="breadcrumbs" EventTimestamp="eventDetail.Timestamp" />
-                            </div>
-                        </div>
-                    }
-                </div>
+                <IssueEventPanel ProjectId="ProjectId" IssueId="IssueId"
+                                 EventDetail="eventDetail" Navigation="navigation"
+                                 Breadcrumbs="breadcrumbs" Navigating="eventNavigating"
+                                 OnNavigateEvent="NavigateEvent" />
             }
-
-            <!-- Events tab -->
-            @if (activeTab == Tab.Events)
+            @if (_activeTab == Tab.Events)
             {
-                @if (events is null || events.Items.Count == 0)
-                {
-                    <EmptyState Title="No events" />
-                }
-                else
-                {
-                    <div class="overflow-x-auto">
-                        <table class="table table-sebra table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Time</th>
-                                    <th>Message</th>
-                                    <th>Severity</th>
-                                    <th>User</th>
-                                    <th>Release</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var evt in events.Items)
-                                {
-                                    <tr class="hover:bg-base-300 relative cursor-pointer">
-                                        <td>
-                                            <a href="/projects/@ProjectId/issues/@IssueId/events/@evt.Id" class="stretched-link"><RelativeTime Value="evt.Timestamp"/></a>
-                                        </td>
-                                        <td class="line-clamp-1">@(evt.Message ?? "—")</td>
-                                        <td><SeverityBadge Level="evt.Level" /></td>
-                                        <td class="text-sm opacity-70">@(evt.UserIdentifier ?? "—")</td>
-                                        <td class="text-sm font-mono opacity-70">@(evt.Release ?? "—")</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <Pagination Page="eventsPage" TotalCount="events.TotalCount" PageSize="EventsPageSize"
-                                OnPageChanged="OnEventsPageChanged" />
-                }
+                <IssueEventsTab ProjectId="ProjectId" IssueId="IssueId" />
             }
-
-            <!-- Activity tab -->
-            @if (activeTab == Tab.Activity)
+            @if (_activeTab == Tab.Activity)
             {
-                <!-- Comment form -->
-                <div class="card bg-base-200">
-                    <div class="card-body p-4 space-y-2">
-                        <textarea class="textarea textarea-bordered w-full text-sm" rows="3"
-                                  placeholder="Add a comment…"
-                                  @bind="commentText" disabled="@commentLoading"></textarea>
-                        <div class="flex items-center gap-2">
-                            <button class="btn btn-primary btn-sm" @onclick="SubmitComment"
-                                    disabled="@(commentLoading || string.IsNullOrWhiteSpace(commentText))">
-                                @if (commentLoading)
-                                {
-                                    <span class="loading loading-spinner loading-xs"></span>
-                                }
-                                Comment
-                            </button>
-                            @if (!string.IsNullOrEmpty(commentError))
-                            {
-                                <span class="text-sm text-error">@commentError</span>
-                            }
-                        </div>
-                    </div>
-                </div>
-
-                @if (activities is null || activities.Items.Count == 0)
-                {
-                    <EmptyState Title="No activity yet" />
-                }
-                else
-                {
-                    <ul class="timeline timeline-vertical timeline-compact">
-                        @foreach (var act in activities.Items)
-                        {
-                            <li>
-                                <div class="timeline-start text-xs opacity-60">
-                                    <RelativeTime Value="act.Timestamp" />
-                                </div>
-                                <div class="timeline-middle">
-                                    <div class="w-2 h-2 rounded-full bg-base-content opacity-40"></div>
-                                </div>
-                                <div class="timeline-end text-sm pb-4">
-                                    <span class="font-medium">@FormatAction(act.Action)</span>
-                                    @if (!string.IsNullOrEmpty(act.UserName))
-                                    {
-                                        <span class="opacity-70"> by @act.UserName</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="opacity-70"> by Sigil</span>
-                                    }
-                                    @if (!string.IsNullOrEmpty(act.Message))
-                                    {
-                                        <div class="text-xs opacity-60 mt-0.5 whitespace-pre-wrap">@act.Message</div>
-                                    }
-                                </div>
-                            </li>
-                        }
-                    </ul>
-                }
+                <IssueActivityTab IssueId="IssueId" />
             }
-
-            <!-- Similar Issues tab -->
-            @if (activeTab == Tab.Similar)
+            @if (_activeTab == Tab.Similar)
             {
-                @if (issue.MergeSet is not null)
-                {
-                    <h1 class="text-2xl">
-                        Issue Group
-                        <span class="badge badge-xl badge-neutral ml-2">@issue.MergeSet.Members.Count</span>
-                    </h1>
-                    <div class="space-y-4">
-                        <div class="flex items-center justify-between">
-                            <p class="text-sm opacity-60">Issues in this merge group. The primary issue's title and metadata represent the group.</p>
-                        </div>
-                        @if(!memberActionError.IsNullOrEmpty())
-                        {
-                            <div role="alert" class="alert alert-warning">
-                                <span>@memberActionError</span>
-                            </div>
-                        }
-                        <div class="card bg-base-200">
-                            <div class="card-body p-4 space-y-3">
-                                @foreach (var member in issue.MergeSet.Members.OrderByDescending(m => m.IsPrimary))
-                                {
-                                    <div class="flex items-start justify-between gap-4 p-3 rounded @(member.IsPrimary ? "bg-primary/10" : "bg-base-300")">
-                                        <div class="flex-1 min-w-0">
-                                            <div class="flex items-center gap-2">
-                                                @if (member.IsPrimary)
-                                                {
-                                                    <span class="badge badge-primary badge-sm">Primary</span>
-                                                }
-                                                <a href="@($"/projects/{ProjectId}/issues/{member.IssueId}{(member.IsPrimary ? "" : "?no-redirect=true")}")" class="font-semibold text-sm hover:underline line-clamp-1">
-                                                    @(string.IsNullOrEmpty(member.Title) ? "No message" : member.Title)
-                                                </a>
-                                            </div>
-                                            <div class="text-xs opacity-60 mt-0.5 font-mono">@member.Fingerprint</div>
-                                            <div class="text-xs opacity-50 mt-0.5">
-                                                @member.OccurrenceCount events · last seen <RelativeTime Value="member.LastSeen" />
-                                            </div>
-                                        </div>
-                                        <div class="flex gap-1 shrink-0">
-                                            @if (!member.IsPrimary)
-                                            {
-                                                <button class="btn btn-ghost btn-xs" title="Set as primary"
-                                                        @onclick="() => SetPrimary(member.IssueId)" disabled="@memberActionLoading">
-                                                    Set Primary
-                                                </button>
-                                                <button class="btn btn-ghost btn-xs text-error" title="Remove from group"
-                                                        @onclick="() => RemoveMember(member.IssueId)" disabled="@memberActionLoading">
-                                                    Remove
-                                                </button>
-                                            }
-                                        </div>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                        
-                    </div>
-                }
-                @if (similarIssues is null)
-                {
-                    <div class="flex justify-center py-8">
-                        <span class="loading loading-spinner loading-md"></span>
-                    </div>
-                }
-                else if (similarIssues.Count == 0)
-                {
-                    <div class="divider"></div>
-                    <h1 class="text-2xl">
-                        Similar Issues
-                    </h1>
-                    <EmptyState Title="No similar issues" Description="No other issues share the same title, exception type, or culprit." />
-                }
-                else
-                {
-                    <div class="divider"></div>
-                    <h1 class="text-2xl">
-                        Similar Issues
-                    </h1>
-                    <div class="space-y-2">
-                        <p class="text-sm opacity-60">Issues with the same title, exception type, or culprit. Consider merging related ones.</p>
-
-                        
-                        <fieldset disabled="@(!CanMerge)">
-                            <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
-                                <span class="text-sm font-medium">@similarSelected.Count selected</span>
-                                <button class="btn btn-primary btn-sm" @onclick="MergeSimilarSelected" disabled="@mergeFromSimilarLoading">
-                                    @if (mergeFromSimilarLoading)
-                                    {
-                                        <span class="loading loading-spinner loading-xs"></span>
-                                    }
-                                    Merge with this issue
-                                </button>
-                                <button class="btn btn-ghost btn-sm" @onclick="() => similarSelected.Clear()">Clear</button>
-                                @if (!string.IsNullOrEmpty(similarMergeError))
-                                {
-                                    <span class="text-sm text-error">@similarMergeError</span>
-                                }
-                            </div>
-                        </fieldset>
-
-
-                        <div class="overflow-x-auto">
-                            <table class="table table-zebra table-sm">
-                                <thead>
-                                    <tr>
-                                        <th class="w-8"></th>
-                                        <th>Issue</th>
-                                        <th>Severity</th>
-                                        <th>Status</th>
-                                        <th class="text-right">Events</th>
-                                        <th>Last Seen</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var sim in similarIssues)
-                                    {
-                                        <tr class="hover:bg-base-300 relative @(similarSelected.Contains(sim.Id) ? "bg-primary/5" : "")">
-                                            <td @onclick:stopPropagation="true">
-                                                <input type="checkbox" class="checkbox checkbox-sm"
-                                                       checked="@similarSelected.Contains(sim.Id)"
-                                                       @onchange="e => ToggleSimilar(sim.Id, (bool)(e.Value ?? false))" />
-                                            </td>
-                                            <td>
-                                                <a href="/projects/@ProjectId/issues/@sim.Id" class="stretched-link after:start-12! cursor-pointer" target="_blank"></a>
-                                                <div class="font-semibold text-sm">
-                                                    @if (!string.IsNullOrEmpty(sim.ExceptionType))
-                                                    {
-                                                        <span class="opacity-80">@sim.ExceptionType: </span>
-                                                    }
-                                                    @(string.IsNullOrEmpty(sim.Title) ? "No message" : sim.Title)
-                                                </div>
-                                                @if (!string.IsNullOrEmpty(sim.Culprit))
-                                                {
-                                                    <div class="text-xs opacity-60">@sim.Culprit</div>
-                                                }
-                                            </td>
-                                            <td><SeverityBadge Level="sim.Level" /></td>
-                                            <td><StatusBadge Status="sim.Status" /></td>
-                                            <td class="text-right font-mono">@sim.OccurrenceCount</td>
-                                            <td><RelativeTime Value="sim.LastSeen" /></td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                }
+                <IssueSimilarTab ProjectId="ProjectId" IssueId="IssueId"
+                                 MergeSet="issue.MergeSet" CurrentUserId="currentUserId"
+                                 OnMergeChanged="LoadIssue" />
             }
         </div>
 
         <!-- Right sidebar -->
-        <div class="w-full lg:w-72 space-y-4">
-            <!-- Status actions -->
-            <div class="card bg-base-200">
-                <div class="card-body p-4 space-y-3">
-                    <div class="flex items-center gap-2">
-                        <span class="text-sm font-semibold">Status</span>
-                        <StatusBadge Status="issue.Status" />
-                    </div>
-                    <div class="flex flex-wrap gap-1">
-                        @if (issue.Status != IssueStatus.Resolved)
-                        {
-                            <button class="btn btn-success btn-sm" @onclick="() => UpdateStatus(IssueStatus.Resolved)" disabled="@actionLoading">
-                                Resolve
-                            </button>
-                        }
-                        @if (issue.Status != IssueStatus.ResolvedInFuture)
-                        {
-                            <button class="btn btn-accent btn-sm" @onclick="() => UpdateStatus(IssueStatus.ResolvedInFuture)" disabled="@actionLoading">
-                                Next Release
-                            </button>
-                        }
-                        @if (issue.Status != IssueStatus.Open)
-                        {
-                            <button class="btn btn-info btn-sm" @onclick="() => UpdateStatus(IssueStatus.Open)" disabled="@actionLoading">
-                                Reopen
-                            </button>
-                        }
-                        @if (issue.Status != IssueStatus.Ignored)
-                        {
-                            <button class="btn btn-ghost btn-sm" @onclick="() => UpdateStatus(IssueStatus.Ignored)" disabled="@actionLoading">
-                                Ignore
-                            </button>
-                        }
-                    </div>
-                    @if (issue.Status != IssueStatus.Ignored)
-                    {
-                        <label class="flex items-center gap-2 text-xs cursor-pointer">
-                            <input type="checkbox" class="checkbox checkbox-xs" @bind="ignoreFutureEvents" />
-                            Also ignore future events with this fingerprint
-                        </label>
-                    }
-                </div>
-            </div>
-
-            <!-- Priority -->
-            <div class="card bg-base-200">
-                <div class="card-body p-4">
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Priority</legend>
-                        <select class="select select-sm w-full" value="@issue.Priority"
-                                @onchange="OnPriorityChanged" disabled="@actionLoading">
-                            @foreach (var p in Enum.GetValues<Priority>())
-                            {
-                                <option value="@p">@p</option>
-                            }
-                        </select>
-                    </fieldset>
-                </div>
-            </div>
-
-            <!-- Details -->
-            <div class="card bg-base-200">
-                <div class="card-body p-4 space-y-2 text-sm">
-                    <div class="flex justify-between">
-                        <span class="opacity-60">Severity</span>
-                        <SeverityBadge Level="issue.Level" />
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="opacity-60">Assigned</span>
-                        <span>@(issue.AssignedToName ?? "Unassigned")</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="opacity-60">First Seen</span>
-                        <div class="text-right">
-                            <RelativeTime Value="issue.FirstSeen" />
-                            @if (!string.IsNullOrEmpty(issue.FirstRelease))
-                            {
-                                <div class="text-xs opacity-50 font-mono">@TagValueFormatter.Format("release", issue.FirstRelease)</div>
-                            }
-                        </div>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="opacity-60">Last Seen</span>
-                        <div class="text-right">
-                            <RelativeTime Value="issue.LastSeen" />
-                            @if (!string.IsNullOrEmpty(issue.LastRelease))
-                            {
-                                <div class="text-xs opacity-50 font-mono">@TagValueFormatter.Format("release", issue.LastRelease)</div>
-                            }
-                        </div>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="opacity-60">Events</span>
-                        <span class="font-mono">@issue.OccurrenceCount</span>
-                    </div>
-                    @if (issue.MergeSet is not null)
-                    {
-                        <div class="flex justify-between">
-                            <span class="opacity-60">Merge Group</span>
-                            <span class="font-mono">@issue.MergeSet.Members.Count members</span>
-                        </div>
-                    }
-                </div>
-            </div>
-
-            <!-- Tags grouped with frequency -->
-            @if (issue.Tags.Count > 0)
-            {
-                <div class="card bg-base-200">
-                    <div class="card-body p-4 space-y-3">
-                        <span class="text-sm font-semibold">Tags</span>
-                        @foreach (var group in issue.Tags.OrderBy(t => t.Key))
-                        {
-                            <div class="space-y-1">
-                                <div class="text-xs font-semibold opacity-70">@group.Key</div>
-                                @{
-                                    var topValues = group.Values.Take(4).ToList();
-                                    int othersCount = group.TotalCount - topValues.Sum(v => v.Count);
-                                }
-                                @foreach (var tagVal in topValues)
-                                {
-                                    var pct = group.TotalCount > 0 ? (double)tagVal.Count / group.TotalCount * 100 : 0;
-                                    <div class="space-y-0.5">
-                                        <div class="flex justify-between text-xs">
-                                            <span class="font-mono line-clamp-1" title="@tagVal.Value">@TagValueFormatter.Format(group.Key, tagVal.Value)</span>
-                                            <span class="opacity-50 shrink-0 ml-2">@pct.ToString("F0")%</span>
-                                        </div>
-                                        <div class="w-full bg-base-300 rounded-full h-1">
-                                            <div class="bg-primary rounded-full h-1" style="width: @pct.ToString("F1")%"></div>
-                                        </div>
-                                    </div>
-                                }
-                                @if (othersCount > 0)
-                                {
-                                    var othersPct = (double)othersCount / group.TotalCount * 100;
-                                    <div class="space-y-0.5">
-                                        <div class="flex justify-between text-xs">
-                                            <span class="opacity-50 italic">others</span>
-                                            <span class="opacity-50 shrink-0 ml-2">@othersPct.ToString("F0")%</span>
-                                        </div>
-                                        <div class="w-full bg-base-300 rounded-full h-1">
-                                            <div class="bg-base-content/20 rounded-full h-1" style="width: @othersPct.ToString("F1")%"></div>
-                                        </div>
-                                    </div>
-                                }
-                            </div>
-                        }
-                    </div>
-                </div>
-            }
-        </div>
+        <IssueSidebar Issue="issue" OnStatusChanged="OnIssueChanged" OnPriorityChanged="OnIssueChanged" />
     </div>
 }
 
@@ -672,42 +101,25 @@ else
     [Parameter] public int IssueId { get; set; }
     [SupplyParameterFromQuery(Name = "tab")] public string? TabParam { get; set; }
     [SupplyParameterFromQuery(Name = "no-redirect")] public bool NoRedirect { get; set; }
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
 
     private IssueDetailResponse? issue;
     private EventDetailResponse? eventDetail;
     private EventNavigationResponse? navigation;
     private List<BreadcrumbResponse> breadcrumbs = [];
-    private PagedResponse<EventSummary>? events;
-    private PagedResponse<ActivityResponse>? activities;
-    private List<IssueSummary>? similarIssues;
     private bool loading = true;
-    private bool actionLoading;
     private bool eventNavigating;
-    private Tab activeTab = Tab.Events;
-    private int eventsPage = 1;
-    private const int EventsPageSize = 50;
+    private Tab _activeTab = Tab.Events;
     private bool isBookmarked;
-    private bool ignoreFutureEvents;
-
-    // Members tab state
-    private bool memberActionLoading;
-    private string memberActionError = "";
-
-    // Comment state
-    private string commentText = "";
-    private bool commentLoading;
-    private string commentError = "";
-
-    // Similar issues state
-    private HashSet<int> similarSelected = [];
-    private bool mergeFromSimilarLoading;
-    private string similarMergeError = "";
-    private bool CanMerge => similarSelected.Count > 0;
     private Guid currentUserId;
 
-    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
-
     private enum Tab { SuggestedEvent, Events, Activity, Similar }
+
+    private static readonly Tab[] _allTabs = [Tab.SuggestedEvent, Tab.Events, Tab.Activity, Tab.Similar];
+    private static readonly Tab[] _tabsWithoutEvent = [Tab.Events, Tab.Activity, Tab.Similar];
+
+    private IReadOnlyList<Tab> _visibleTabs =>
+        issue?.SuggestedEvent is not null && eventDetail is not null ? _allTabs : _tabsWithoutEvent;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -716,13 +128,8 @@ else
         currentUserId = userIdStr is not null ? Guid.Parse(userIdStr) : Guid.Empty;
 
         loading = true;
-        events = null;
-        activities = null;
-        similarIssues = null;
         breadcrumbs = [];
         navigation = null;
-        memberActionError = "";
-        similarSelected.Clear();
 
         await LoadIssue();
 
@@ -733,7 +140,7 @@ else
             return;
         }
 
-        activeTab = TabParam?.ToLower() switch
+        _activeTab = TabParam?.ToLower() switch
         {
             "event"    => issue?.SuggestedEvent is not null ? Tab.SuggestedEvent : Tab.Events,
             "events"   => Tab.Events,
@@ -743,13 +150,6 @@ else
         };
 
         loading = false;
-
-        if (activeTab == Tab.Events)
-            await LoadEvents();
-        else if (activeTab == Tab.Activity)
-            await LoadActivity();
-        else if (activeTab == Tab.Similar)
-            await LoadSimilar();
     }
 
     private async Task LoadIssue()
@@ -761,7 +161,6 @@ else
             {
                 var combined = await EventService.GetIssueEventDetailAsync(IssueId, issue.SuggestedEvent.Id);
                 eventDetail = combined?.Event;
-                // Use merge group navigation for primary issues in a merge set
                 navigation = issue.MergeSet is not null && issue.MergeSet.PrimaryIssueId == IssueId && combined is not null
                     ? await EventService.GetMergeGroupEventNavigationAsync(issue.MergeSet.Id, issue.SuggestedEvent.Id)
                     : combined?.Navigation;
@@ -799,7 +198,6 @@ else
             if (combined is not null)
             {
                 eventDetail = combined.Event;
-                // Use merge group navigation if the issue is the primary of a merge set
                 navigation = issue?.MergeSet is not null && issue.MergeSet.PrimaryIssueId == IssueId
                     ? await EventService.GetMergeGroupEventNavigationAsync(issue.MergeSet.Id, eventId)
                     : combined.Navigation;
@@ -816,193 +214,27 @@ else
         }
     }
 
-    private async Task LoadEvents()
+    private async Task OnIssueChanged<T>(T _) => await LoadIssue();
+
+    private void SetActiveTab(Tab tab)
     {
-        try
+        var tabStr = tab switch
         {
-            events = await EventService.GetEventSummariesAsync(IssueId, eventsPage, EventsPageSize);
-        }
-        catch
-        {
-            events = null;
-        }
+            Tab.SuggestedEvent => "event",
+            Tab.Events         => "events",
+            Tab.Activity       => "activity",
+            Tab.Similar        => "similar",
+            _                  => "events"
+        };
+        Navigation.NavigateTo($"/projects/{ProjectId}/issues/{IssueId}?tab={tabStr}", forceLoad: false);
     }
 
-    private async Task LoadActivity()
+    private static string GetTabLabel(Tab tab) => tab switch
     {
-        try
-        {
-            activities = await ActivityService.GetActivitySummariesAsync(IssueId);
-        }
-        catch
-        {
-            activities = null;
-        }
-    }
-
-    private async Task SubmitComment()
-    {
-        if (string.IsNullOrWhiteSpace(commentText)) return;
-        commentLoading = true;
-        commentError = "";
-        try
-        {
-            await ActivityService.AddCommentAsync(IssueId, commentText.Trim());
-            commentText = "";
-            await LoadActivity();
-        }
-        catch (Exception ex)
-        {
-            commentError = ex.Message;
-        }
-        finally
-        {
-            commentLoading = false;
-        }
-    }
-
-    private async Task LoadSimilar()
-    {
-        try
-        {
-            similarIssues = await IssueService.GetSimilarIssuesAsync(IssueId);
-        }
-        catch
-        {
-            similarIssues = [];
-        }
-    }
-
-    private async Task UpdateStatus(IssueStatus status)
-    {
-        actionLoading = true;
-        try
-        {
-            var ignoreFuture = status == IssueStatus.Ignored && ignoreFutureEvents;
-            await IssueService.UpdateIssueStatusAsync(IssueId, status, ignoreFutureEvents: ignoreFuture);
-            ignoreFutureEvents = false;
-            await LoadIssue();
-        }
-        finally
-        {
-            actionLoading = false;
-        }
-    }
-
-    private async Task OnPriorityChanged(ChangeEventArgs e)
-    {
-        if (Enum.TryParse<Priority>(e.Value?.ToString(), out var priority))
-        {
-            actionLoading = true;
-            try
-            {
-                await IssueService.UpdateIssuePriorityAsync(IssueId, priority);
-                await LoadIssue();
-            }
-            finally
-            {
-                actionLoading = false;
-            }
-        }
-    }
-
-    private async Task OnEventsPageChanged(int newPage)
-    {
-        eventsPage = newPage;
-        await LoadEvents();
-    }
-
-    private async Task SetPrimary(int issueId)
-    {
-        if (issue?.MergeSet is null) return;
-        memberActionLoading = true;
-        memberActionError = "";
-        try
-        {
-            await MergeSetService.SetPrimaryAsync(issue.MergeSet.Id, issueId);
-            await LoadIssue();
-        }
-        catch (Exception ex)
-        {
-            memberActionError = ex.Message;
-        }
-        finally
-        {
-            memberActionLoading = false;
-        }
-    }
-
-    private async Task RemoveMember(int issueId)
-    {
-        if (issue?.MergeSet is null) return;
-        memberActionLoading = true;
-        memberActionError = "";
-        try
-        {
-            await MergeSetService.RemoveIssueAsync(issue.MergeSet.Id, issueId, currentUserId);
-            await LoadIssue();
-        }
-        catch (Exception ex)
-        {
-            memberActionError = ex.Message;
-        }
-        finally
-        {
-            memberActionLoading = false;
-        }
-    }
-
-    private void ToggleSimilar(int issueId, bool selected)
-    {
-        similarMergeError = "";
-        if (selected) similarSelected.Add(issueId);
-        else similarSelected.Remove(issueId);
-    }
-
-    private async Task MergeSimilarSelected()
-    {
-        if (similarSelected.Count == 0) return;
-        mergeFromSimilarLoading = true;
-        similarMergeError = "";
-        try
-        {
-            var allIds = new List<int> { IssueId };
-            allIds.AddRange(similarSelected);
-
-            if (issue?.MergeSet is not null)
-            {
-                // Already in a merge set — add all selected issues
-                await MergeSetService.BulkAddIssuesAsync(issue.MergeSet.Id, similarSelected.ToList(), currentUserId);
-            }
-            else
-            {
-                await MergeSetService.CreateAsync(ProjectId, allIds, currentUserId);
-            }
-
-            Navigation.NavigateTo($"/projects/{ProjectId}/issues/{IssueId}?tab=members", forceLoad: false);
-        }
-        catch (Exception ex)
-        {
-            similarMergeError = ex.Message;
-        }
-        finally
-        {
-            mergeFromSimilarLoading = false;
-        }
-    }
-
-    private static string FormatAction(IssueActivityAction action) => action switch
-    {
-        IssueActivityAction.Created    => "Issue created",
-        IssueActivityAction.Resolved   => "Resolved",
-        IssueActivityAction.Unresolved => "Reopened",
-        IssueActivityAction.Ignored    => "Ignored",
-        IssueActivityAction.Assigned   => "Assigned",
-        IssueActivityAction.Unassigned => "Unassigned",
-        IssueActivityAction.Commented  => "Commented",
-        IssueActivityAction.Merged     => "Merged into group",
-        IssueActivityAction.Unmerged   => "Removed from group",
-        IssueActivityAction.Bookmarked => "Bookmarked",
-        _                              => action.ToString()
+        Tab.SuggestedEvent => "Event",
+        Tab.Events         => "Events",
+        Tab.Activity       => "Activity",
+        Tab.Similar        => "Similar",
+        _                  => tab.ToString()
     };
 }

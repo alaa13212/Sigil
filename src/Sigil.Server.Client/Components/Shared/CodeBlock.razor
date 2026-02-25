@@ -1,0 +1,21 @@
+<pre><code class="language-@Language" @ref="_codeRef">@Code</code></pre>
+
+@code {
+    [Parameter, EditorRequired] public string Code { get; set; } = "";
+    [Parameter] public string Language { get; set; } = "plaintext";
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private ElementReference _codeRef;
+    private string _prevCode = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender || Code != _prevCode)
+        {
+            _prevCode = Code;
+            try { await JS.InvokeVoidAsync("hljs.highlightElement", _codeRef); }
+            catch { /* hljs not yet loaded or element unmounted */ }
+        }
+    }
+}

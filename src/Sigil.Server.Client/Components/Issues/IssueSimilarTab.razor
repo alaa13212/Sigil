@@ -1,0 +1,249 @@
+@using Sigil.Application.Models.Issues
+@using Sigil.Application.Models.MergeSets
+@using Sigil.Domain.Extensions
+@inject IIssueService IssueService
+@inject IMergeSetService MergeSetService
+@inject NavigationManager Navigation
+
+@if (MergeSet is not null)
+{
+    <h1 class="text-2xl">
+        Issue Group
+        <span class="badge badge-xl badge-neutral ml-2">@MergeSet.Members.Count</span>
+    </h1>
+    <div class="space-y-4">
+        <div class="flex items-center justify-between">
+            <p class="text-sm opacity-60">Issues in this merge group. The primary issue's title and metadata represent the group.</p>
+        </div>
+        @if (!_memberActionError.IsNullOrEmpty())
+        {
+            <div role="alert" class="alert alert-warning">
+                <span>@_memberActionError</span>
+            </div>
+        }
+        <div class="card bg-base-200">
+            <div class="card-body p-4 space-y-3">
+                @foreach (var member in MergeSet.Members.OrderByDescending(m => m.IsPrimary))
+                {
+                    <div class="flex items-start justify-between gap-4 p-3 rounded @(member.IsPrimary ? "bg-primary/10" : "bg-base-300")">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                @if (member.IsPrimary)
+                                {
+                                    <span class="badge badge-primary badge-sm">Primary</span>
+                                }
+                                <a href="@($"/projects/{ProjectId}/issues/{member.IssueId}{(member.IsPrimary ? "" : "?no-redirect=true")}")"
+                                   class="font-semibold text-sm hover:underline line-clamp-1">
+                                    @(string.IsNullOrEmpty(member.Title) ? "No message" : member.Title)
+                                </a>
+                            </div>
+                            <div class="text-xs opacity-60 mt-0.5 font-mono">@member.Fingerprint</div>
+                            <div class="text-xs opacity-50 mt-0.5">
+                                @member.OccurrenceCount events · last seen <RelativeTime Value="member.LastSeen" />
+                            </div>
+                        </div>
+                        <div class="flex gap-1 shrink-0">
+                            @if (!member.IsPrimary)
+                            {
+                                <button class="btn btn-ghost btn-xs" title="Set as primary"
+                                        @onclick="() => SetPrimary(member.IssueId)" disabled="@_memberActionLoading">
+                                    Set Primary
+                                </button>
+                                <button class="btn btn-ghost btn-xs text-error" title="Remove from group"
+                                        @onclick="() => RemoveMember(member.IssueId)" disabled="@_memberActionLoading">
+                                    Remove
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@if (_similarIssues is null)
+{
+    <div class="flex justify-center py-8">
+        <span class="loading loading-spinner loading-md"></span>
+    </div>
+}
+else if (_similarIssues.Count == 0)
+{
+    <div class="divider"></div>
+    <h1 class="text-2xl">Similar Issues</h1>
+    <EmptyState Title="No similar issues" Description="No other issues share the same title, exception type, or culprit." />
+}
+else
+{
+    <div class="divider"></div>
+    <h1 class="text-2xl">Similar Issues</h1>
+    <div class="space-y-2">
+        <p class="text-sm opacity-60">Issues with the same title, exception type, or culprit. Consider merging related ones.</p>
+
+        <fieldset disabled="@(!CanMerge)">
+            <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
+                <span class="text-sm font-medium">@_selected.Count selected</span>
+                <button class="btn btn-primary btn-sm" @onclick="MergeSelected" disabled="@_mergeLoading">
+                    @if (_mergeLoading) { <span class="loading loading-spinner loading-xs"></span> }
+                    Merge with this issue
+                </button>
+                <button class="btn btn-ghost btn-sm" @onclick="() => _selected.Clear()">Clear</button>
+                @if (!string.IsNullOrEmpty(_mergeError))
+                {
+                    <span class="text-sm text-error">@_mergeError</span>
+                }
+            </div>
+        </fieldset>
+
+        <div class="overflow-x-auto">
+            <table class="table table-zebra table-sm">
+                <thead>
+                    <tr>
+                        <th class="w-8"></th>
+                        <th>Issue</th>
+                        <th>Severity</th>
+                        <th>Status</th>
+                        <th class="text-right">Events</th>
+                        <th>Last Seen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var sim in _similarIssues)
+                    {
+                        <tr class="hover:bg-base-300 relative @(_selected.Contains(sim.Id) ? "bg-primary/5" : "")">
+                            <td @onclick:stopPropagation="true">
+                                <input type="checkbox" class="checkbox checkbox-sm"
+                                       checked="@_selected.Contains(sim.Id)"
+                                       @onchange="e => ToggleSelect(sim.Id, (bool)(e.Value ?? false))" />
+                            </td>
+                            <td>
+                                <a href="/projects/@ProjectId/issues/@sim.Id" class="stretched-link after:start-12! cursor-pointer" target="_blank"></a>
+                                <div class="font-semibold text-sm">
+                                    @if (!string.IsNullOrEmpty(sim.ExceptionType))
+                                    {
+                                        <span class="opacity-80">@sim.ExceptionType: </span>
+                                    }
+                                    @(string.IsNullOrEmpty(sim.Title) ? "No message" : sim.Title)
+                                </div>
+                                @if (!string.IsNullOrEmpty(sim.Culprit))
+                                {
+                                    <div class="text-xs opacity-60">@sim.Culprit</div>
+                                }
+                            </td>
+                            <td><SeverityBadge Level="sim.Level" /></td>
+                            <td><StatusBadge Status="sim.Status" /></td>
+                            <td class="text-right font-mono">@sim.OccurrenceCount</td>
+                            <td><RelativeTime Value="sim.LastSeen" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public int ProjectId { get; set; }
+    [Parameter, EditorRequired] public int IssueId { get; set; }
+    [Parameter] public MergeSetResponse? MergeSet { get; set; }
+    [Parameter] public Guid CurrentUserId { get; set; }
+    [Parameter] public EventCallback OnMergeChanged { get; set; }
+
+    private List<IssueSummary>? _similarIssues;
+    private HashSet<int> _selected = [];
+    private bool _mergeLoading;
+    private string _mergeError = "";
+    private bool _memberActionLoading;
+    private string _memberActionError = "";
+    private bool CanMerge => _selected.Count > 0;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _selected.Clear();
+        _memberActionError = "";
+        _mergeError = "";
+        await LoadSimilar();
+    }
+
+    private async Task LoadSimilar()
+    {
+        try { _similarIssues = await IssueService.GetSimilarIssuesAsync(IssueId); }
+        catch { _similarIssues = []; }
+    }
+
+    private void ToggleSelect(int issueId, bool selected)
+    {
+        _mergeError = "";
+        if (selected) _selected.Add(issueId);
+        else _selected.Remove(issueId);
+    }
+
+    private async Task MergeSelected()
+    {
+        if (_selected.Count == 0) return;
+        _mergeLoading = true;
+        _mergeError = "";
+        try
+        {
+            var allIds = new List<int> { IssueId };
+            allIds.AddRange(_selected);
+
+            if (MergeSet is not null)
+                await MergeSetService.BulkAddIssuesAsync(MergeSet.Id, _selected.ToList(), CurrentUserId);
+            else
+                await MergeSetService.CreateAsync(ProjectId, allIds, CurrentUserId);
+
+            await OnMergeChanged.InvokeAsync();
+            Navigation.NavigateTo($"/projects/{ProjectId}/issues/{IssueId}?tab=similar", forceLoad: false);
+        }
+        catch (Exception ex)
+        {
+            _mergeError = ex.Message;
+        }
+        finally
+        {
+            _mergeLoading = false;
+        }
+    }
+
+    private async Task SetPrimary(int issueId)
+    {
+        if (MergeSet is null) return;
+        _memberActionLoading = true;
+        _memberActionError = "";
+        try
+        {
+            await MergeSetService.SetPrimaryAsync(MergeSet.Id, issueId);
+            await OnMergeChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _memberActionError = ex.Message;
+        }
+        finally
+        {
+            _memberActionLoading = false;
+        }
+    }
+
+    private async Task RemoveMember(int issueId)
+    {
+        if (MergeSet is null) return;
+        _memberActionLoading = true;
+        _memberActionError = "";
+        try
+        {
+            await MergeSetService.RemoveIssueAsync(MergeSet.Id, issueId, CurrentUserId);
+            await OnMergeChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _memberActionError = ex.Message;
+        }
+        finally
+        {
+            _memberActionLoading = false;
+        }
+    }
+}

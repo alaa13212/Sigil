@@ -1,0 +1,197 @@
+@using Sigil.Application.Models.Issues
+@inject IIssueService IssueService
+@inject ITagValueFormatter TagValueFormatter
+
+<div class="w-full lg:w-72 space-y-4">
+    <!-- Status actions -->
+    <div class="card bg-base-200">
+        <div class="card-body p-4 space-y-3">
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold">Status</span>
+                <StatusBadge Status="Issue.Status" />
+            </div>
+            <div class="flex flex-wrap gap-1">
+                @if (Issue.Status != IssueStatus.Resolved)
+                {
+                    <button class="btn btn-success btn-sm" @onclick="() => UpdateStatus(IssueStatus.Resolved)" disabled="@_loading">
+                        Resolve
+                    </button>
+                }
+                @if (Issue.Status != IssueStatus.ResolvedInFuture)
+                {
+                    <button class="btn btn-accent btn-sm" @onclick="() => UpdateStatus(IssueStatus.ResolvedInFuture)" disabled="@_loading">
+                        Next Release
+                    </button>
+                }
+                @if (Issue.Status != IssueStatus.Open)
+                {
+                    <button class="btn btn-info btn-sm" @onclick="() => UpdateStatus(IssueStatus.Open)" disabled="@_loading">
+                        Reopen
+                    </button>
+                }
+                @if (Issue.Status != IssueStatus.Ignored)
+                {
+                    <button class="btn btn-ghost btn-sm" @onclick="() => UpdateStatus(IssueStatus.Ignored)" disabled="@_loading">
+                        Ignore
+                    </button>
+                }
+            </div>
+            @if (Issue.Status != IssueStatus.Ignored)
+            {
+                <label class="flex items-center gap-2 text-xs cursor-pointer">
+                    <input type="checkbox" class="checkbox checkbox-xs" @bind="_ignoreFutureEvents" />
+                    Also ignore future events with this fingerprint
+                </label>
+            }
+        </div>
+    </div>
+
+    <!-- Priority -->
+    <div class="card bg-base-200">
+        <div class="card-body p-4">
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Priority</legend>
+                <select class="select select-sm w-full" value="@Issue.Priority"
+                        @onchange="OnPrioritySelectChanged" disabled="@_loading">
+                    @foreach (var p in Enum.GetValues<Priority>())
+                    {
+                        <option value="@p">@p</option>
+                    }
+                </select>
+            </fieldset>
+        </div>
+    </div>
+
+    <!-- Details -->
+    <div class="card bg-base-200">
+        <div class="card-body p-4 space-y-2 text-sm">
+            <div class="flex justify-between">
+                <span class="opacity-60">Severity</span>
+                <SeverityBadge Level="Issue.Level" />
+            </div>
+            <div class="flex justify-between">
+                <span class="opacity-60">Assigned</span>
+                <span>@(Issue.AssignedToName ?? "Unassigned")</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="opacity-60">First Seen</span>
+                <div class="text-right">
+                    <RelativeTime Value="Issue.FirstSeen" />
+                    @if (!string.IsNullOrEmpty(Issue.FirstRelease))
+                    {
+                        <div class="text-xs opacity-50 font-mono">@TagValueFormatter.Format("release", Issue.FirstRelease)</div>
+                    }
+                </div>
+            </div>
+            <div class="flex justify-between">
+                <span class="opacity-60">Last Seen</span>
+                <div class="text-right">
+                    <RelativeTime Value="Issue.LastSeen" />
+                    @if (!string.IsNullOrEmpty(Issue.LastRelease))
+                    {
+                        <div class="text-xs opacity-50 font-mono">@TagValueFormatter.Format("release", Issue.LastRelease)</div>
+                    }
+                </div>
+            </div>
+            <div class="flex justify-between">
+                <span class="opacity-60">Events</span>
+                <span class="font-mono">@Issue.OccurrenceCount</span>
+            </div>
+            @if (Issue.MergeSet is not null)
+            {
+                <div class="flex justify-between">
+                    <span class="opacity-60">Merge Group</span>
+                    <span class="font-mono">@Issue.MergeSet.Members.Count members</span>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Tags with frequency bars -->
+    @if (Issue.Tags.Count > 0)
+    {
+        <div class="card bg-base-200">
+            <div class="card-body p-4 space-y-3">
+                <span class="text-sm font-semibold">Tags</span>
+                @foreach (var group in Issue.Tags.OrderBy(t => t.Key))
+                {
+                    <div class="space-y-1">
+                        <div class="text-xs font-semibold opacity-70">@group.Key</div>
+                        @{
+                            var topValues = group.Values.Take(4).ToList();
+                            int othersCount = group.TotalCount - topValues.Sum(v => v.Count);
+                        }
+                        @foreach (var tagVal in topValues)
+                        {
+                            var pct = group.TotalCount > 0 ? (double)tagVal.Count / group.TotalCount * 100 : 0;
+                            <div class="space-y-0.5">
+                                <div class="flex justify-between text-xs">
+                                    <span class="font-mono line-clamp-1" title="@tagVal.Value">@TagValueFormatter.Format(group.Key, tagVal.Value)</span>
+                                    <span class="opacity-50 shrink-0 ml-2">@pct.ToString("F0")%</span>
+                                </div>
+                                <div class="w-full bg-base-300 rounded-full h-1">
+                                    <div class="bg-primary rounded-full h-1" style="width: @pct.ToString("F1")%"></div>
+                                </div>
+                            </div>
+                        }
+                        @if (othersCount > 0)
+                        {
+                            var othersPct = (double)othersCount / group.TotalCount * 100;
+                            <div class="space-y-0.5">
+                                <div class="flex justify-between text-xs">
+                                    <span class="opacity-50 italic">others</span>
+                                    <span class="opacity-50 shrink-0 ml-2">@othersPct.ToString("F0")%</span>
+                                </div>
+                                <div class="w-full bg-base-300 rounded-full h-1">
+                                    <div class="bg-base-content/20 rounded-full h-1" style="width: @othersPct.ToString("F1")%"></div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IssueDetailResponse Issue { get; set; } = default!;
+    [Parameter] public EventCallback<IssueStatus> OnStatusChanged { get; set; }
+    [Parameter] public EventCallback<Priority> OnPriorityChanged { get; set; }
+
+    private bool _loading;
+    private bool _ignoreFutureEvents;
+
+    private async Task UpdateStatus(IssueStatus status)
+    {
+        _loading = true;
+        try
+        {
+            var ignoreFuture = status == IssueStatus.Ignored && _ignoreFutureEvents;
+            await IssueService.UpdateIssueStatusAsync(Issue.Id, status, ignoreFutureEvents: ignoreFuture);
+            _ignoreFutureEvents = false;
+            await OnStatusChanged.InvokeAsync(status);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnPrioritySelectChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<Priority>(e.Value?.ToString(), out var priority))
+        {
+            _loading = true;
+            try
+            {
+                await IssueService.UpdateIssuePriorityAsync(Issue.Id, priority);
+                await OnPriorityChanged.InvokeAsync(priority);
+            }
+            finally
+            {
+                _loading = false;
+            }
+        }
+    }
+}
