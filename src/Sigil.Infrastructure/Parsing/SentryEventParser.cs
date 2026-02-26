@@ -49,7 +49,7 @@ internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSeri
         return new ParsedEvent
         {
             EventId = eventData.EventId,
-            Timestamp = eventData.Timestamp.Value,
+            Timestamp = eventData.Timestamp.Value.ToUniversalTime(),
             Platform = PlatformHelper.Parse(eventData.Platform),
             Level = SeverityHelper.Parse(eventData.Level),
             ServerName = eventData.ServerName,
