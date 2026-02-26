@@ -98,6 +98,8 @@ internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSeri
     }
 
     private static string? GetMessage(SentryEvent sentryEvent) => sentryEvent switch {
+        { LogEntry.Formatted: not null, Threads.Values.Count: > 0 } => sentryEvent.LogEntry.Formatted, // TODO Format
+        { LogEntry.Message: not null, Threads.Values.Count: > 0 } => sentryEvent.LogEntry.Message,
         { Message.Formatted: not null, Threads.Values.Count: > 0 } => sentryEvent.Message.Formatted, // TODO Format
         { Message.Message: not null, Threads.Values.Count: > 0 } => sentryEvent.Message.Message,
         { Exception.Values: [.., var last] } => last.Value,
@@ -107,6 +109,7 @@ internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSeri
     private static List<SentryStackFrame>? GetStackFrames(SentryEvent sentryEvent) => sentryEvent switch
     {
         { Exception.Values: [.., {Stacktrace: not null} last]  } => last.Stacktrace.Frames,
+        { LogEntry.Formatted: not null, Threads.Values: [.., {Stacktrace: not null} last] } => last.Stacktrace.Frames,
         { Message.Formatted: not null, Threads.Values: [.., {Stacktrace: not null} last] } => last.Stacktrace.Frames,
         _ => null,
     };

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Sigil.Infrastructure.Parsing.Models;
 
@@ -24,6 +25,9 @@ internal class SentryEvent
     public string? Environment { get; set; }
 
     public SentryMessage? Message { get; set; }
+    
+    [JsonPropertyName("logentry")]
+    public SentryMessage? LogEntry { get; set; }
 
     public SentryExceptionData? Exception { get; set; }
     public SentryThreadData? Threads { get; set; }
