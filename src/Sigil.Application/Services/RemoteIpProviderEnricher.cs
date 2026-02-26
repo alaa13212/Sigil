@@ -11,7 +11,7 @@ public class RemoteIpProviderEnricher(IHttpContextAccessor httpContextAccessor) 
     {
         if (parsedEvent.User is { IpAddress: "{{auto}}" })
         {
-            string? userIpAddress = httpContextAccessor.HttpContext.Connection.RemoteIpAddress?.ToString();
+            string? userIpAddress = httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
             parsedEvent.User.IpAddress = userIpAddress.IsNullOrEmpty() ? null : userIpAddress;
         }
     }
