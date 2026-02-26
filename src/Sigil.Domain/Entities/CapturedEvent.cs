@@ -37,7 +37,6 @@ public class CapturedEvent
     public Release? Release { get; set; }
     
 
-    [Column(TypeName = "jsonb")]
     public Dictionary<string, string>? Extra { get; set; }
     
 

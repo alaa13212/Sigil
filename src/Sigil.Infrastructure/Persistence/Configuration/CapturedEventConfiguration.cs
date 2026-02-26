@@ -11,6 +11,9 @@ internal class CapturedEventConfiguration : IEntityTypeConfiguration<CapturedEve
         builder.HasIndex(e => e.EventId).IsUnique();
         builder.HasIndex(e => new { e.IssueId, e.Timestamp });
         
+        builder.Property(e => e.Extra)
+            .HasColumnType("jsonb");
+        
         builder
             .HasMany(e => e.Tags)
             .WithMany(t => t.Events)

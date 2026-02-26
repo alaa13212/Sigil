@@ -10,5 +10,8 @@ internal class IssueActivityConfiguration : IEntityTypeConfiguration<IssueActivi
     {
         builder.HasIndex(e => e.IssueId);
         builder.HasIndex(e => e.Timestamp);
+        
+        builder.Property(e => e.Extra)
+            .HasColumnType("jsonb");
     }
 }

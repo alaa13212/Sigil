@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Application.Services;
@@ -26,7 +27,11 @@ public static class ServiceCollectionExtensions
         // Database configuration
         services.AddDbContextPool<SigilDbContext>(options =>
         {
-            options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
+            NpgsqlDataSourceBuilder dataSourceBuilder = new NpgsqlDataSourceBuilder(configuration.GetConnectionString("DefaultConnection"));
+            dataSourceBuilder.EnableDynamicJson();
+            NpgsqlDataSource dataSource = dataSourceBuilder.Build();
+            
+            options.UseNpgsql(dataSource);
             options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
         });
         

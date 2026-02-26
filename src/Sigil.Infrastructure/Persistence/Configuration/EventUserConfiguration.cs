@@ -9,5 +9,8 @@ internal class EventUserConfiguration : IEntityTypeConfiguration<EventUser>
     public void Configure(EntityTypeBuilder<EventUser> builder)
     {
         builder.HasIndex(e => e.UniqueIdentifier).IsUnique();
+        
+        builder.Property(e => e.Data)
+            .HasColumnType("jsonb");
     }
 }

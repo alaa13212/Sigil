@@ -12,7 +12,6 @@ public class IssueActivity
     public IssueActivityAction Action { get; set; }
     public string? Message { get; set; }
     
-    [Column(TypeName = "jsonb")]
     public Dictionary<string, string>? Extra { get; set; }
     
     [ForeignKey(nameof(Issue))]
