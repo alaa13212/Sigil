@@ -36,8 +36,6 @@ internal class IssueService(
             List<Issue> fromDb = await dbContext.Issues
                 .AsTracking()
                 .Include(i => i.Tags)
-                    .ThenInclude(it => it.TagValue)
-                    .ThenInclude(tv => tv!.TagKey)
                 .Where(i => i.ProjectId == project.Id && missFingerprints.Contains(i.Fingerprint))
                 .ToListAsync();
 
