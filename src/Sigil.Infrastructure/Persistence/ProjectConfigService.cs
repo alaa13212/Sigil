@@ -6,10 +6,12 @@ using Sigil.Domain;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class ProjectConfigService(IServiceProvider serviceProvider) : IProjectConfigService
+internal class ProjectConfigService(IServiceProvider serviceProvider) : IProjectConfigService, IAsyncStartupInitializer
 {
     private readonly ConcurrentDictionary<int, Dictionary<string, string?>> _store = new();
 
+    public Task InitializeAsync() => LoadAsync();
+    
     public async Task LoadAsync()
     {
         using var scope = serviceProvider.CreateScope();

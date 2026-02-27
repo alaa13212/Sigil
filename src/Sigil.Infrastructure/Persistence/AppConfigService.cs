@@ -6,10 +6,12 @@ using Sigil.Domain;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class AppConfigService(IServiceProvider serviceProvider) : IAppConfigService
+internal class AppConfigService(IServiceProvider serviceProvider) : IAppConfigService, IAsyncStartupInitializer
 {
     private readonly ConcurrentDictionary<string, string?> _store = new();
 
+    public Task InitializeAsync() => LoadAsync();
+    
     public async Task LoadAsync()
     {
         using var scope = serviceProvider.CreateScope();

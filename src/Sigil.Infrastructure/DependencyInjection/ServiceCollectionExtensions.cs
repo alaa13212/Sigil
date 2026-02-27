@@ -52,6 +52,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITagService, TagService>();
         services.AddScoped<IIssueActivityService, IssueActivityService>();
         services.AddSingleton<IAppConfigService, AppConfigService>();
+        services.AddSingleton<IAsyncStartupInitializer>(sp => (IAsyncStartupInitializer) sp.GetRequiredService<IAppConfigService>());
         services.AddScoped<IAppConfigEditorService, AppConfigEditorService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ITeamService, TeamService>();
@@ -69,6 +70,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IReleaseHealthService, ReleaseHealthService>();
         services.AddScoped<IRecommendationService, RecommendationService>();
         services.AddSingleton<IProjectConfigService, ProjectConfigService>();
+        services.AddSingleton<IAsyncStartupInitializer>(sp => (IAsyncStartupInitializer) sp.GetRequiredService<IProjectConfigService>());
         services.AddScoped<IProjectConfigEditorService, ProjectConfigEditorService>();
         services.AddScoped<ISearchService, SearchService>();
         services.AddScoped<IBadgeService, BadgeService>();

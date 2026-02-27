@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Sigil.Application.DependencyInjection;
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models.Auth;
 using Sigil.Domain.DependencyInjection;
 using Sigil.Infrastructure.DependencyInjection;
 using Sigil.Server.Auth;
@@ -92,6 +93,20 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
+
+// Load all configs into memory before accepting requests
+await using (AsyncServiceScope scope = app.Services.CreateAsyncScope())
+{
+    DbConnectionStatus status = await scope.ServiceProvider.GetRequiredService<IDatabaseMigrator>().CheckConnectionAsync();
+    if (status == DbConnectionStatus.Connected)
+    {
+        foreach (IAsyncStartupInitializer service in scope.ServiceProvider.GetServices<IAsyncStartupInitializer>())
+        {
+            await service.InitializeAsync();
+        }
+    }
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -127,9 +142,5 @@ app.MapRazorComponents<App>()
 
 app.MapControllers();
 app.MapHealthChecks("/health");
-
-// Load all configs into memory before accepting requests
-await app.Services.GetRequiredService<IAppConfigService>().LoadAsync();
-await app.Services.GetRequiredService<IProjectConfigService>().LoadAsync();
 
 app.Run();
