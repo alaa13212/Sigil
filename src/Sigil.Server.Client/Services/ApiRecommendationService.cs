@@ -25,7 +25,7 @@ public class ApiRecommendationService(HttpClient http) : IRecommendationService
 
     public async Task DismissAsync(int recommendationId)
     {
-        HttpResponseMessage response = await http.PostAsJsonAsync($"api/projects/{recommendationId}/dismiss", new StringContent(""));
+        HttpResponseMessage response = await http.PutAsJsonAsync($"api/recommendations/{recommendationId}/dismiss", new StringContent(""));
         response.EnsureSuccessStatusCode();
     }
 }
