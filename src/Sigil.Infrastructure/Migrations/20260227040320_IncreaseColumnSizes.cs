@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore.Migrations;
+using NpgsqlTypes;
 
 #nullable disable
 
@@ -10,6 +11,8 @@ namespace Sigil.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropColumn(name: "search_vector", table: "Issues");
+            
             migrationBuilder.AlterColumn<string>(
                 name: "Module",
                 table: "StackFrames",
@@ -108,6 +111,22 @@ namespace Sigil.Infrastructure.Migrations
                 oldType: "character varying(500)",
                 oldMaxLength: 500,
                 oldNullable: true);
+            
+            
+            migrationBuilder.AddColumn<NpgsqlTsVector>(
+                name: "search_vector",
+                table: "Issues",
+                type: "tsvector",
+                nullable: true,
+                computedColumnSql: 
+                """
+                setweight(to_tsvector('simple', coalesce("Title", '')), 'A') ||
+                setweight(to_tsvector('simple', coalesce("ExceptionType", '')), 'A') ||
+                setweight(to_tsvector('simple', coalesce("Culprit", '')), 'B') ||
+                setweight(to_tsvector('simple', coalesce("SuggestedEventMessage", '')), 'B') ||
+                setweight(to_tsvector('simple', coalesce("SuggestedFramesSummary", '')), 'C')
+                """,
+                stored: true);
         }
 
         /// <inheritdoc />
