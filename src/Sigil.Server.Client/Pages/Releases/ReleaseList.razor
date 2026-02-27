@@ -96,7 +96,11 @@
     private bool loading = true;
     private const int PageSize = 20;
 
-    protected override async Task OnParametersSetAsync() => await Load();
+    protected override async Task OnParametersSetAsync()
+    {
+        Page = Math.Max(1, Page);
+        await Load();
+    }
 
     private async Task Load()
     {
