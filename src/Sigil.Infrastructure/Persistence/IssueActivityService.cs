@@ -38,6 +38,11 @@ internal class IssueActivityService(SigilDbContext dbContext, IDateTime dateTime
 
         dbContext.IssueActivities.Add(activity);
         await dbContext.SaveChangesAsync();
+
+        await dbContext.Issues
+            .Where(i => i.Id == issueId)
+            .ExecuteUpdateAsync(s => s.SetProperty(i => i.LastChangedAt, activity.Timestamp));
+
         return activity;
     }
 

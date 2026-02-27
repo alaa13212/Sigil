@@ -343,7 +343,7 @@ internal class IssueService(
             systemTagsByIssue.TryGetValue(i.Id, out var stags);
             var lastSeen = ms?.LastSeen ?? i.LastSeen;
             var isUnviewed = query.ViewerUserId.HasValue &&
-                             (!lastViewedByIssue.TryGetValue(i.Id, out var lv) || lv is null || lv < lastSeen);
+                             (!lastViewedByIssue.TryGetValue(i.Id, out var lv) || lv is null || lv < i.LastChangedAt);
             return new IssueSummary(
                 i.Id, i.Title, i.ExceptionType, i.Culprit,
                 i.Status, i.Priority,

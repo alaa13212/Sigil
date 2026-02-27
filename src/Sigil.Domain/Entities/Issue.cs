@@ -26,6 +26,7 @@ public class Issue
 
     public DateTime FirstSeen { get; set; }
     public DateTime LastSeen { get; set; }
+    public DateTime LastChangedAt { get; set; }
     public DateTime? ResolvedAt { get; set; }
     public int? ResolvedInReleaseId { get; set; }
     public int OccurrenceCount { get; set; }

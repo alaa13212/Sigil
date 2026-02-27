@@ -18,7 +18,7 @@ internal class BadgeService(SigilDbContext dbContext) : IBadgeService
                 v => v.UserId == userId
                      && v.ProjectId == i.ProjectId
                      && v.PageType == PageType.Issues
-                     && v.LastViewedAt >= i.LastSeen))
+                     && v.LastViewedAt >= i.LastChangedAt))
             .GroupBy(i => i.ProjectId)
             .Select(g => new { ProjectId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.ProjectId, x => x.Count);

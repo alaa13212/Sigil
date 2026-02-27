@@ -144,6 +144,7 @@ public class DigestionService(
                 FirstSeen = timestamp,
                 LastSeen = timestamp,
             });
+            issue.LastChangedAt = TimeMath.Later(issue.LastChangedAt, timestamp);
         }
         else
         {
