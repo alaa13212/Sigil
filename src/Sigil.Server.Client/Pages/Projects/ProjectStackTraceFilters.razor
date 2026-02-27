@@ -1,0 +1,128 @@
+@page "/projects/{ProjectId:int}/settings/stack-trace-filters"
+@attribute [Authorize]
+@using Sigil.Application.Models.Filters
+@inject IStackTraceFilterService FilterService
+
+@layout ProjectSettingsLayout
+
+<PageTitle>Stack Trace Filters — Sigil</PageTitle>
+
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-lg font-bold">Stack Trace Filters</h2>
+            <p class="text-sm opacity-60 mt-1">Remove matching stack frames before fingerprinting. Affects issue grouping.</p>
+        </div>
+        <button class="btn btn-primary btn-sm" @onclick="() => { _editingFilter = null; _modalOpen = true; }">
+            Add Filter
+        </button>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="flex justify-center py-8"><span class="loading loading-spinner"></span></div>
+    }
+    else if (_filters.Count == 0)
+    {
+        <EmptyState Title="No filters" Description="Add a filter to strip unwanted stack frames." />
+    }
+    else
+    {
+        <div class="card bg-base-200">
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Description</th>
+                            <th>Field</th>
+                            <th>Operator</th>
+                            <th>Value</th>
+                            <th>Enabled</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var filter in _filters)
+                        {
+                            <tr>
+                                <td class="opacity-70">@(filter.Description ?? "—")</td>
+                                <td class="font-mono text-sm">@filter.Field</td>
+                                <td class="text-sm">@filter.Operator</td>
+                                <td class="font-mono text-sm line-clamp-1" title="@filter.Value">@filter.Value</td>
+                                <td>
+                                    <input type="checkbox" class="toggle toggle-sm"
+                                           checked="@filter.Enabled"
+                                           @onchange="() => ToggleEnabled(filter)" />
+                                </td>
+                                <td class="flex gap-1">
+                                    <button class="btn btn-ghost btn-xs"
+                                            @onclick="() => { _editingFilter = filter; _modalOpen = true; }">
+                                        Edit
+                                    </button>
+                                    <button class="btn btn-ghost btn-xs text-error"
+                                            @onclick="() => DeleteFilter(filter.Id)">
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+<StackTraceFilterFormModal IsOpen="_modalOpen" ProjectId="ProjectId"
+                           EditingFilter="_editingFilter"
+                           OnSaved="OnSaved" OnClosed="() => _modalOpen = false" />
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+
+    private List<StackTraceFilterResponse> _filters = [];
+    private bool _loading = true;
+    private bool _modalOpen;
+    private StackTraceFilterResponse? _editingFilter;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        try { _filters = await FilterService.GetFiltersAsync(ProjectId); }
+        catch { _filters = []; }
+        _loading = false;
+    }
+
+    private void OnSaved(StackTraceFilterResponse saved)
+    {
+        var idx = _filters.FindIndex(f => f.Id == saved.Id);
+        if (idx >= 0) _filters[idx] = saved;
+        else _filters.Add(saved);
+        _modalOpen = false;
+    }
+
+    private async Task ToggleEnabled(StackTraceFilterResponse filter)
+    {
+        try
+        {
+            var updated = await FilterService.UpdateFilterAsync(filter.Id,
+                new UpdateStackTraceFilterRequest(filter.Field, filter.Operator, filter.Value, !filter.Enabled, filter.Priority, filter.Description));
+            if (updated is not null)
+            {
+                var idx = _filters.IndexOf(filter);
+                if (idx >= 0) _filters[idx] = updated;
+            }
+        }
+        catch { /* keep current state */ }
+    }
+
+    private async Task DeleteFilter(int id)
+    {
+        try
+        {
+            if (await FilterService.DeleteFilterAsync(id))
+                _filters.RemoveAll(f => f.Id == id);
+        }
+        catch { /* ignore */ }
+    }
+}

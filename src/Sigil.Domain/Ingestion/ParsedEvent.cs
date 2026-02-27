@@ -30,6 +30,6 @@ public class ParsedEvent
     public ParsedEventUser? User { get; set; }
     
     public IReadOnlyList<string>? FingerprintHints { get; init; }
-    public IReadOnlyList<ParsedStackFrame> Stacktrace { get; init; } = [];
+    public List<ParsedStackFrame> Stacktrace { get; set; } = [];
     
 }

@@ -14,22 +14,22 @@ internal class SetupService(
     SignInManager<User> signInManager,
     RoleManager<IdentityRole<Guid>> roleManager,
     IAppConfigService appConfigService,
+    IAppConfigEditorService appConfigEditorService,
     INormalizationRuleService normalizationRuleService,
     IDatabaseMigrator databaseMigrator) : ISetupService
 {
     // Cached per process lifetime; null = unchecked, false = up to date, true = pending
     private static bool? _hasPendingMigrationsCache;
     
-    public async Task<SetupStatus> GetSetupStatusAsync()
+    public Task<SetupStatus> GetSetupStatusAsync()
     {
         try
         {
-            var value = await appConfigService.GetAsync(AppConfigKeys.SetupComplete);
-            return new SetupStatus(IsComplete: value == "true");
+            return Task.FromResult(new SetupStatus(IsComplete: appConfigService.SetupComplete));
         }
         catch
         {
-            return new SetupStatus(IsComplete: false);
+            return Task.FromResult(new SetupStatus(IsComplete: false));
         }
     }
 
@@ -144,9 +144,9 @@ internal class SetupService(
 
         // Save host URL config if provided
         if (!string.IsNullOrWhiteSpace(request.HostUrl))
-            await appConfigService.SetAsync(AppConfigKeys.HostUrl, request.HostUrl);
+            await appConfigEditorService.SetAsync(AppConfigKeys.HostUrl, request.HostUrl);
 
-        await appConfigService.SetAsync(AppConfigKeys.SetupComplete, "true");
+        await appConfigEditorService.SetAsync(AppConfigKeys.SetupComplete, "true");
 
         // Sign in the admin
         await signInManager.SignInAsync(admin, isPersistent: false);

@@ -1,5 +1,4 @@
 using Sigil.Application.Interfaces;
-using Sigil.Domain;
 using Sigil.Domain.Ingestion;
 
 namespace Sigil.Infrastructure.Parsing;
@@ -8,18 +7,17 @@ internal class EventParsingContextBuilder(
     INormalizationRuleService normalizationRuleService,
     IAutoTagService autoTagService,
     IEventFilterService filterService,
+    IStackTraceFilterService stackTraceFilterService,
     IProjectConfigService projectConfigService) : IEventParsingContextBuilder
 {
     public async Task<EventParsingContext> BuildAsync(int projectId)
     {
-        var normTask      = normalizationRuleService.GetRawRulesAsync(projectId);
-        var autoTagTask   = autoTagService.GetRawRulesForProjectAsync(projectId);
-        var filterTask    = filterService.GetRawFiltersForProjectAsync(projectId);
-        var hvThreshTask  = projectConfigService.GetAsync(projectId, ProjectConfigKeys.HighVolumeThreshold);
+        var normTask    = normalizationRuleService.GetRawRulesAsync(projectId);
+        var autoTagTask = autoTagService.GetRawRulesForProjectAsync(projectId);
+        var filterTask  = filterService.GetRawFiltersForProjectAsync(projectId);
+        var stfTask     = stackTraceFilterService.GetRawFiltersForProjectAsync(projectId);
 
-        await Task.WhenAll(normTask, autoTagTask, filterTask, hvThreshTask);
-
-        int highVolumeThreshold = int.TryParse(hvThreshTask.Result, out var parsed) ? parsed : 1000;
+        await Task.WhenAll(normTask, autoTagTask, filterTask, stfTask);
 
         return new EventParsingContext
         {
@@ -27,7 +25,8 @@ internal class EventParsingContextBuilder(
             NormalizationRules = normTask.Result,
             AutoTagRules = autoTagTask.Result,
             InboundFilters = filterTask.Result,
-            HighVolumeThreshold = highVolumeThreshold,
+            StackTraceFilters = stfTask.Result,
+            HighVolumeThreshold = projectConfigService.HighVolumeThreshold(projectId),
         };
     }
 }

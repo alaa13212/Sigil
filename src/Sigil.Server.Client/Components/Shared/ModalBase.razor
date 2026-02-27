@@ -1,5 +1,5 @@
-<div class="modal @(IsOpen ? "modal-open" : "") max-md:modal-bottom md:items-start">
-    <div class="modal-box @SizeClass @BoxClass">
+<div class="modal @(IsOpen ? "modal-open" : "") max-md:modal-bottom">
+    <div class="modal-box @SizeClass @BoxClass max-md:w-full">
         @if (!string.IsNullOrEmpty(Title))
         {
             <h3 class="font-bold text-lg mb-4">@Title</h3>
@@ -21,10 +21,10 @@
 
     private string SizeClass => Size switch
     {
-        ModalSize.Small  => "max-w-md",
-        ModalSize.Medium => "max-w-2xl",
-        ModalSize.Large  => "max-w-4xl",
-        _                => "max-w-2xl"
+        ModalSize.Small  => "md:max-w-md",
+        ModalSize.Medium => "md:max-w-2xl",
+        ModalSize.Large  => "md:max-w-4xl",
+        _                => "md:max-w-2xl"
     };
 
     private async Task HandleBackdropClick()

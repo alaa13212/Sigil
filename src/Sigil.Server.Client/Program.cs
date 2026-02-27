@@ -42,6 +42,9 @@ builder.Services.AddScoped<INormalizationRuleService, ApiNormalizationRuleServic
 builder.Services.AddScoped<IReleaseHealthService, ApiReleaseHealthService>();
 builder.Services.AddScoped<IBadgeService, ApiBadgeService>();
 builder.Services.AddScoped<ISearchService, ApiSearchService>();
+builder.Services.AddScoped<IStackTraceFilterService, ApiStackTraceFilterService>();
 builder.Services.AddScoped<IUserPreferenceService, LocalStoragePreferenceService>();
+builder.Services.AddScoped<IAppConfigEditorService, ApiAppConfigEditorService>();
+builder.Services.AddScoped<IProjectConfigEditorService, ApiProjectConfigEditorService>();
 
 await builder.Build().RunAsync();

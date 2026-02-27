@@ -57,6 +57,38 @@
             </div>
         </div>
 
+        <!-- Throughput metrics (rolling 60-min window) -->
+        @if (stats.BatchesInLastHour > 0)
+        {
+            <div class="stats shadow w-full bg-base-200">
+                <div class="stat">
+                    <div class="stat-title">Events / min</div>
+                    <div class="stat-value text-base">@stats.EventsPerMinute</div>
+                    <div class="stat-desc">rolling 60-min average</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-title">Avg digest time</div>
+                    <div class="stat-value text-base font-mono">@stats.AvgDigestMs ms</div>
+                    <div class="stat-desc">per batch (last hour)</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-title">Avg parse time</div>
+                    <div class="stat-value text-base font-mono">@stats.AvgParseMs ms</div>
+                    <div class="stat-desc">per batch (last hour)</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-title">Peak queue depth</div>
+                    <div class="stat-value text-base">@stats.PeakQueueDepth</div>
+                    <div class="stat-desc">max pending envelopes (last hour)</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-title">Batches processed</div>
+                    <div class="stat-value text-base">@stats.BatchesInLastHour</div>
+                    <div class="stat-desc">in the last 60 minutes</div>
+                </div>
+            </div>
+        }
+
         <!-- Per-project breakdown -->
         @if (stats.ByProject.Count > 0)
         {

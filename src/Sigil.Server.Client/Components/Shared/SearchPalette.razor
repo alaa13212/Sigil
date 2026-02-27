@@ -7,7 +7,7 @@
 @inject ISearchService SearchService
 @inject IUserPreferenceService Preferences
 
-<ModalBase IsOpen="_isOpen" OnClose="Close" Size="ModalSize.Large" BoxClass="relative flex flex-col max-md:h-[85vh] md:mt-[10vh] md:h-[clamp(13rem,80vh,80vh)] md:w-11/12">
+<ModalBase IsOpen="_isOpen" OnClose="Close" Size="ModalSize.Large" BoxClass="relative flex flex-col max-md:h-[85vh] md:mb-[10vh] md:h-[clamp(13rem,80vh,80vh)] md:w-11/12">
     <!-- Search input -->
     <div class="flex items-baseline gap-2 pb-3 border-b border-base-300 -mx-4 px-4 -mt-1">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -213,6 +213,7 @@
         new("Admin / Users", "/admin/users"),
         new("Admin / Migrations", "/admin/migrations"),
         new("Admin / Digestion", "/admin/digestion"),
+        new("Admin / Settings", "/admin/settings"),
     ];
 
     private static readonly (string Name, string Path)[] ProjectSettingsPages =
@@ -221,8 +222,10 @@
         ("Project Settings", "settings"),
         ("Alert Rules", "settings/alerts"),
         ("Inbound Filters", "settings/filters"),
+        ("Stack Trace Filters", "settings/stack-trace-filters"),
         ("Auto Tags", "settings/tags"),
         ("Normalization Rules", "settings/normalization"),
+        ("Rate Limits & Retention", "settings/limits"),
     ];
 
     private static readonly Regex ProjectIdRegex = new(@"^/projects/(\d+)(?:/|$)", RegexOptions.Compiled);

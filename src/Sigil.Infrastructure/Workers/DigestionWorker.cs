@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -64,15 +66,19 @@ internal class DigestionWorker(
         var contextBuilder = scope.ServiceProvider.GetRequiredService<IEventParsingContextBuilder>();
         var dbContext = scope.ServiceProvider.GetRequiredService<SigilDbContext>();
 
+        // Snapshot the total pending queue depth before processing this batch
+        var queueDepthAtStart = await dbContext.RawEnvelopes.CountAsync(e => e.Error == null, ct);
+
         foreach (var group in batch.GroupBy(r => r.ProjectId))
         {
+            var sw = Stopwatch.StartNew();
             var successIds = new List<long>();
             var failures = new List<(long Id, string Error)>();
             var parsedEvents = new List<ParsedEvent>();
 
-            // Build context once per project — pre-loads normalization rules, auto-tag rules, and inbound filters
             var context = await contextBuilder.BuildAsync(group.Key);
 
+            sw.Restart();
             foreach (var raw in group)
             {
                 try
@@ -86,6 +92,7 @@ internal class DigestionWorker(
                     failures.Add((raw.Id, ex.Message));
                 }
             }
+            var parseElapsedMs = (int)sw.ElapsedMilliseconds;
 
             if (failures.Count > 0)
                 await rawEnvelopeService.BulkMarkFailedAsync(failures);
@@ -94,8 +101,22 @@ internal class DigestionWorker(
             {
                 try
                 {
+                    sw.Restart();
                     await digestionService.BulkDigestAsync(context, parsedEvents, ct);
+                    var digestElapsedMs = (int)sw.ElapsedMilliseconds;
+                    
                     await rawEnvelopeService.DeleteAsync(successIds);
+
+                    dbContext.DigestBatchMetrics.Add(new DigestBatchMetric
+                    {
+                        RecordedAt = DateTime.UtcNow,
+                        ProjectId = group.Key,
+                        EventCount = parsedEvents.Count,
+                        QueueDepthAtStart = queueDepthAtStart,
+                        ParseElapsedMs = parseElapsedMs,
+                        DigestElapsedMs = digestElapsedMs,
+                    });
+                    await dbContext.SaveChangesAsync(ct);
                 }
                 catch (Exception ex)
                 {

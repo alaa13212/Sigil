@@ -1,0 +1,110 @@
+@page "/projects/{ProjectId:int}/settings/limits"
+@attribute [Authorize]
+@using Sigil.Domain
+@inject IProjectConfigEditorService ProjectConfigService
+@inject IAppConfigEditorService AppConfigService
+
+@layout ProjectSettingsLayout
+
+<PageTitle>Project Limits — Sigil</PageTitle>
+
+@if (loading)
+{
+    <div class="flex justify-center py-16">
+        <span class="loading loading-spinner loading-lg"></span>
+    </div>
+}
+else
+{
+    <div class="max-w-2xl space-y-6">
+        <h2 class="text-lg font-bold">Rate Limiting & Retention</h2>
+        <p class="text-sm opacity-60">
+            Override the <a href="/admin/settings" class="link">global defaults</a> for this project.
+            Leave a field blank to inherit the global default.
+        </p>
+
+        <!-- Prioritization -->
+        <div class="card bg-base-200">
+            <div class="card-body p-5 space-y-3">
+                <h2 class="font-semibold">Prioritization</h2>
+                <ConfigField Label="High-volume threshold (events)"
+                             Description="Issues exceeding this occurrence count get the high-volume tag and priority bump"
+                             Value="@GetProject(ProjectConfigKeys.HighVolumeThreshold)"
+                             OnSave='v => SaveProject(ProjectConfigKeys.HighVolumeThreshold, v)'
+                             Saving="@IsSaving(ProjectConfigKeys.HighVolumeThreshold)"
+                             InputType="number"
+                             Placeholder="1000" />
+            </div>
+        </div>
+
+        <!-- Rate Limiting -->
+        <div class="card bg-base-200">
+            <div class="card-body p-5 space-y-3">
+                <h2 class="font-semibold">Rate Limiting</h2>
+                <ConfigField Label="Max events per window (override)"
+                             Description="Maximum events accepted for this project per rate-limit window"
+                             Value="@GetProject(ProjectConfigKeys.RateLimitMaxEventsPerWindow)"
+                             OnSave='v => SaveProject(ProjectConfigKeys.RateLimitMaxEventsPerWindow, v)'
+                             Saving="@IsSaving(ProjectConfigKeys.RateLimitMaxEventsPerWindow)"
+                             GlobalDefault="@GetGlobal(AppConfigKeys.RateLimitDefaultProjectLimit, "50000")"
+                             InputType="number" />
+            </div>
+        </div>
+
+        <!-- Retention -->
+        <div class="card bg-base-200">
+            <div class="card-body p-5 space-y-3">
+                <h2 class="font-semibold">Event Retention</h2>
+                <ConfigField Label="Max event age (days, override)"
+                             Description="Events older than this are deleted"
+                             Value="@GetProject(ProjectConfigKeys.RetentionMaxAgeDays)"
+                             OnSave='v => SaveProject(ProjectConfigKeys.RetentionMaxAgeDays, v)'
+                             Saving="@IsSaving(ProjectConfigKeys.RetentionMaxAgeDays)"
+                             GlobalDefault="@GetGlobal(AppConfigKeys.RetentionDefaultMaxAgeDays, "90")"
+                             InputType="number" />
+                <ConfigField Label="Max event count (override)"
+                             Description="When exceeded, the oldest events are deleted first"
+                             Value="@GetProject(ProjectConfigKeys.RetentionMaxEventCount)"
+                             OnSave='v => SaveProject(ProjectConfigKeys.RetentionMaxEventCount, v)'
+                             Saving="@IsSaving(ProjectConfigKeys.RetentionMaxEventCount)"
+                             GlobalDefault="@GetGlobal(AppConfigKeys.RetentionDefaultMaxEvents, "1000000")"
+                             InputType="number" />
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+
+    private Dictionary<string, string?> _projectConfig = [];
+    private Dictionary<string, string?> _globalConfig = [];
+    private HashSet<string> _savingKeys = [];
+    private bool loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        _projectConfig = await ProjectConfigService.GetAllAsync(ProjectId);
+        _globalConfig = await AppConfigService.GetAllAsync();
+        loading = false;
+    }
+
+    private string? GetProject(string key) => _projectConfig.GetValueOrDefault(key);
+    private string? GetGlobal(string key, string fallback) => _globalConfig.GetValueOrDefault(key) ?? fallback;
+    private bool IsSaving(string key) => _savingKeys.Contains(key);
+
+    private async Task SaveProject(string key, string? value)
+    {
+        _savingKeys.Add(key);
+        try
+        {
+            await ProjectConfigService.SetAsync(ProjectId, key, value);
+            _projectConfig[key] = value;
+        }
+        finally
+        {
+            _savingKeys.Remove(key);
+        }
+    }
+}

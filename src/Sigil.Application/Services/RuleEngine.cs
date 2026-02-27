@@ -39,6 +39,8 @@ public class RuleEngine : IRuleEngine
         _ => null
     };
 
+    public bool Match(string value, FilterOperator op, string pattern) => MatchOperator(value, op, pattern);
+
     private static bool MatchOperator(string fieldValue, FilterOperator op, string pattern) => op switch
     {
         FilterOperator.Equals     => string.Equals(fieldValue, pattern, StringComparison.OrdinalIgnoreCase),

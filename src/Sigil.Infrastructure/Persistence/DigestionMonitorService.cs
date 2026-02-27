@@ -27,7 +27,7 @@ internal class DigestionMonitorService(
             .FirstOrDefaultAsync();
 
         var projectIds = groups.Select(g => g.ProjectId).Distinct().ToList();
-        var projectNames = await context.Set<Sigil.Domain.Entities.Project>()
+        var projectNames = await context.Projects
             .Where(p => projectIds.Contains(p.Id))
             .Select(p => new { p.Id, p.Name })
             .ToDictionaryAsync(p => p.Id, p => p.Name);
@@ -43,6 +43,18 @@ internal class DigestionMonitorService(
             })
             .ToList();
 
+        // Rolling 60-minute throughput metrics
+        var since = DateTime.UtcNow.AddMinutes(-60);
+        var recentBatches = await context.DigestBatchMetrics
+            .Where(m => m.RecordedAt >= since)
+            .ToListAsync();
+
+        var eventsInLastHour = recentBatches.Sum(m => m.EventCount);
+        var eventsPerMinute = eventsInLastHour / 60.0;
+        var avgDigestMs = recentBatches.Count > 0 ? recentBatches.Average(m => m.DigestElapsedMs) : 0;
+        var avgParseMs = recentBatches.Count > 0 ? recentBatches.Average(m => m.ParseElapsedMs) : 0;
+        var peakQueueDepth = recentBatches.Count > 0 ? recentBatches.Max(m => m.QueueDepthAtStart) : 0;
+
         return new DigestionStats
         {
             PendingCount = groups.Where(g => !g.IsFailed).Sum(g => g.Count),
@@ -50,6 +62,11 @@ internal class DigestionMonitorService(
             BatchSize = options.Value.GetOptions(nameof(DigestionWorker)).BatchSize,
             OldestPendingAt = oldestPending,
             ByProject = byProject,
+            EventsPerMinute = Math.Round(eventsPerMinute, 1),
+            AvgDigestMs = Math.Round(avgDigestMs, 0),
+            AvgParseMs = Math.Round(avgParseMs, 0),
+            PeakQueueDepth = peakQueueDepth,
+            BatchesInLastHour = recentBatches.Count,
         };
     }
 
@@ -59,7 +76,7 @@ internal class DigestionMonitorService(
             .Where(e => e.Error != null)
             .OrderByDescending(e => e.ReceivedAt)
             .Take(limit)
-            .Join(context.Set<Sigil.Domain.Entities.Project>(),
+            .Join(context.Projects,
                 e => e.ProjectId,
                 p => p.Id,
                 (e, p) => new FailedEnvelopeSummary

@@ -1,0 +1,120 @@
+@using Sigil.Application.Models.Filters
+@using Sigil.Domain.Enums
+@inject IStackTraceFilterService FilterService
+
+<ModalBase IsOpen="IsOpen" OnClose="OnClosed" Title="@(EditingFilter is null ? "New Stack Trace Filter" : "Edit Stack Trace Filter")" Size="ModalSize.Medium">
+    <div class="space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Field</legend>
+                <select class="select select-sm w-full" @bind="_field">
+                    <option value="function">function</option>
+                    <option value="filename">filename</option>
+                    <option value="module">module</option>
+                </select>
+                <p class="fieldset-label text-xs">The stack frame field to match against</p>
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Operator</legend>
+                <select class="select select-sm w-full" @bind="_operator">
+                    @foreach (var op in Enum.GetValues<FilterOperator>())
+                    {
+                        <option value="@op">@op</option>
+                    }
+                </select>
+            </fieldset>
+
+            <fieldset class="fieldset sm:col-span-2">
+                <legend class="fieldset-legend">Value</legend>
+                <input type="text" class="input input-sm w-full font-mono"
+                       placeholder="e.g. System.Web"
+                       @bind="_value" />
+            </fieldset>
+
+            <fieldset class="fieldset sm:col-span-2">
+                <legend class="fieldset-legend">Description <span class="opacity-50">(optional)</span></legend>
+                <input type="text" class="input input-sm w-full"
+                       placeholder="What does this filter do?"
+                       @bind="_description" />
+            </fieldset>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="alert alert-error text-sm py-2">@_error</div>
+        }
+
+        <div class="modal-action">
+            <button class="btn btn-ghost" @onclick="() => OnClosed.InvokeAsync()">Cancel</button>
+            <button class="btn btn-primary" @onclick="Save" disabled="@_saving">
+                @(_saving ? "Saving…" : (EditingFilter is null ? "Add Filter" : "Save"))
+            </button>
+        </div>
+    </div>
+</ModalBase>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter, EditorRequired] public int ProjectId { get; set; }
+    [Parameter] public StackTraceFilterResponse? EditingFilter { get; set; }
+    [Parameter] public EventCallback<StackTraceFilterResponse> OnSaved { get; set; }
+    [Parameter] public EventCallback OnClosed { get; set; }
+
+    private string _field = "function";
+    private FilterOperator _operator = FilterOperator.Contains;
+    private string _value = "";
+    private string? _description;
+    private string _error = "";
+    private bool _saving;
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen) return;
+        if (EditingFilter is not null)
+        {
+            _field = EditingFilter.Field;
+            _operator = EditingFilter.Operator;
+            _value = EditingFilter.Value;
+            _description = EditingFilter.Description;
+        }
+        else
+        {
+            _field = "function"; _value = ""; _description = null;
+            _operator = FilterOperator.Contains;
+        }
+        _error = "";
+    }
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(_value)) { _error = "Value is required."; return; }
+
+        _saving = true;
+        _error = "";
+        try
+        {
+            StackTraceFilterResponse result;
+            if (EditingFilter is null)
+            {
+                var req = new CreateStackTraceFilterRequest(_field, _operator, _value.Trim(), true, 0, _description?.Trim());
+                result = await FilterService.CreateFilterAsync(ProjectId, req);
+            }
+            else
+            {
+                var req = new UpdateStackTraceFilterRequest(_field, _operator, _value.Trim(), EditingFilter.Enabled, EditingFilter.Priority, _description?.Trim());
+                result = await FilterService.UpdateFilterAsync(EditingFilter.Id, req)
+                         ?? throw new InvalidOperationException("Filter not found.");
+            }
+            await OnSaved.InvokeAsync(result);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

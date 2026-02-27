@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Domain.Entities;
+using Sigil.Domain.Enums;
 using Sigil.Domain.Extensions;
 using Sigil.Infrastructure.Persistence;
 
@@ -53,6 +54,7 @@ internal class PostDigestionWorker(
         await UpdateEventBucketsAsync(work.BucketIncrements, dbContext, ct);
         await RefreshMergeSetAggregates(issues, scope.ServiceProvider);
         await FireIssueAlerts(work, issues, scope.ServiceProvider);
+        await LogPriorityChangesAsync(work.PriorityChanges, scope.ServiceProvider);
     }
 
     private static async Task UpdateSearchColumnsAsync(List<int> issueIds, SigilDbContext dbContext, CancellationToken ct)
@@ -107,10 +109,29 @@ internal class PostDigestionWorker(
             await mergeSetService.RefreshAggregatesAsync(mergeSetIds);
     }
 
+    private static async Task LogPriorityChangesAsync(List<PriorityChange> changes, IServiceProvider serviceProvider)
+    {
+        IssueActivityService activityService = serviceProvider.GetRequiredService<IssueActivityService>();
+
+        foreach (var change in changes)
+        {
+            await activityService.LogActivityAsync(
+                change.IssueId,
+                IssueActivityAction.PriorityChanged,
+                userId: null,
+                extra: new Dictionary<string, string>
+                {
+                    ["previous"] = change.OldPriority.ToString(),
+                    ["new"] = change.NewPriority.ToString(),
+                    ["reason"] = change.Reason,
+                });
+        }
+    }
+
     private static async Task FireIssueAlerts(PostDigestionWork work, List<Issue> issues, IServiceProvider serviceProvider)
     {
         var alertService = serviceProvider.GetRequiredService<IAlertService>();
-        foreach (var issue in issues)
+        foreach (Issue issue in issues)
         {
             if (work.NewIssueIds.Contains(issue.Id))
                 await alertService.EvaluateNewIssueAsync(issue);

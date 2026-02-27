@@ -7,6 +7,13 @@ public class DigestionStats
     public int BatchSize { get; init; }
     public DateTime? OldestPendingAt { get; init; }
     public List<ProjectEnvelopeStats> ByProject { get; init; } = [];
+
+    // Throughput metrics (rolling 60-minute window)
+    public double EventsPerMinute { get; init; }
+    public double AvgDigestMs { get; init; }
+    public double AvgParseMs { get; init; }
+    public int PeakQueueDepth { get; init; }
+    public int BatchesInLastHour { get; init; }
 }
 
 public class ProjectEnvelopeStats

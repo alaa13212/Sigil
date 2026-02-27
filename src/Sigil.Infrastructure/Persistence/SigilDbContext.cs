@@ -34,6 +34,9 @@ internal class SigilDbContext(DbContextOptions<SigilDbContext> options) : SaveSu
     public DbSet<TextNormalizationRule> TextNormalizationRules => Set<TextNormalizationRule>();
     public DbSet<ProjectRecommendation> ProjectRecommendations => Set<ProjectRecommendation>();
     public DbSet<ProjectConfig> ProjectConfigs => Set<ProjectConfig>();
+    public DbSet<StackTraceFilter> StackTraceFilters => Set<StackTraceFilter>();
+    public DbSet<IngestionSpike> IngestionSpikes => Set<IngestionSpike>();
+    public DbSet<DigestBatchMetric> DigestBatchMetrics => Set<DigestBatchMetric>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

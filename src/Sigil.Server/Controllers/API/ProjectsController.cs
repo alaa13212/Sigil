@@ -9,7 +9,7 @@ namespace Sigil.Server.Controllers.API;
 [ApiController]
 [Route("api/projects")]
 [Authorize]
-public class ProjectsController(IProjectService projectService) : SigilController
+public class ProjectsController(IProjectService projectService, IProjectConfigEditorService projectConfigEditorService) : SigilController
 {
     [HttpGet]
     public async Task<IActionResult> List()
@@ -65,5 +65,16 @@ public class ProjectsController(IProjectService projectService) : SigilControlle
 
         var newKey = await projectService.RotateApiKeyAsync(id);
         return Ok(new { apiKey = newKey });
+    }
+
+    [HttpGet("{id:int}/config")]
+    public async Task<IActionResult> GetConfig(int id)
+        => Ok(await projectConfigEditorService.GetAllAsync(id));
+
+    [HttpPut("{id:int}/config/{key}")]
+    public async Task<IActionResult> SetConfig(int id, string key, [FromBody] SetConfigValueRequest request)
+    {
+        await projectConfigEditorService.SetAsync(id, key, request.Value);
+        return NoContent();
     }
 }

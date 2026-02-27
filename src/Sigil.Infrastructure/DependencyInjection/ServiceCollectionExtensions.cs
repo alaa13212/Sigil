@@ -51,7 +51,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEventUserService, EventUserService>();
         services.AddScoped<ITagService, TagService>();
         services.AddScoped<IIssueActivityService, IssueActivityService>();
-        services.AddScoped<IAppConfigService, AppConfigService>();
+        services.AddSingleton<IAppConfigService, AppConfigService>();
+        services.AddScoped<IAppConfigEditorService, AppConfigEditorService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ITeamService, TeamService>();
         services.AddScoped<ISetupService, SetupService>();
@@ -67,9 +68,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAlertService, AlertService>();
         services.AddScoped<IReleaseHealthService, ReleaseHealthService>();
         services.AddScoped<IRecommendationService, RecommendationService>();
-        services.AddScoped<IProjectConfigService, ProjectConfigService>();
+        services.AddSingleton<IProjectConfigService, ProjectConfigService>();
+        services.AddScoped<IProjectConfigEditorService, ProjectConfigEditorService>();
         services.AddScoped<ISearchService, SearchService>();
         services.AddScoped<IBadgeService, BadgeService>();
+        services.AddScoped<IStackTraceFilterService, StackTraceFilterService>();
+        services.AddSingleton<IRateLimiter, SlidingWindowRateLimiter>();
         
         services.AddSingleton<IStackFrameCleaner, CSharpStackFrameCleaner>();
         services.AddSingleton<IStackFrameCleaner, JavaStackFrameCleaner>();
@@ -95,7 +99,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ICacheManager, CacheManager>();
         services.Configure<CacheManagerOptions>(options =>
         {
-            options.Add<IAppConfigCache>(50, TimeSpan.FromHours(1));
             options.Add<IProjectCache>(100, TimeSpan.FromMinutes(30));
             options.Add<IReleaseCache>(5_000, TimeSpan.FromMinutes(30));
             options.Add<ITagCache>(20_000, TimeSpan.FromMinutes(30));
@@ -104,10 +107,9 @@ public static class ServiceCollectionExtensions
             options.Add<IEventFilterCache>(500, TimeSpan.FromHours(1));
             options.Add<IAutoTagRuleCache>(500, TimeSpan.FromHours(1));
             options.Add<INormalizationRuleCache>(500, TimeSpan.FromHours(1));
-            options.Add<IProjectConfigCache>(200, TimeSpan.FromMinutes(30));
+            options.Add<IStackTraceFilterCache>(500, TimeSpan.FromHours(1));
         });
 
-        services.AddScoped<IAppConfigCache, AppConfigCache>();
         services.AddScoped<IProjectCache, ProjectCache>();
         services.AddScoped<IReleaseCache, ReleaseCache>();
         services.AddScoped<ITagCache, TagCache>();
@@ -116,7 +118,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEventFilterCache, EventFilterCache>();
         services.AddScoped<IAutoTagRuleCache, AutoTagRuleCache>();
         services.AddScoped<INormalizationRuleCache, NormalizationRuleCache>();
-        services.AddScoped<IProjectConfigCache, ProjectConfigCache>();
+        services.AddScoped<IStackTraceFilterCache, StackTraceFilterCache>();
     }
     
     private static void AddIdentityServices(this IServiceCollection services)
@@ -150,6 +152,8 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<RecommendationAnalysisWorker>();
         services.AddSingleton<IWorker>(UseExisting<RecommendationAnalysisWorker>);
+
+        services.AddHostedService<RetentionWorker>();
 
         services.Configure<BatchWorkersConfig>(configuration.GetSection("BatchWorkers"));
     }

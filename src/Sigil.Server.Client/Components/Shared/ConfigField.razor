@@ -1,0 +1,47 @@
+@* Inline editable config field: shows current value with a Save button *@
+
+<fieldset class="fieldset">
+    <legend class="fieldset-legend">@Label</legend>
+    <div class="join w-full">
+        <input type="@InputType" class="input join-item flex-1" @bind="_editValue"
+               placeholder="@(GlobalDefault is not null ? $"Default: {GlobalDefault}" : Placeholder)" />
+        <button class="btn join-item" @onclick="HandleSave" disabled="@Saving">
+            @(Saving ? "Saving..." : "Save")
+        </button>
+    </div>
+    @if (!string.IsNullOrEmpty(Description) || GlobalDefault is not null)
+    {
+        <p class="fieldset-label opacity-60 text-xs">
+            @Description
+            @if (GlobalDefault is not null)
+            {
+                @if (!string.IsNullOrEmpty(Description)) { <span> — </span> }
+                <span>Global default: <strong>@GlobalDefault</strong></span>
+            }
+        </p>
+    }
+</fieldset>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public string? GlobalDefault { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "";
+    [Parameter] public string InputType { get; set; } = "text";
+    [Parameter] public bool Saving { get; set; }
+    [Parameter] public EventCallback<string?> OnSave { get; set; }
+
+    private string? _editValue;
+
+    protected override void OnParametersSet()
+    {
+        // Only initialize from Value on first render (when _editValue is null)
+        _editValue ??= Value;
+    }
+
+    private async Task HandleSave()
+    {
+        await OnSave.InvokeAsync(string.IsNullOrWhiteSpace(_editValue) ? null : _editValue);
+    }
+}

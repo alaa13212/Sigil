@@ -1,0 +1,94 @@
+@page "/admin/settings"
+@attribute [Authorize]
+@using Sigil.Domain
+@inject IAppConfigEditorService AppConfigService
+
+<PageTitle>App Settings — Sigil</PageTitle>
+
+<div class="max-w-2xl space-y-6">
+    <h1 class="text-2xl font-bold">App Settings</h1>
+
+    @if (loading)
+    {
+        <div class="flex justify-center py-16">
+            <span class="loading loading-spinner loading-lg"></span>
+        </div>
+    }
+    else
+    {
+        <!-- General -->
+        <div class="card bg-base-200">
+            <div class="card-body p-5 space-y-3">
+                <h2 class="font-semibold">General</h2>
+                <ConfigField Label="Host URL" Description="The public URL of this Sigil instance (used in DSNs and email links)"
+                             Value="@Get(AppConfigKeys.HostUrl)" OnSave='v => Save(AppConfigKeys.HostUrl, v)' Saving="@IsSaving(AppConfigKeys.HostUrl)" />
+            </div>
+        </div>
+
+        <!-- Rate Limiting -->
+        <div class="card bg-base-200">
+            <div class="card-body p-5 space-y-3">
+                <h2 class="font-semibold">Rate Limiting</h2>
+                <p class="text-sm opacity-60">Controls how many events are accepted per time window. Per-project overrides can be set in each project's settings.</p>
+                <ConfigField Label="Global limit (events per window)" Description="Maximum events accepted across all projects combined"
+                             Value="@Get(AppConfigKeys.RateLimitGlobalLimit)" OnSave='v => Save(AppConfigKeys.RateLimitGlobalLimit, v)'
+                             Saving="@IsSaving(AppConfigKeys.RateLimitGlobalLimit)" Placeholder="50000" InputType="number" />
+                <ConfigField Label="Default per-project limit (events per window)" Description="Per-project cap when no project-level override is set"
+                             Value="@Get(AppConfigKeys.RateLimitDefaultProjectLimit)" OnSave='v => Save(AppConfigKeys.RateLimitDefaultProjectLimit, v)'
+                             Saving="@IsSaving(AppConfigKeys.RateLimitDefaultProjectLimit)" Placeholder="50000" InputType="number" />
+                <ConfigField Label="Window size (seconds)" Description="Duration of the sliding rate limit window"
+                             Value="@Get(AppConfigKeys.RateLimitWindowSeconds)" OnSave='v => Save(AppConfigKeys.RateLimitWindowSeconds, v)'
+                             Saving="@IsSaving(AppConfigKeys.RateLimitWindowSeconds)" Placeholder="60" InputType="number" />
+            </div>
+        </div>
+
+        <!-- Retention -->
+        <div class="card bg-base-200">
+            <div class="card-body p-5 space-y-3">
+                <h2 class="font-semibold">Event Retention</h2>
+                <p class="text-sm opacity-60">Global defaults for how long events are kept. Per-project overrides can be set in each project's settings.</p>
+                <ConfigField Label="Max event age (days)" Description="Events older than this are deleted during the next retention pass"
+                             Value="@Get(AppConfigKeys.RetentionDefaultMaxAgeDays)" OnSave='v => Save(AppConfigKeys.RetentionDefaultMaxAgeDays, v)'
+                             Saving="@IsSaving(AppConfigKeys.RetentionDefaultMaxAgeDays)" Placeholder="90" InputType="number" />
+                <ConfigField Label="Max events per project" Description="When exceeded, the oldest events are deleted first"
+                             Value="@Get(AppConfigKeys.RetentionDefaultMaxEvents)" OnSave='v => Save(AppConfigKeys.RetentionDefaultMaxEvents, v)'
+                             Saving="@IsSaving(AppConfigKeys.RetentionDefaultMaxEvents)" Placeholder="250000" InputType="number" />
+                <ConfigField Label="Check interval (minutes)" Description="How often the retention worker runs"
+                             Value="@Get(AppConfigKeys.RetentionCheckIntervalMinutes)" OnSave='v => Save(AppConfigKeys.RetentionCheckIntervalMinutes, v)'
+                             Saving="@IsSaving(AppConfigKeys.RetentionCheckIntervalMinutes)" Placeholder="60" InputType="number" />
+                <ConfigField Label="Failed envelope max age (days)" Description="Failed raw envelopes older than this are deleted"
+                             Value="@Get(AppConfigKeys.RetentionFailedEnvelopeMaxAgeDays)" OnSave='v => Save(AppConfigKeys.RetentionFailedEnvelopeMaxAgeDays, v)'
+                             Saving="@IsSaving(AppConfigKeys.RetentionFailedEnvelopeMaxAgeDays)" Placeholder="7" InputType="number" />
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private Dictionary<string, string?> _config = [];
+    private HashSet<string> _savingKeys = [];
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _config = await AppConfigService.GetAllAsync();
+        loading = false;
+    }
+
+    private string? Get(string key) => _config.GetValueOrDefault(key);
+    private bool IsSaving(string key) => _savingKeys.Contains(key);
+
+    private async Task Save(string key, string? value)
+    {
+        _savingKeys.Add(key);
+        try
+        {
+            await AppConfigService.SetAsync(key, value);
+            _config[key] = value;
+        }
+        finally
+        {
+            _savingKeys.Remove(key);
+        }
+    }
+}

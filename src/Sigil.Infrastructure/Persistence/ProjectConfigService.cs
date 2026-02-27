@@ -1,53 +1,61 @@
+using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Sigil.Application.Interfaces;
-using Sigil.Domain.Entities;
+using Sigil.Domain;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class ProjectConfigService(SigilDbContext dbContext, IProjectConfigCache cache) : IProjectConfigService
+internal class ProjectConfigService(IServiceProvider serviceProvider) : IProjectConfigService
 {
-    public async Task<string?> GetAsync(int projectId, string key)
-    {
-        if (cache.TryGet(projectId, key, out string? cached))
-            return cached;
+    private readonly ConcurrentDictionary<int, Dictionary<string, string?>> _store = new();
 
-        var config = await dbContext.ProjectConfigs
-            .FirstOrDefaultAsync(c => c.ProjectId == projectId && c.Key == key);
-        var value = config?.Value;
-        cache.Set(projectId, key, value);
-        return value;
+    public async Task LoadAsync()
+    {
+        using var scope = serviceProvider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<SigilDbContext>();
+        var all = await dbContext.ProjectConfigs.ToListAsync();
+
+        _store.Clear();
+        foreach (var group in all.GroupBy(c => c.ProjectId))
+            _store[group.Key] = group.ToDictionary(c => c.Key, c => c.Value);
     }
 
-    public async Task SetAsync(int projectId, string key, string? value)
+    public async Task LoadAsync(int projectId)
     {
-        var existing = await dbContext.ProjectConfigs
-            .AsTracking()
-            .FirstOrDefaultAsync(c => c.ProjectId == projectId && c.Key == key);
-
-        if (existing is not null)
-        {
-            existing.Value = value;
-            existing.UpdatedAt = DateTime.UtcNow;
-        }
-        else
-        {
-            dbContext.ProjectConfigs.Add(new ProjectConfig
-            {
-                ProjectId = projectId,
-                Key = key,
-                Value = value,
-                UpdatedAt = DateTime.UtcNow
-            });
-        }
-
-        await dbContext.SaveChangesAsync();
-        cache.Invalidate(projectId, key);
-    }
-
-    public async Task<Dictionary<string, string?>> GetAllAsync(int projectId)
-    {
-        return await dbContext.ProjectConfigs
+        using var scope = serviceProvider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<SigilDbContext>();
+        var configs = await dbContext.ProjectConfigs
             .Where(c => c.ProjectId == projectId)
             .ToDictionaryAsync(c => c.Key, c => c.Value);
+
+        _store[projectId] = configs;
+    }
+
+    public int HighVolumeThreshold(int projectId) =>
+        Get(projectId, ProjectConfigKeys.HighVolumeThreshold, 1000);
+
+    public int? RateLimitMaxEventsPerWindow(int projectId) =>
+        GetNullable<int>(projectId, ProjectConfigKeys.RateLimitMaxEventsPerWindow);
+
+    public int? RetentionMaxAgeDays(int projectId) =>
+        GetNullable<int>(projectId, ProjectConfigKeys.RetentionMaxAgeDays);
+
+    public int? RetentionMaxEventCount(int projectId) =>
+        GetNullable<int>(projectId, ProjectConfigKeys.RetentionMaxEventCount);
+
+    public string? Get(int projectId, string key) =>
+        _store.TryGetValue(projectId, out var dict) ? dict.GetValueOrDefault(key) : null;
+
+    public T Get<T>(int projectId, string key, T defaultValue) where T : IParsable<T>
+    {
+        var raw = Get(projectId, key);
+        return raw is not null && T.TryParse(raw, null, out var parsed) ? parsed : defaultValue;
+    }
+
+    private T? GetNullable<T>(int projectId, string key) where T : struct, IParsable<T>
+    {
+        var raw = Get(projectId, key);
+        return raw is not null && T.TryParse(raw, null, out var parsed) ? parsed : null;
     }
 }

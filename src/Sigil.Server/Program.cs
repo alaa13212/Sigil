@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Sigil.Application.DependencyInjection;
+using Sigil.Application.Interfaces;
 using Sigil.Domain.DependencyInjection;
 using Sigil.Infrastructure.DependencyInjection;
 using Sigil.Server.Auth;
@@ -126,5 +127,9 @@ app.MapRazorComponents<App>()
 
 app.MapControllers();
 app.MapHealthChecks("/health");
+
+// Load all configs into memory before accepting requests
+await app.Services.GetRequiredService<IAppConfigService>().LoadAsync();
+await app.Services.GetRequiredService<IProjectConfigService>().LoadAsync();
 
 app.Run();

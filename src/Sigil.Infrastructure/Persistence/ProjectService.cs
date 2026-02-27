@@ -103,7 +103,7 @@ internal class ProjectService(SigilDbContext dbContext, IAppConfigService appCon
         var project = await GetProjectByIdAsync(id);
         if (project is null) return null;
 
-        var hostUrl = await appConfigService.GetAsync(AppConfigKeys.HostUrl);
+        var hostUrl = appConfigService.HostUrl;
         var dsn = "";
         if (!string.IsNullOrEmpty(hostUrl))
         {

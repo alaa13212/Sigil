@@ -16,6 +16,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IEventEnricher, NormalizedMessageEnricher>();
         services.AddSingleton<IEventEnricher, RemoteIpProviderEnricher>();
         services.AddSingleton<IEventEnricher, EventUserUniqueIdentifierEnricher>();
+        services.AddSingleton<IEventEnricher, StackTraceFilterEnricher>();
         services.AddSingleton<IEventEnricher, FingerprintEventEnricher>();
         services.AddSingleton<IEventEnricher, AutoTagsEventEnricher>();
         

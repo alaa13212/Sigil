@@ -74,19 +74,9 @@ public class DigestionService(
             issue.SuggestedEvent = eventRanker.GetMostRelevantEvent(eventsEntities.Union(issue.SuggestedEvent != null ? [issue.SuggestedEvent] : []));
         }
 
-        // Apply system tags
-        foreach (var issueId in regressionIssueIds)
-        {
-            var issue = issues.Values.First(i => i.Id == issueId);
-            AddSystemTag(issue, SystemTags.Regression, tagValues, now);
-            AddSystemTag(issue, SystemTags.Reopened, tagValues, now);
-        }
+        ApplySystemTags(context, regressionIssueIds, issues, tagValues, now);
 
-        foreach (var issue in issues.Values)
-        {
-            if (issue.OccurrenceCount > context.HighVolumeThreshold)
-                AddSystemTag(issue, SystemTags.HighVolume, tagValues, now);
-        }
+        List<PriorityChange> priorityChanges = ElevateIssuePriorities(context, regressionIssueIds, issues);
 
         await eventService.SaveEventsAsync();
 
@@ -95,7 +85,8 @@ public class DigestionService(
             issues.Values.Select(i => i.Id).ToList(),
             newIssueIds,
             regressionIssueIds,
-            AggregateEventCountsByBucket(parsedEvents, issues)));
+            AggregateEventCountsByBucket(parsedEvents, issues),
+            priorityChanges));
     }
 
     private static bool IsReleaseRegression(Issue issue, IEnumerable<ParsedEvent> events, Dictionary<string, Release> releases)
@@ -182,6 +173,51 @@ public class DigestionService(
             .Select(g => new EventBucketIncrement(g.Key.IssueId, g.Key.BucketStart, g.Count()))
             .ToList();
         return bucketIncrements;
+    }
+    
+
+    private static void ApplySystemTags(EventParsingContext context, HashSet<int> regressionIssueIds, Dictionary<string, Issue> issues,
+        Dictionary<string, Dictionary<string, int>> tagValues, DateTime now)
+    {
+        foreach (var issueId in regressionIssueIds)
+        {
+            var issue = issues.Values.First(i => i.Id == issueId);
+            AddSystemTag(issue, SystemTags.Regression, tagValues, now);
+            AddSystemTag(issue, SystemTags.Reopened, tagValues, now);
+        }
+
+        foreach (var issue in issues.Values)
+        {
+            if (issue.OccurrenceCount > context.HighVolumeThreshold)
+                AddSystemTag(issue, SystemTags.HighVolume, tagValues, now);
+        }
+    }
+    
+    
+
+    private static List<PriorityChange> ElevateIssuePriorities(EventParsingContext context, HashSet<int> regressionIssueIds, Dictionary<string, Issue> issues)
+    {
+        var priorityChanges = new List<PriorityChange>();
+        foreach (var issueId in regressionIssueIds)
+        {
+            var issue = issues.Values.First(i => i.Id == issueId);
+            if (issue.Priority < Priority.Medium)
+            {
+                priorityChanges.Add(new PriorityChange(issue.Id, issue.Priority, Priority.Medium, "Regression detected"));
+                issue.Priority = Priority.Medium;
+            }
+        }
+        foreach (var issue in issues.Values)
+        {
+            if (issue.OccurrenceCount > context.HighVolumeThreshold && issue.Priority < Priority.High)
+            {
+                if (priorityChanges.All(pc => pc.IssueId != issue.Id))
+                    priorityChanges.Add(new PriorityChange(issue.Id, issue.Priority, Priority.High, "High-volume threshold exceeded"));
+                issue.Priority = Priority.High;
+            }
+        }
+
+        return priorityChanges;
     }
 
 }

@@ -25,7 +25,7 @@ internal class IssueActivityService(SigilDbContext dbContext, IDateTime dateTime
         return (items, totalCount);
     }
 
-    public async Task<IssueActivity> LogActivityAsync(int issueId, IssueActivityAction action, Guid? userId = null, string? message = null)
+    public async Task<IssueActivity> LogActivityAsync(int issueId, IssueActivityAction action, Guid? userId = null, string? message = null, Dictionary<string, string>? extra = null)
     {
         var activity = new IssueActivity
         {
@@ -33,6 +33,7 @@ internal class IssueActivityService(SigilDbContext dbContext, IDateTime dateTime
             UserId = userId,
             Action = action,
             Message = message,
+            Extra = extra,
             Timestamp = dateTime.UtcNow,
         };
 

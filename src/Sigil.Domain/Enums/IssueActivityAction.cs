@@ -12,4 +12,5 @@ public enum IssueActivityAction
     Merged,
     Unmerged,
     Bookmarked,
+    PriorityChanged,
 }

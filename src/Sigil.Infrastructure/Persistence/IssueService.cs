@@ -273,9 +273,10 @@ internal class IssueService(
         return issue;
     }
 
-    public async Task<Issue> UpdateIssuePriorityAsync(int issueId, Priority priority)
+    public async Task<Issue> UpdateIssuePriorityAsync(int issueId, Priority priority, Guid? userId = null)
     {
         var issue = await dbContext.Issues.AsTracking().FirstAsync(i => i.Id == issueId);
+        var oldPriority = issue.Priority;
         issue.Priority = priority;
         await dbContext.SaveChangesAsync();
 
@@ -283,6 +284,14 @@ internal class IssueService(
             await dbContext.Issues
                 .Where(i => i.MergeSetId == issue.MergeSetId && i.Id != issueId)
                 .ExecuteUpdateAsync(s => s.SetProperty(i => i.Priority, priority));
+
+        if (oldPriority != priority)
+            await activityService.LogActivityAsync(issueId, IssueActivityAction.PriorityChanged, userId,
+                extra: new Dictionary<string, string>
+                {
+                    ["previous"] = oldPriority.ToString(),
+                    ["new"] = priority.ToString(),
+                });
 
         issueCache.InvalidateAll();
         return issue;

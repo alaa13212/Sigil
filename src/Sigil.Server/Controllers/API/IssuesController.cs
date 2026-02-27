@@ -92,7 +92,8 @@ public class IssuesController(
     [HttpPut("api/issues/{id:int}/priority")]
     public async Task<IActionResult> UpdatePriority(int id, [FromBody] UpdatePriorityRequest request)
     {
-        var issue = await issueService.UpdateIssuePriorityAsync(id, request.Priority);
+        Guid? userId = GetUserId();
+        var issue = await issueService.UpdateIssuePriorityAsync(id, request.Priority, userId);
         return Ok(new { issue.Id, issue.Priority });
     }
 

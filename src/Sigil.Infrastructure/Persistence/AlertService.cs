@@ -98,7 +98,7 @@ internal class AlertService(
         };
 
         var sender = GetSender(rule.Channel);
-        var baseUrl = await GetBaseUrlAsync();
+        var baseUrl = GetBaseUrl();
         await sender.SendAsync(rule, fakeIssue, $"{baseUrl}/projects/{rule.ProjectId}/issues/0");
     }
 
@@ -186,8 +186,8 @@ internal class AlertService(
 
     #region Helpers
 
-    private async Task<string> GetBaseUrlAsync() =>
-        (await appConfigService.GetAsync(AppConfigKeys.HostUrl))?.TrimEnd('/') ?? "";
+    private string GetBaseUrl() =>
+        appConfigService.HostUrl?.TrimEnd('/') ?? "";
     
     private async Task<List<AlertRule>> GetEnabledRulesAsync(int projectId, AlertTrigger trigger) =>
         await dbContext.AlertRules
@@ -207,7 +207,7 @@ internal class AlertService(
             return;
         }
 
-        var baseUrl = await GetBaseUrlAsync();
+        var baseUrl = GetBaseUrl();
         var issueUrl = issue.Id > 0 ? $"{baseUrl}/projects/{issue.ProjectId}/issues/{issue.Id}" : "";
         var sender = GetSender(rule.Channel);
 

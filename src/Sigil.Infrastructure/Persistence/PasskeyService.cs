@@ -20,9 +20,9 @@ internal class PasskeyService(
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    private async Task<Fido2> CreateFido2Async()
+    private Fido2 CreateFido2()
     {
-        var hostUrl = await appConfig.GetAsync(AppConfigKeys.HostUrl) ?? "http://localhost";
+        var hostUrl = appConfig.HostUrl ?? "http://localhost";
         var uri = new Uri(hostUrl);
         var origin = $"{uri.Scheme}://{uri.Authority}";
         return new Fido2(new Fido2Configuration
@@ -35,7 +35,7 @@ internal class PasskeyService(
 
     public async Task<PasskeyRegistrationOptions> GetRegistrationOptionsAsync(Guid userId)
     {
-        var fido2 = await CreateFido2Async();
+        var fido2 = CreateFido2();
 
         var user = await userManager.FindByIdAsync(userId.ToString())
                    ?? throw new InvalidOperationException("User not found.");
@@ -72,7 +72,7 @@ internal class PasskeyService(
 
     public async Task<AuthResult> CompleteRegistrationAsync(Guid userId, PasskeyRegistrationResponse response)
     {
-        var fido2 = await CreateFido2Async();
+        var fido2 = CreateFido2();
 
         var storedJson = challengeStore.Get($"reg:{userId}");
         if (storedJson is null)
@@ -133,7 +133,7 @@ internal class PasskeyService(
 
     public async Task<PasskeyAssertionOptions> GetAssertionOptionsAsync()
     {
-        var fido2 = await CreateFido2Async();
+        var fido2 = CreateFido2();
 
         var options = fido2.GetAssertionOptions(new GetAssertionOptionsParams
         {
@@ -154,7 +154,7 @@ internal class PasskeyService(
 
     public async Task<AuthResult> CompleteAssertionAsync(PasskeyAssertionResponse response)
     {
-        var fido2 = await CreateFido2Async();
+        var fido2 = CreateFido2();
 
         var storedJson = challengeStore.Get($"auth:{response.ChallengeId}");
         if (storedJson is null)

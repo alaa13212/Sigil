@@ -80,7 +80,7 @@ public class ApiIssueService(HttpClient http) : IIssueService
         return (await GetIssueByIdAsync(issueId))!;
     }
 
-    public async Task<Issue> UpdateIssuePriorityAsync(int issueId, Priority priority)
+    public async Task<Issue> UpdateIssuePriorityAsync(int issueId, Priority priority, Guid? userId = null)
     {
         await http.PutAsJsonAsync($"api/issues/{issueId}/priority", new UpdatePriorityRequest(priority));
         return (await GetIssueByIdAsync(issueId))!;

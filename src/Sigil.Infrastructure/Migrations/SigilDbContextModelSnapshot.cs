@@ -389,6 +389,41 @@ namespace Sigil.infrastructure.Migrations
                     b.ToTable("Events");
                 });
 
+            modelBuilder.Entity("Sigil.Domain.Entities.DigestBatchMetric", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("DigestElapsedMs")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("EventCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ParseElapsedMs")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("QueueDepthAtStart")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("RecordedAt");
+
+                    b.ToTable("DigestBatchMetrics");
+                });
+
             modelBuilder.Entity("Sigil.Domain.Entities.EventBucket", b =>
                 {
                     b.Property<int>("IssueId")
@@ -500,6 +535,38 @@ namespace Sigil.infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("EventUsers");
+                });
+
+            modelBuilder.Entity("Sigil.Domain.Entities.IngestionSpike", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AcceptedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DroppedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("StartedAt");
+
+                    b.ToTable("IngestionSpikes");
                 });
 
             modelBuilder.Entity("Sigil.Domain.Entities.Issue", b =>
@@ -925,6 +992,50 @@ namespace Sigil.infrastructure.Migrations
                     b.ToTable("StackFrames");
                 });
 
+            modelBuilder.Entity("Sigil.Domain.Entities.StackTraceFilter", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Field")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Operator")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("StackTraceFilters");
+                });
+
             modelBuilder.Entity("Sigil.Domain.Entities.TagKey", b =>
                 {
                     b.Property<int>("Id")
@@ -1348,6 +1459,17 @@ namespace Sigil.infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Sigil.Domain.Entities.DigestBatchMetric", b =>
+                {
+                    b.HasOne("Sigil.Domain.Entities.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("Sigil.Domain.Entities.EventBucket", b =>
                 {
                     b.HasOne("Sigil.Domain.Entities.Issue", "Issue")
@@ -1387,6 +1509,17 @@ namespace Sigil.infrastructure.Migrations
                     b.Navigation("Event");
 
                     b.Navigation("TagValue");
+                });
+
+            modelBuilder.Entity("Sigil.Domain.Entities.IngestionSpike", b =>
+                {
+                    b.HasOne("Sigil.Domain.Entities.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("Sigil.Domain.Entities.Issue", b =>
@@ -1538,6 +1671,17 @@ namespace Sigil.infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Event");
+                });
+
+            modelBuilder.Entity("Sigil.Domain.Entities.StackTraceFilter", b =>
+                {
+                    b.HasOne("Sigil.Domain.Entities.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("Sigil.Domain.Entities.TagValue", b =>
