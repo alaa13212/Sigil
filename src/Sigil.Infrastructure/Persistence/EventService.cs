@@ -275,7 +275,7 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
             .ToList();
 
         EventUserResponse? user = e.User is not null
-            ? new EventUserResponse(e.User.Username, e.User.Email, e.User.IpAddress, e.User.Identifier)
+            ? new EventUserResponse(e.User.Username, e.User.Email, e.User.IpAddress, e.User.Identifier, e.User.Data)
             : null;
 
         var environment = tags.FirstOrDefault(t => t.Key == "environment")?.Value;

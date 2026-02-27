@@ -1,3 +1,4 @@
+using System.Collections;
 using Sigil.Domain.Enums;
 
 namespace Sigil.Application.Models.Events;
@@ -45,7 +46,8 @@ public record EventUserResponse(
     string? Username,
     string? Email,
     string? IpAddress,
-    string? Identifier);
+    string? Identifier,
+    Dictionary<string, string>? Extra);
 
 public record BreadcrumbResponse(
     DateTime? Timestamp,

@@ -61,7 +61,7 @@
 
     <!-- Details -->
     <div class="card bg-base-200">
-        <div class="card-body p-4 space-y-2 text-sm">
+        <div class="card-body p-4 space-y-1 text-sm">
             <div class="flex justify-between">
                 <span class="opacity-60">Severity</span>
                 <SeverityBadge Level="Issue.Level" />
@@ -70,25 +70,25 @@
                 <span class="opacity-60">Assigned</span>
                 <span>@(Issue.AssignedToName ?? "Unassigned")</span>
             </div>
-            <div class="flex justify-between">
-                <span class="opacity-60">First Seen</span>
-                <div class="text-right">
-                    <RelativeTime Value="Issue.FirstSeen" />
-                    @if (!string.IsNullOrEmpty(Issue.FirstRelease))
-                    {
-                        <div class="text-xs opacity-50 font-mono">@TagValueFormatter.Format("release", Issue.FirstRelease)</div>
-                    }
+            <div class="flex flex-col whitespace-nowrap">
+                <div class="flex justify-between">
+                    <span class="opacity-60">First Seen</span>
+                    <RelativeTime Value="Issue.FirstSeen"/>
                 </div>
+                @if (!string.IsNullOrEmpty(Issue.FirstRelease))
+                {
+                    <div class="text-xs text-end opacity-50 font-mono truncate">@TagValueFormatter.Format("release", Issue.FirstRelease)</div>
+                }
             </div>
-            <div class="flex justify-between">
-                <span class="opacity-60">Last Seen</span>
-                <div class="text-right">
-                    <RelativeTime Value="Issue.LastSeen" />
-                    @if (!string.IsNullOrEmpty(Issue.LastRelease))
-                    {
-                        <div class="text-xs opacity-50 font-mono">@TagValueFormatter.Format("release", Issue.LastRelease)</div>
-                    }
+            <div class="flex flex-col whitespace-nowrap">
+                <div class="flex justify-between">
+                    <span class="opacity-60">Last Seen</span>
+                    <RelativeTime Value="Issue.LastSeen"/>
                 </div>
+                @if (!string.IsNullOrEmpty(Issue.LastRelease))
+                {
+                    <div class="text-xs text-end opacity-50 font-mono truncate">@TagValueFormatter.Format("release", Issue.LastRelease)</div>
+                }
             </div>
             <div class="flex justify-between">
                 <span class="opacity-60">Events</span>
