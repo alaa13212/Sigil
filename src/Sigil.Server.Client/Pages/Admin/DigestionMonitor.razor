@@ -26,7 +26,7 @@
     else if (stats is not null)
     {
         <!-- Summary stats -->
-        <div class="stats shadow w-full bg-base-200">
+        <div class="stats shadow w-full bg-base-100">
             <div class="stat">
                 <div class="stat-title">Pending</div>
                 <div class="stat-value @(stats.PendingCount > 0 ? "text-warning" : "text-success")">@stats.PendingCount</div>
@@ -60,7 +60,7 @@
         <!-- Throughput metrics (rolling 60-min window) -->
         @if (stats.BatchesInLastHour > 0)
         {
-            <div class="stats shadow w-full bg-base-200">
+            <div class="stats shadow w-full bg-base-100">
                 <div class="stat">
                     <div class="stat-title">Events / min</div>
                     <div class="stat-value text-base">@stats.EventsPerMinute</div>
@@ -92,7 +92,7 @@
         <!-- Per-project breakdown -->
         @if (stats.ByProject.Count > 0)
         {
-            <div class="card bg-base-200">
+            <div class="card bg-base-100">
                 <div class="card-body p-4">
                     <h2 class="font-semibold mb-3">By Project</h2>
                     <div class="overflow-x-auto">
@@ -123,7 +123,7 @@
         <!-- Recent parse failures -->
         @if (failures.Count > 0)
         {
-            <div class="card bg-base-200">
+            <div class="card bg-base-100">
                 <div class="card-body p-4">
                     <div class="flex items-center justify-between mb-3">
                         <h2 class="font-semibold">

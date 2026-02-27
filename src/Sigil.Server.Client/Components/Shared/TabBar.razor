@@ -1,11 +1,11 @@
 @typeparam TTab where TTab : struct, Enum
 @inject NavigationManager NavigationManager
 
-<div role="tablist" class="tabs tabs-bordered @Class">
+<div role="tablist" class="tabs @Class mb-0">
     @foreach (var tab in Tabs)
     {
         var isActive = EqualityComparer<TTab>.Default.Equals(tab, ActiveTab);
-        <a role="tab" class="tab @(isActive ? "tab-active" : "")" href="@NavigationManager.GetUriWithQueryParameter("tab", tab.ToString())">
+        <a role="tab" class="tab @(isActive ? "tab-active" : "")" href="@NavigationManager.GetUriWithQueryParameter(TabParamName, tab.ToString())">
             @(TabLabel?.Invoke(tab) ?? tab.ToString())
         </a>
     }
@@ -16,4 +16,5 @@
     [Parameter, EditorRequired] public TTab ActiveTab { get; set; }
     [Parameter] public Func<TTab, string>? TabLabel { get; set; }
     [Parameter] public string? Class { get; set; }
+    [Parameter] public string TabParamName { get; set; } = "tab";
 }

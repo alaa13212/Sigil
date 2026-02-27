@@ -29,7 +29,7 @@ else if (Projects.Count > 1)
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             @foreach (var project in Projects)
             {
-                <a href="/projects/@project.Id/issues" class="card bg-base-200 hover:bg-base-300 transition-colors cursor-pointer">
+                <a href="/projects/@project.Id/issues" class="card bg-base-100 hover:bg-base-200 transition-colors cursor-pointer">
                     <div class="card-body p-5">
                         <h2 class="card-title text-base">@project.Name</h2>
                         <div class="badge badge-ghost badge-sm">@project.Platform</div>

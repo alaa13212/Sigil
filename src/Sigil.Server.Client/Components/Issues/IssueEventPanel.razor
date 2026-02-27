@@ -2,71 +2,84 @@
 
 <!-- Navigation bar -->
 <div class="space-y-4">
-    <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-            <button class="btn btn-ghost btn-sm" disabled="@(Navigation?.PreviousEventId is null || Navigating)"
-                    @onclick="() => OnNavigateEvent.InvokeAsync(Navigation!.PreviousEventId!.Value)">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
-                Older
-            </button>
-            <button class="btn btn-ghost btn-sm" disabled="@(Navigation?.NextEventId is null || Navigating)"
-                    @onclick="() => OnNavigateEvent.InvokeAsync(Navigation!.NextEventId!.Value)">
-                Newer
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
-            </button>
-        </div>
-        <a href="/projects/@ProjectId/issues/@IssueId/events/@EventDetail.Id" class="btn btn-ghost btn-sm">
-            View full event
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-        </a>
-    </div>
-
+    
     <div class="flex items-center gap-3 text-sm opacity-60">
         <SeverityBadge Level="EventDetail.Level" />
         <RelativeTime Value="EventDetail.Timestamp" />
         <span>·</span>
         <span>@EventDetail.Timestamp.ToString("yyyy-MM-dd HH:mm:ss UTC")</span>
+        <div class="grow"></div>
+        <code class="text-xs opacity-50">EventId: @EventDetail.EventId</code>
     </div>
-
-    <div class="alert flex flex-row flex-wrap items-start gap-2">
-        @if (!string.IsNullOrEmpty(EventDetail.ExceptionType))
-        {
-            <div class="font-mono text-sm font-semibold opacity-70">@EventDetail.ExceptionType</div>
-        }
-        @if (!string.IsNullOrEmpty(EventDetail.Message))
-        {
-            <div class="font-mono text-sm break-words grow-1">@EventDetail.Message</div>
-        }
-        else if (string.IsNullOrEmpty(EventDetail.ExceptionType))
-        {
-            <div class="opacity-50 italic text-sm">No message</div>
-        }
-        @if (!string.IsNullOrEmpty(EventDetail.Culprit))
-        {
-            <div class="text-xs opacity-50 mt-0.5">@EventDetail.Culprit</div>
-        }
-    </div>
-
-    @if (EventDetail.StackFrames.Count > 0)
-    {
-        <div class="card bg-base-200">
-            <div class="card-body p-4 overflow-auto">
-                <h2 class="card-title text-base">Stack Trace</h2>
-                <StackTraceViewer Frames="EventDetail.StackFrames" Platform="EventDetail.Platform" />
-            </div>
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+            <button class="btn btn-ghost btn-sm" disabled="@(Navigation?.PreviousEventId is null || Navigating)"
+                    @onclick="() => OnNavigateEvent.InvokeAsync(Navigation!.PreviousEventId!.Value)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                Older
+            </button>
+            <TabBar TTab="EventTab" Tabs="_eventTabs" ActiveTab="_activeEventTab" TabLabel="GetEventTabLabel" TabParamName="etab" Class="tabs-border"/>
+            <button class="btn btn-ghost btn-sm" disabled="@(Navigation?.NextEventId is null || Navigating)"
+                    @onclick="() => OnNavigateEvent.InvokeAsync(Navigation!.NextEventId!.Value)">
+                Newer
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
         </div>
+    </div>
+
+
+
+    @if (_activeEventTab == EventTab.Details)
+    {
+        <div class="alert bg-base-300 flex flex-row flex-wrap items-start gap-2">
+            @if (!string.IsNullOrEmpty(EventDetail.ExceptionType))
+            {
+                <div class="font-mono text-sm font-semibold opacity-70">@EventDetail.ExceptionType</div>
+            }
+            @if (!string.IsNullOrEmpty(EventDetail.Message))
+            {
+                <div class="font-mono text-sm break-words grow-1">@EventDetail.Message</div>
+            }
+            else if (string.IsNullOrEmpty(EventDetail.ExceptionType))
+            {
+                <div class="opacity-50 italic text-sm">No message</div>
+            }
+            @if (!string.IsNullOrEmpty(EventDetail.Culprit))
+            {
+                <div class="text-xs opacity-50 mt-0.5">@EventDetail.Culprit</div>
+            }
+        </div>
+
+        @if (EventDetail.StackFrames.Count > 0)
+        {
+            <div class="card bg-base-300">
+                <div class="card-body p-4 overflow-auto">
+                    <h2 class="card-title text-base">Stack Trace</h2>
+                    <StackTraceViewer Frames="EventDetail.StackFrames" Platform="EventDetail.Platform"/>
+                </div>
+            </div>
+        }
+
+        <EventContextCards EventDetail="EventDetail" ProjectId="ProjectId"/>
     }
-
-    <EventContextCards EventDetail="EventDetail" ProjectId="ProjectId" />
-
-    @if (Breadcrumbs is { Count: > 0 })
+    else if (_activeEventTab == EventTab.Breadcrumbs)
     {
-        <div class="card bg-base-200">
-            <div class="card-body p-4">
-                <h2 class="card-title text-base">Breadcrumbs</h2>
-                <BreadcrumbsViewer Breadcrumbs="Breadcrumbs" EventTimestamp="EventDetail.Timestamp" />
+        @if (Breadcrumbs is { Count: > 0 })
+        {
+            <div class="card bg-base-300">
+                <div class="card-body p-4">
+                    <BreadcrumbsViewer Breadcrumbs="Breadcrumbs" EventTimestamp="EventDetail.Timestamp"/>
+                </div>
             </div>
-        </div>
+        }
+        else
+        {
+            <EmptyState Title="No breadcrumbs" Description="This event has no breadcrumbs."/>
+        }
+    }
+    else if (_activeEventTab == EventTab.Raw)
+    {
+        <RawJsonViewer EventId="EventDetail.Id" AutoLoad="true" @key="EventDetail.Id"/>
     }
 </div>
 
@@ -78,4 +91,23 @@
     [Parameter] public List<BreadcrumbResponse>? Breadcrumbs { get; set; }
     [Parameter] public bool Navigating { get; set; }
     [Parameter] public EventCallback<long> OnNavigateEvent { get; set; }
+    [SupplyParameterFromQuery(Name = "etab")] public string? EventTabParam { get; set; }
+
+    private enum EventTab { Details, Breadcrumbs, Raw }
+    private static readonly EventTab[] _eventTabs = [EventTab.Details, EventTab.Breadcrumbs, EventTab.Raw];
+
+    private EventTab _activeEventTab => EventTabParam switch
+    {
+        nameof(EventTab.Breadcrumbs) => EventTab.Breadcrumbs,
+        nameof(EventTab.Raw)         => EventTab.Raw,
+        _                            => EventTab.Details
+    };
+
+    private static string GetEventTabLabel(EventTab tab) => tab switch
+    {
+        EventTab.Details     => "Details",
+        EventTab.Breadcrumbs => "Breadcrumbs",
+        EventTab.Raw         => "Raw JSON",
+        _                    => tab.ToString()
+    };
 }

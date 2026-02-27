@@ -84,7 +84,7 @@
                         var ppUrl = $"/projects/{_currentProjectId.Value}/{path}";
                         var ppName = name;
                         var ni = idx++;
-                        <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-200 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-2"
+                        <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-300 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-2"
                            href="@ppUrl" @onclick='() => SaveRecent(ppName, ppUrl, "page")'>
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -100,7 +100,7 @@
                     var gpUrl = gp.Url;
                     var gpName = gp.Name;
                     var ni = idx++;
-                    <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-200 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-2"
+                    <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-300 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-2"
                        href="@gpUrl" @onclick='() => SaveRecent(gpName, gpUrl, "page")'>
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -125,7 +125,7 @@
                             ? (issue.Title ?? "(no title)")
                             : $"{issue.ExceptionType}: {issue.Title ?? "(no title)"}";
                         var ni = idx++;
-                        <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-200 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-3"
+                        <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-300 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-3"
                            href="@issueUrl" @onclick='() => SaveRecent(issueLabel, issueUrl, "issue")'>
                             <SeverityBadge Level="issue.Level" />
                             <div class="min-w-0 flex-1">
@@ -149,7 +149,7 @@
                     {
                         var releaseUrl = $"/projects/{release.ProjectId}/releases/{release.Id}";
                         var ni = idx++;
-                        <a id="sr-@ni" class="block w-full text-left px-4 py-2.5 hover:bg-base-200 @(ni == _focusedIndex ? "bg-base-200" : "")"
+                        <a id="sr-@ni" class="block w-full text-left px-4 py-2.5 hover:bg-base-300 @(ni == _focusedIndex ? "bg-base-200" : "")"
                            href="@releaseUrl" @onclick='() => SaveRecent(release.RawName, releaseUrl, "release")'>
                             <span class="text-sm font-mono">@release.RawName</span>
                         </a>
@@ -164,7 +164,7 @@
                         var tagUrl = $"/projects/{tag.ProjectId}/issues?q={Uri.EscapeDataString(tag.Key + ":" + tag.Value)}";
                         var tagLabel = $"{tag.Key}:{tag.Value}";
                         var ni = idx++;
-                        <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-200 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-2"
+                        <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-300 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-2"
                            href="@tagUrl" @onclick='() => SaveRecent(tagLabel, tagUrl, "tag")'>
                             <span class="text-sm font-mono flex-1"><span class="opacity-60">@tag.Key:</span>@tag.Value</span>
                             <span class="text-xs opacity-50">@tag.IssueCount @(tag.IssueCount == 1 ? "issue" : "issues")</span>
@@ -184,7 +184,7 @@
                         var pgUrl = pg.Url;
                         var pgName = pg.Name;
                         var ni = idx++;
-                        <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-200 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-2"
+                        <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-300 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-2"
                            href="@pgUrl" @onclick='() => SaveRecent(pgName, pgUrl, "page")'>
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />

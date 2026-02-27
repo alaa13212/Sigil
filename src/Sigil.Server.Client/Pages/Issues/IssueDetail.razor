@@ -64,30 +64,31 @@ else
             </div>
 
             <!-- Tab bar -->
-            <TabBar TTab="Tab" Tabs="_visibleTabs" ActiveTab="_activeTab" TabLabel="GetTabLabel" />
-
-            <!-- Tab content -->
-            @if (_activeTab == Tab.SuggestedEvent && eventDetail is not null)
-            {
-                <IssueEventPanel ProjectId="ProjectId" IssueId="IssueId"
-                                 EventDetail="eventDetail" Navigation="navigation"
-                                 Breadcrumbs="breadcrumbs" Navigating="eventNavigating"
-                                 OnNavigateEvent="NavigateEvent" />
-            }
-            @if (_activeTab == Tab.Events)
-            {
-                <IssueEventsTab ProjectId="ProjectId" IssueId="IssueId" />
-            }
-            @if (_activeTab == Tab.Activity)
-            {
-                <IssueActivityTab IssueId="IssueId" />
-            }
-            @if (_activeTab == Tab.Similar)
-            {
-                <IssueSimilarTab ProjectId="ProjectId" IssueId="IssueId"
-                                 MergeSet="issue.MergeSet" CurrentUserId="currentUserId"
-                                 OnMergeChanged="LoadIssue" />
-            }
+            <TabBar TTab="Tab" Tabs="_visibleTabs" ActiveTab="_activeTab" TabLabel="GetTabLabel" Class="tabs-lift" />
+            <div class="bg-base-100 border-base-300 p-6">
+                <!-- Tab content -->
+                @if (_activeTab == Tab.EventDetails && eventDetail is not null)
+                {
+                    <IssueEventPanel ProjectId="ProjectId" IssueId="IssueId"
+                                     EventDetail="eventDetail" Navigation="navigation"
+                                     Breadcrumbs="breadcrumbs" Navigating="eventNavigating"
+                                     OnNavigateEvent="NavigateEvent" />
+                }
+                @if (_activeTab == Tab.Events)
+                {
+                    <IssueEventsTab ProjectId="ProjectId" IssueId="IssueId" />
+                }
+                @if (_activeTab == Tab.Activity)
+                {
+                    <IssueActivityTab IssueId="IssueId" />
+                }
+                @if (_activeTab == Tab.Similar)
+                {
+                    <IssueSimilarTab ProjectId="ProjectId" IssueId="IssueId"
+                                     MergeSet="issue.MergeSet" CurrentUserId="currentUserId"
+                                     OnMergeChanged="LoadIssue" />
+                }
+            </div>
         </div>
 
         <!-- Right sidebar -->
@@ -99,6 +100,8 @@ else
     [Parameter] public int ProjectId { get; set; }
     [Parameter] public int IssueId { get; set; }
     [SupplyParameterFromQuery(Name = "tab")] public string? TabParam { get; set; }
+    [SupplyParameterFromQuery(Name = "event")] public long? EventParam { get; set; }
+    [SupplyParameterFromQuery(Name = "etab")] public string? EventTabParam { get; set; }
     [SupplyParameterFromQuery(Name = "no-redirect")] public bool NoRedirect { get; set; }
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
 
@@ -111,10 +114,11 @@ else
     private Tab _activeTab = Tab.Events;
     private bool isBookmarked;
     private Guid currentUserId;
+    private int _loadedIssueId;
 
-    private enum Tab { SuggestedEvent, Events, Activity, Similar }
+    private enum Tab { EventDetails, Events, Activity, Similar }
 
-    private static readonly Tab[] _allTabs = [Tab.SuggestedEvent, Tab.Events, Tab.Activity, Tab.Similar];
+    private static readonly Tab[] _allTabs = [Tab.EventDetails, Tab.Events, Tab.Activity, Tab.Similar];
     private static readonly Tab[] _tabsWithoutEvent = [Tab.Events, Tab.Activity, Tab.Similar];
 
     private IReadOnlyList<Tab> _visibleTabs =>
@@ -125,6 +129,26 @@ else
         var authState = await AuthState;
         var userIdStr = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         currentUserId = userIdStr is not null ? Guid.Parse(userIdStr) : Guid.Empty;
+
+        // If the issue is already loaded and only event/tab params changed, skip full reload
+        if (_loadedIssueId == IssueId && issue is not null)
+        {
+            // If EventParam matches what's already loaded, just update the tab
+            if (EventParam.HasValue && eventDetail?.Id == EventParam.Value)
+            {
+                _activeTab = ResolveTab();
+                return;
+            }
+
+            // If EventParam changed, load just that event
+            if (EventParam.HasValue)
+            {
+                await LoadEvent(EventParam.Value);
+            }
+
+            _activeTab = ResolveTab();
+            return;
+        }
 
         loading = true;
         breadcrumbs = [];
@@ -139,31 +163,30 @@ else
             return;
         }
 
-        _activeTab = TabParam?.ToLower() switch
-        {
-            "suggestedevent" => issue?.SuggestedEvent is not null ? Tab.SuggestedEvent : Tab.Events,
-            "events"         => Tab.Events,
-            "activity"       => Tab.Activity,
-            "similar"        => Tab.Similar,
-            _                => issue?.SuggestedEvent is not null ? Tab.SuggestedEvent : Tab.Events
-        };
-
+        _activeTab = ResolveTab();
         loading = false;
     }
+
+    private Tab ResolveTab() => TabParam?.ToLower() switch
+    {
+        "eventdetails"   => eventDetail is not null ? Tab.EventDetails : Tab.Events,
+        "events"         => Tab.Events,
+        "activity"       => Tab.Activity,
+        "similar"        => Tab.Similar,
+        _                => eventDetail is not null ? Tab.EventDetails : Tab.Events
+    };
 
     private async Task LoadIssue()
     {
         try
         {
             issue = await IssueService.GetIssueDetailAsync(IssueId);
-            if (issue?.SuggestedEvent is not null)
+            _loadedIssueId = IssueId;
+
+            var targetEventId = EventParam ?? issue?.SuggestedEvent?.Id;
+            if (issue is not null && targetEventId.HasValue)
             {
-                var combined = await EventService.GetIssueEventDetailAsync(IssueId, issue.SuggestedEvent.Id);
-                eventDetail = combined?.Event;
-                navigation = issue.MergeSet is not null && issue.MergeSet.PrimaryIssueId == IssueId && combined is not null
-                    ? await EventService.GetMergeGroupEventNavigationAsync(issue.MergeSet.Id, issue.SuggestedEvent.Id)
-                    : combined?.Navigation;
-                breadcrumbs = combined?.Breadcrumbs ?? [];
+                await LoadEvent(targetEventId.Value);
             }
             else
             {
@@ -183,6 +206,16 @@ else
         }
     }
 
+    private async Task LoadEvent(long eventId)
+    {
+        var combined = await EventService.GetIssueEventDetailAsync(IssueId, eventId);
+        eventDetail = combined?.Event;
+        navigation = issue?.MergeSet is not null && issue.MergeSet.PrimaryIssueId == IssueId && combined is not null
+            ? await EventService.GetMergeGroupEventNavigationAsync(issue.MergeSet.Id, eventId)
+            : combined?.Navigation;
+        breadcrumbs = combined?.Breadcrumbs ?? [];
+    }
+
     private async Task ToggleBookmark()
     {
         isBookmarked = await BookmarkService.ToggleBookmarkAsync(IssueId, currentUserId);
@@ -193,15 +226,12 @@ else
         eventNavigating = true;
         try
         {
-            var combined = await EventService.GetIssueEventDetailAsync(IssueId, eventId);
-            if (combined is not null)
-            {
-                eventDetail = combined.Event;
-                navigation = issue?.MergeSet is not null && issue.MergeSet.PrimaryIssueId == IssueId
-                    ? await EventService.GetMergeGroupEventNavigationAsync(issue.MergeSet.Id, eventId)
-                    : combined.Navigation;
-                breadcrumbs = combined.Breadcrumbs;
-            }
+            await LoadEvent(eventId);
+            Navigation.NavigateTo(
+                Navigation.GetUriWithQueryParameters(
+                    $"/projects/{ProjectId}/issues/{IssueId}",
+                    new Dictionary<string, object?> { ["tab"] = "SuggestedEvent", ["event"] = eventId }),
+                replace: false);
         }
         catch
         {
@@ -217,8 +247,8 @@ else
 
     private static string GetTabLabel(Tab tab) => tab switch
     {
-        Tab.SuggestedEvent => "Event",
-        Tab.Events         => "Events",
+        Tab.EventDetails => "Details",
+        Tab.Events        => "Events",
         Tab.Activity       => "Activity",
         Tab.Similar        => "Similar",
         _                  => tab.ToString()

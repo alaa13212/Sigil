@@ -76,7 +76,10 @@ else if (_similarIssues.Count == 0)
 }
 else
 {
-    <div class="divider"></div>
+    @if(MergeSet is not null)
+    {
+        <div class="divider"></div>
+    }
     <h1 class="text-2xl">Similar Issues</h1>
     <div class="space-y-2">
         <p class="text-sm opacity-60">Issues with the same title, exception type, or culprit. Consider merging related ones.</p>

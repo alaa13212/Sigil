@@ -3,7 +3,7 @@
 
 <div class="columns-1 md:columns-xl space-y-4 gap 4">
     <!-- Context -->
-    <div class="card bg-base-200 break-inside-avoid">
+    <div class="card bg-base-300 break-inside-avoid">
         <div class="card-body p-4">
             <h2 class="card-title text-base">Context</h2>
             <div class="overflow-x-auto">
@@ -40,7 +40,7 @@
     <!-- User -->
     @if (EventDetail.User is not null)
     {
-        <div class="card bg-base-200 break-inside-avoid">
+        <div class="card bg-base-300 break-inside-avoid">
             <div class="card-body p-4">
                 <h2 class="card-title text-base">User</h2>
                 
@@ -102,7 +102,7 @@
     <!-- Tags -->
     @if (EventDetail.Tags.Count > 0)
     {
-        <div class="card bg-base-200 break-inside-avoid">
+        <div class="card bg-base-300 break-inside-avoid">
             <div class="card-body p-4">
                 <h2 class="card-title text-base">Tags</h2>
                 <div class="overflow-x-auto">
@@ -138,7 +138,7 @@
     <!-- Extra -->
     @if (EventDetail.Extra is { Count: > 0 })
     {
-        <div class="card bg-base-200 break-inside-avoid">
+        <div class="card bg-base-300 break-inside-avoid">
             <div class="card-body p-4">
                 <h2 class="card-title text-base">Extra</h2>
                 <div class="overflow-x-auto">

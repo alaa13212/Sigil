@@ -52,7 +52,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             @foreach (var team in Teams)
             {
-                <a href="/teams/@team.Id" class="card bg-base-200 hover:bg-base-300 transition-colors cursor-pointer">
+                <a href="/teams/@team.Id" class="card bg-base-100 hover:bg-base-200 transition-colors cursor-pointer">
                     <div class="card-body p-5">
                         <h2 class="card-title text-base">@team.Name</h2>
                         <div class="flex gap-4 text-sm opacity-70">
@@ -65,7 +65,7 @@
             
             @if (showCreate)
             {
-                <form class="card bg-base-200" @onsubmit="CreateTeam">
+                <form class="card bg-base-100" @onsubmit="CreateTeam">
                     <div class="card-body p-5">
                         <div class="join w-full">
                             <input type="text" class="input join-item flex-1" placeholder="Team name"

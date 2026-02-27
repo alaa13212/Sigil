@@ -1,15 +1,22 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Auth;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class EfDatabaseMigrator(SigilDbContext dbContext) : IDatabaseMigrator
+internal class EfDatabaseMigrator(
+    SigilDbContext dbContext,
+    IServiceProvider serviceProvider
+) : IDatabaseMigrator
 {
     public async Task MigrateAsync()
     {
         await dbContext.Database.MigrateAsync();
+
+        foreach (IAsyncStartupInitializer service in serviceProvider.GetServices<IAsyncStartupInitializer>()) 
+            await service.InitializeAsync();
     }
 
     public async Task<DbConnectionStatus> CheckConnectionAsync()

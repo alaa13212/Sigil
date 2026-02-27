@@ -39,19 +39,19 @@ else
         </div>
 
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div class="stat bg-base-200 rounded-box p-4">
+            <div class="stat bg-base-100 rounded-box p-4">
                 <div class="stat-title">Total Events</div>
                 <div class="stat-value text-2xl">@release.TotalEvents.ToString("N0")</div>
             </div>
-            <div class="stat bg-base-200 rounded-box p-4">
+            <div class="stat bg-base-100 rounded-box p-4">
                 <div class="stat-title">Affected Issues</div>
                 <div class="stat-value text-2xl">@release.AffectedIssues.ToString("N0")</div>
             </div>
-            <div class="stat bg-base-200 rounded-box p-4">
+            <div class="stat bg-base-100 rounded-box p-4">
                 <div class="stat-title">New Issues</div>
                 <div class="stat-value text-2xl @(release.NewIssues > 0 ? "text-error" : "")">@release.NewIssues.ToString("N0")</div>
             </div>
-            <div class="stat bg-base-200 rounded-box p-4">
+            <div class="stat bg-base-100 rounded-box p-4">
                 <div class="stat-title">First Seen</div>
                 <div class="stat-value text-base"><RelativeTime Value="release.FirstSeenAt" /></div>
             </div>
@@ -59,7 +59,7 @@ else
 
         @if (_releaseHistogram.Count > 0)
         {
-            <div class="card bg-base-200">
+            <div class="card bg-base-100">
                 <div class="card-body p-4">
                     <h2 class="card-title text-base mb-2">Event Activity (14 days)</h2>
                     <Sparkline Data="_releaseHistogram" Width="560" Height="48" Class="w-full text-primary" />
@@ -69,7 +69,7 @@ else
 
         @if (release.TopIssues.Count > 0)
         {
-            <div class="card bg-base-200">
+            <div class="card bg-base-100">
                 <div class="card-body p-4">
                     <h2 class="card-title text-base mb-2">Top Issues</h2>
                 </div>

@@ -70,7 +70,7 @@ else
                 {
                     @foreach (var frame in group.Frames)
                     {
-                        <div class="bg-base-200 rounded px-3 py-1 text-sm font-mono">
+                        <div class="px-3 py-1 text-sm font-mono">
                             <div class="font-semibold">@MethodName(frame)</div>
                             @if (!string.IsNullOrEmpty(frame.Filename))
                             {
@@ -94,7 +94,7 @@ else
         <div class="space-y-1">
             @foreach (var frame in Frames)
             {
-                var bgClass = frame.InApp ? "bg-base-200" : "opacity-50";
+                var bgClass = frame.InApp ? "" : "opacity-50";
                 <div class="@bgClass rounded px-3 py-1 text-sm font-mono">
                     <div class="font-semibold">@MethodName(frame)</div>
                     @if (!string.IsNullOrEmpty(frame.Filename))

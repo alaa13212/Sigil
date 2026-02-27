@@ -98,9 +98,9 @@ internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSeri
     }
 
     private static string? GetMessage(SentryEvent sentryEvent) => sentryEvent switch {
-        { LogEntry.Formatted: not null, Threads.Values.Count: > 0 } => sentryEvent.LogEntry.Formatted, // TODO Format
+        { LogEntry.Formatted: not null, Threads.Values.Count: > 0 } => sentryEvent.LogEntry.Formatted,
         { LogEntry.Message: not null, Threads.Values.Count: > 0 } => sentryEvent.LogEntry.Message,
-        { Message.Formatted: not null, Threads.Values.Count: > 0 } => sentryEvent.Message.Formatted, // TODO Format
+        { Message.Formatted: not null, Threads.Values.Count: > 0 } => sentryEvent.Message.Formatted,
         { Message.Message: not null, Threads.Values.Count: > 0 } => sentryEvent.Message.Message,
         { Exception.Values: [.., var last] } => last.Value,
         _ => null

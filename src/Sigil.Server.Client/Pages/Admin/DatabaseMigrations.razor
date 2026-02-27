@@ -23,7 +23,7 @@
     else
     {
         <!-- Connection status -->
-        <div class="card bg-base-200">
+        <div class="card bg-base-100">
             <div class="card-body p-4 space-y-3">
                 <h2 class="font-semibold">Connection</h2>
 
@@ -50,7 +50,7 @@
         <!-- Pending migrations -->
         @if (status.Status == DbConnectionStatus.Connected)
         {
-            <div class="card bg-base-200">
+            <div class="card bg-base-100">
                 <div class="card-body p-4 space-y-3">
                     <h2 class="font-semibold">Pending Migrations</h2>
 
@@ -93,7 +93,7 @@
             <!-- Applied migrations -->
             @if (status.Applied.Count > 0)
             {
-                <div class="collapse collapse-arrow bg-base-200">
+                <div class="collapse collapse-arrow bg-base-100">
                     <input type="checkbox" />
                     <div class="collapse-title font-semibold text-sm">Applied Migrations (@status.Applied.Count)</div>
                     <div class="collapse-content space-y-1">
