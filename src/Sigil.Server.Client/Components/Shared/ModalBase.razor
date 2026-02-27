@@ -1,5 +1,5 @@
-<div class="modal @(IsOpen ? "modal-open" : "")">
-    <div class="modal-box @SizeClass">
+<div class="modal @(IsOpen ? "modal-open" : "") max-md:modal-bottom md:items-start">
+    <div class="modal-box @SizeClass @BoxClass">
         @if (!string.IsNullOrEmpty(Title))
         {
             <h3 class="font-bold text-lg mb-4">@Title</h3>
@@ -16,6 +16,8 @@
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public bool CloseOnBackdropClick { get; set; } = true;
     [Parameter] public ModalSize Size { get; set; } = ModalSize.Medium;
+
+    [Parameter] public string BoxClass { get; set; } = "";
 
     private string SizeClass => Size switch
     {

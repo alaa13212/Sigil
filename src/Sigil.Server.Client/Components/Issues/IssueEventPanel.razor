@@ -28,18 +28,18 @@
         <span>@EventDetail.Timestamp.ToString("yyyy-MM-dd HH:mm:ss UTC")</span>
     </div>
 
-    <div class="alert flex-col items-start gap-0.5">
+    <div class="alert flex flex-row flex-wrap items-start gap-2">
         @if (!string.IsNullOrEmpty(EventDetail.ExceptionType))
         {
             <div class="font-mono text-sm font-semibold opacity-70">@EventDetail.ExceptionType</div>
         }
         @if (!string.IsNullOrEmpty(EventDetail.Message))
         {
-            <span class="font-mono text-sm break-words">@EventDetail.Message</span>
+            <div class="font-mono text-sm break-words grow-1">@EventDetail.Message</div>
         }
         else if (string.IsNullOrEmpty(EventDetail.ExceptionType))
         {
-            <span class="opacity-50 italic text-sm">No message</span>
+            <div class="opacity-50 italic text-sm">No message</div>
         }
         @if (!string.IsNullOrEmpty(EventDetail.Culprit))
         {

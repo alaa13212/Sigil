@@ -17,4 +17,7 @@ public record IssueQueryParams
 
     // Client-side only: when true, server uses the current user's ID as BookmarkedByUserId
     public bool Bookmarked { get; init; }
+
+    // Server-side: viewer user ID for unviewed status computation
+    public Guid? ViewerUserId { get; init; }
 }

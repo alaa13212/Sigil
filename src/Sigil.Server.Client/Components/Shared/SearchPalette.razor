@@ -1,0 +1,525 @@
+@implements IAsyncDisposable
+@using Sigil.Application.Models.Search
+@using System.Text.Json
+@using System.Text.RegularExpressions
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject ISearchService SearchService
+@inject IUserPreferenceService Preferences
+
+<ModalBase IsOpen="_isOpen" OnClose="Close" Size="ModalSize.Large" BoxClass="relative flex flex-col max-md:h-[85vh] md:mt-[10vh] md:h-[clamp(13rem,80vh,80vh)] md:w-11/12">
+    <!-- Search input -->
+    <div class="flex items-baseline gap-2 pb-3 border-b border-base-300 -mx-4 px-4 -mt-1">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input id="search-palette-input" type="text" placeholder="Search issues, releases, tags, pages..."
+               class="flex-1 bg-transparent outline-none text-lg"
+               value="@_query" @oninput="OnQueryInput" />
+        @if (!string.IsNullOrEmpty(_query))
+        {
+            <button class="btn btn-xs btn-ghost btn-circle" @onclick="ResetState">×</button>
+        }
+        <span class="flex items-center gap-1 text opacity-40">
+            <kbd class="kbd kbd">↵</kbd> Go
+        </span>
+        <span class="flex items-center gap-1 text opacity-40">
+            <kbd class="kbd kbd">↑</kbd>/<kbd class="kbd kbd">↓</kbd> Select
+        </span>
+        <span class="flex items-center gap-1 text opacity-40">
+            <kbd class="kbd kbd">ESC</kbd> Close
+        </span>
+    </div>
+
+    <!-- Scope toggle (only when on a project page) -->
+    @if (_currentProjectId.HasValue)
+    {
+        <div class="flex gap-1 py-2 border-b border-base-300 -mx-4 px-4">
+            <button class="btn btn @(_scopeAll ? "" : "btn-primary")" @onclick='() => SetScope(false)'>
+                Current Project
+            </button>
+            <button class="btn btn @(_scopeAll ? "btn-primary" : "")" @onclick='() => SetScope(true)'>
+                All
+            </button>
+        </div>
+    }
+
+    <div class="flex-grow overflow-x-hidden overflow-y-auto">
+
+        <!-- Results -->
+        <div class="max-h-[90vh] overflow-y-auto -mx-4">
+            @{ int idx = 0; }
+            @if (_loading)
+            {
+                <div class="flex justify-center py-6"><span class="loading loading-spinner loading-sm"></span></div>
+            }
+            else if (string.IsNullOrWhiteSpace(_query))
+            {
+                @if (_recents.Count > 0)
+                {
+                    <div class="flex items-center px-4 py-1.5">
+                        <span class="text-xs font-semibold opacity-50 uppercase tracking-wide flex-1">Recent</span>
+                        <button class="text-xs opacity-40 hover:opacity-70 transition-opacity" @onclick="ClearAllRecentsAsync">Clear all</button>
+                    </div>
+                    @foreach (var recent in _recents)
+                    {
+                        var r = recent;
+                        var ni = idx++;
+                        <div id="sr-@ni" class="flex items-center gap-2 px-4 py-2.5 hover:bg-base-200 @(ni == _focusedIndex ? "bg-base-200" : "") group">
+                            <span class="badge badge-xs badge-ghost opacity-60 shrink-0">@r.Type</span>
+                            <a class="flex-1 min-w-0 text-left" href="@r.Url" @onclick="() => SaveRecent(r.Label, r.Url, r.Type)">
+                                <span class="text-sm truncate block">@r.Label</span>
+                            </a>
+                            <button class="btn btn-xs btn-ghost btn-circle opacity-0 group-hover:opacity-100 shrink-0 transition-opacity"
+                                    @onclick="() => RemoveRecentAsync(r)">×</button>
+                        </div>
+                    }
+                }
+
+                @if (_currentProjectId.HasValue && !_scopeAll)
+                {
+                    <div class="px-4 py-1.5 text-xs font-semibold opacity-50 uppercase tracking-wide">Project Pages</div>
+                    @foreach (var (name, path) in ProjectSettingsPages)
+                    {
+                        var ppUrl = $"/projects/{_currentProjectId.Value}/{path}";
+                        var ppName = name;
+                        var ni = idx++;
+                        <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-200 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-2"
+                           href="@ppUrl" @onclick='() => SaveRecent(ppName, ppUrl, "page")'>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                            <span class="text-sm">@name</span>
+                        </a>
+                    }
+                }
+
+                <div class="px-4 py-1.5 text-xs font-semibold opacity-50 uppercase tracking-wide">Pages</div>
+                @foreach (var gp in GlobalPages)
+                {
+                    var gpUrl = gp.Url;
+                    var gpName = gp.Name;
+                    var ni = idx++;
+                    <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-200 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-2"
+                       href="@gpUrl" @onclick='() => SaveRecent(gpName, gpUrl, "page")'>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        <span class="text-sm">@gp.Name</span>
+                    </a>
+                }
+            }
+            else if (HasNoResults)
+            {
+                <div class="text-sm opacity-50 text-center py-6">No results for "@_query"</div>
+            }
+            else
+            {
+                @if (_results is not null && _results.Issues.Count > 0)
+                {
+                    <div class="px-4 py-1.5 text-xs font-semibold opacity-50 uppercase tracking-wide">Issues</div>
+                    @foreach (var issue in _results.Issues)
+                    {
+                        var issueUrl = $"/projects/{issue.ProjectId}/issues/{issue.Id}";
+                        var issueLabel = string.IsNullOrEmpty(issue.ExceptionType)
+                            ? (issue.Title ?? "(no title)")
+                            : $"{issue.ExceptionType}: {issue.Title ?? "(no title)"}";
+                        var ni = idx++;
+                        <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-200 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-3"
+                           href="@issueUrl" @onclick='() => SaveRecent(issueLabel, issueUrl, "issue")'>
+                            <SeverityBadge Level="issue.Level" />
+                            <div class="min-w-0 flex-1">
+                                <div class="text-sm font-medium truncate">
+                                    @if (!string.IsNullOrEmpty(issue.ExceptionType))
+                                    {
+                                        <span class="opacity-70">@issue.ExceptionType: </span>
+                                    }
+                                    @(issue.Title ?? "(no title)")
+                                </div>
+                            </div>
+                            <StatusBadge Status="issue.Status" />
+                        </a>
+                    }
+                }
+
+                @if (_results is not null && _results.Releases.Count > 0)
+                {
+                    <div class="px-4 py-1.5 text-xs font-semibold opacity-50 uppercase tracking-wide">Releases</div>
+                    @foreach (var release in _results.Releases)
+                    {
+                        var releaseUrl = $"/projects/{release.ProjectId}/releases/{release.Id}";
+                        var ni = idx++;
+                        <a id="sr-@ni" class="block w-full text-left px-4 py-2.5 hover:bg-base-200 @(ni == _focusedIndex ? "bg-base-200" : "")"
+                           href="@releaseUrl" @onclick='() => SaveRecent(release.RawName, releaseUrl, "release")'>
+                            <span class="text-sm font-mono">@release.RawName</span>
+                        </a>
+                    }
+                }
+
+                @if (_results is not null && _results.Tags.Count > 0)
+                {
+                    <div class="px-4 py-1.5 text-xs font-semibold opacity-50 uppercase tracking-wide">Tags</div>
+                    @foreach (var tag in _results.Tags)
+                    {
+                        var tagUrl = $"/projects/{tag.ProjectId}/issues?q={Uri.EscapeDataString(tag.Key + ":" + tag.Value)}";
+                        var tagLabel = $"{tag.Key}:{tag.Value}";
+                        var ni = idx++;
+                        <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-200 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-2"
+                           href="@tagUrl" @onclick='() => SaveRecent(tagLabel, tagUrl, "tag")'>
+                            <span class="text-sm font-mono flex-1"><span class="opacity-60">@tag.Key:</span>@tag.Value</span>
+                            <span class="text-xs opacity-50">@tag.IssueCount @(tag.IssueCount == 1 ? "issue" : "issues")</span>
+                            @if (!_currentProjectId.HasValue || _scopeAll)
+                            {
+                                <span class="badge badge-xs badge-ghost">@tag.ProjectName</span>
+                            }
+                        </a>
+                    }
+                }
+
+                @if (_pageResults.Count > 0)
+                {
+                    <div class="px-4 py-1.5 text-xs font-semibold opacity-50 uppercase tracking-wide">Pages</div>
+                    @foreach (var pg in _pageResults)
+                    {
+                        var pgUrl = pg.Url;
+                        var pgName = pg.Name;
+                        var ni = idx++;
+                        <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-200 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-2"
+                           href="@pgUrl" @onclick='() => SaveRecent(pgName, pgUrl, "page")'>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                            <span class="text-sm">@pg.Name</span>
+                        </a>
+                    }
+                }
+            }
+        </div>
+    </div>
+</ModalBase>
+
+@code {
+    private record StaticPage(string Name, string Url);
+    private record RecentItem(string Label, string Url, string Type);
+
+    private const string RecentsKey = "search.recents";
+    private const int MaxRecents = 8;
+
+    private static readonly StaticPage[] GlobalPages =
+    [
+        new("Home", "/"),
+        new("Organization / Teams", "/teams"),
+        new("Organization / Create Project", "/projects/create"),
+        new("Admin / Users", "/admin/users"),
+        new("Admin / Migrations", "/admin/migrations"),
+        new("Admin / Digestion", "/admin/digestion"),
+    ];
+
+    private static readonly (string Name, string Path)[] ProjectSettingsPages =
+    [
+        ("Project Issues", "issues"),
+        ("Project Settings", "settings"),
+        ("Alert Rules", "settings/alerts"),
+        ("Inbound Filters", "settings/filters"),
+        ("Auto Tags", "settings/tags"),
+        ("Normalization Rules", "settings/normalization"),
+    ];
+
+    private static readonly Regex ProjectIdRegex = new(@"^/projects/(\d+)(?:/|$)", RegexOptions.Compiled);
+
+    private bool _isOpen;
+    private bool _scopeAll;
+    private int? _currentProjectId;
+    private string _query = string.Empty;
+    private bool _loading;
+    private SearchResultsResponse? _results;
+    private List<StaticPage> _pageResults = [];
+    private List<RecentItem> _recents = [];
+    private List<(string Url, string Label, string Type)> _navItems = [];
+    private int _focusedIndex = -1;
+    private System.Timers.Timer? _debounce;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<SearchPalette>? _dotNetRef;
+
+    private bool HasNoResults =>
+        (_results is null || (_results.Issues.Count == 0 && _results.Releases.Count == 0 && _results.Tags.Count == 0))
+        && _pageResults.Count == 0;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            Navigation.LocationChanged += OnLocationChanged;
+            ParseProjectIdFromUri(Navigation.Uri);
+
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/search-palette.js");
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await _module.InvokeVoidAsync("register", _dotNetRef);
+
+            await LoadRecentsAsync();
+        }
+    }
+
+    private async Task LoadRecentsAsync()
+    {
+        var json = await Preferences.GetAsync(RecentsKey);
+        if (!string.IsNullOrEmpty(json))
+        {
+            try { _recents = JsonSerializer.Deserialize<List<RecentItem>>(json) ?? []; }
+            catch { _recents = []; }
+        }
+        RebuildNavItems();
+        StateHasChanged();
+    }
+
+    private async Task SaveRecent(string label, string url, string type)
+    {
+        _recents.RemoveAll(r => r.Url == url);
+        _recents.Insert(0, new RecentItem(label, url, type));
+        if (_recents.Count > MaxRecents)
+            _recents.RemoveRange(MaxRecents, _recents.Count - MaxRecents);
+        await Preferences.SetAsync(RecentsKey, JsonSerializer.Serialize(_recents));
+    }
+
+    private async Task RemoveRecentAsync(RecentItem item)
+    {
+        _recents.Remove(item);
+        await Preferences.SetAsync(RecentsKey, JsonSerializer.Serialize(_recents));
+        RebuildNavItems();
+        StateHasChanged();
+    }
+
+    private async Task ClearAllRecentsAsync()
+    {
+        _recents.Clear();
+        await Preferences.SetAsync(RecentsKey, "[]");
+        RebuildNavItems();
+        StateHasChanged();
+    }
+
+    private void RebuildNavItems()
+    {
+        _navItems.Clear();
+        _focusedIndex = -1;
+
+        if (string.IsNullOrWhiteSpace(_query))
+        {
+            foreach (var r in _recents)
+                _navItems.Add((r.Url, r.Label, r.Type));
+            
+            if (_currentProjectId.HasValue && !_scopeAll)
+            {
+                foreach (var (name, path) in ProjectSettingsPages)
+                    _navItems.Add(($"/projects/{_currentProjectId.Value}/{path}", name, "page"));
+            }
+            
+            foreach (var gp in GlobalPages)
+                _navItems.Add((gp.Url, gp.Name, "page"));
+        }
+        else
+        {
+            if (_results != null)
+            {
+                foreach (var issue in _results.Issues)
+                {
+                    var label = string.IsNullOrEmpty(issue.ExceptionType)
+                        ? (issue.Title ?? "(no title)")
+                        : $"{issue.ExceptionType}: {issue.Title ?? "(no title)"}";
+                    _navItems.Add(($"/projects/{issue.ProjectId}/issues/{issue.Id}", label, "issue"));
+                }
+                foreach (var release in _results.Releases)
+                    _navItems.Add(($"/projects/{release.ProjectId}/releases/{release.Id}", release.RawName, "release"));
+                foreach (var tag in _results.Tags)
+                    _navItems.Add(($"/projects/{tag.ProjectId}/issues?q={Uri.EscapeDataString(tag.Key + ":" + tag.Value)}", $"{tag.Key}:{tag.Value}", "tag"));
+            }
+            foreach (var pg in _pageResults)
+                _navItems.Add((pg.Url, pg.Name, "page"));
+        }
+    }
+
+    [JSInvokable]
+    public void HandleKeyNavigation(int direction)
+    {
+        _focusedIndex = Math.Clamp(_focusedIndex + direction, 0, _navItems.Count - 1);
+        _ = ScrollFocusedIntoViewAsync();
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void HandleEnterKey()
+    {
+        if (_focusedIndex >= 0 && _focusedIndex < _navItems.Count)
+        {
+            var (url, label, type) = _navItems[_focusedIndex];
+            InvokeAsync(() => SaveRecent(label, url, type));
+        }
+    }
+
+    private async Task ScrollFocusedIntoViewAsync()
+    {
+        if (_module != null && _focusedIndex >= 0)
+            await _module.InvokeVoidAsync("scrollResultIntoView", $"sr-{_focusedIndex}");
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        ParseProjectIdFromUri(e.Location);
+        ResetState();
+        Close();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void ParseProjectIdFromUri(string uri)
+    {
+        var path = new Uri(uri).AbsolutePath;
+        var match = ProjectIdRegex.Match(path);
+        if (match.Success && int.TryParse(match.Groups[1].Value, out var id))
+        {
+            _currentProjectId = id;
+            _scopeAll = false;
+        }
+        else
+        {
+            _currentProjectId = null;
+            _scopeAll = true;
+        }
+    }
+
+    [JSInvokable]
+    public void ToggleSearchPalette()
+    {
+        _isOpen = !_isOpen;
+        if (_isOpen)
+            _ = FocusInputAsync();
+        else
+            ResetState();
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void ClosePalette()
+    {
+        if (_isOpen)
+        {
+            _isOpen = false;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ResetState()
+    {
+        _query = string.Empty;
+        _results = null;
+        _pageResults = [];
+        RebuildNavItems();
+    }
+
+    private async Task FocusInputAsync()
+    {
+        if (_module is not null)
+            await _module.InvokeVoidAsync("focusInput", "search-palette-input");
+    }
+
+    private void Close()
+    {
+        _isOpen = false;
+    }
+
+    private async Task SetScope(bool all)
+    {
+        _scopeAll = all;
+        await FocusInputAsync();
+        if (!string.IsNullOrWhiteSpace(_query))
+        {
+            await DoSearchAsync();
+        }
+        
+        RebuildNavItems();
+        StateHasChanged();
+    }
+
+    private void OnQueryInput(ChangeEventArgs e)
+    {
+        _query = e.Value?.ToString() ?? string.Empty;
+
+        _debounce?.Stop();
+        _debounce?.Dispose();
+
+        if (string.IsNullOrWhiteSpace(_query))
+        {
+            _results = null;
+            _pageResults = [];
+            RebuildNavItems();
+            return;
+        }
+
+        _pageResults = MatchStaticPages(_query);
+
+        _debounce = new System.Timers.Timer(250);
+        _debounce.AutoReset = false;
+        _debounce.Elapsed += async (_, _) =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await DoSearchAsync();
+                StateHasChanged();
+            });
+        };
+        _debounce.Start();
+    }
+
+    private List<StaticPage> MatchStaticPages(string q)
+    {
+        var results = new List<StaticPage>();
+
+        foreach (var pg in GlobalPages)
+        {
+            if (pg.Name.Contains(q, StringComparison.OrdinalIgnoreCase))
+                results.Add(pg);
+        }
+
+        if (_currentProjectId.HasValue)
+        {
+            foreach (var (name, path) in ProjectSettingsPages)
+            {
+                if (name.Contains(q, StringComparison.OrdinalIgnoreCase))
+                    results.Add(new StaticPage(name, $"/projects/{_currentProjectId.Value}/{path}"));
+            }
+        }
+
+        return results;
+    }
+
+    private async Task DoSearchAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            int? projectId = (_scopeAll || !_currentProjectId.HasValue) ? null : _currentProjectId;
+            _results = await SearchService.SearchAsync(_query, projectId);
+        }
+        catch
+        {
+            _results = null;
+        }
+        finally
+        {
+            _loading = false;
+            RebuildNavItems();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+        _debounce?.Dispose();
+        if (_module is not null)
+        {
+            await _module.InvokeVoidAsync("unregister");
+            await _module.DisposeAsync();
+        }
+        _dotNetRef?.Dispose();
+    }
+}

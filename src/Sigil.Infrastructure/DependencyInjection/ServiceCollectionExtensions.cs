@@ -68,6 +68,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IReleaseHealthService, ReleaseHealthService>();
         services.AddScoped<IRecommendationService, RecommendationService>();
         services.AddScoped<IProjectConfigService, ProjectConfigService>();
+        services.AddScoped<ISearchService, SearchService>();
+        services.AddScoped<IBadgeService, BadgeService>();
         
         services.AddSingleton<IStackFrameCleaner, CSharpStackFrameCleaner>();
         services.AddSingleton<IStackFrameCleaner, JavaStackFrameCleaner>();

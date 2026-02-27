@@ -40,6 +40,8 @@ builder.Services.AddScoped<IAlertService, ApiAlertService>();
 builder.Services.AddScoped<IAutoTagService, ApiAutoTagService>();
 builder.Services.AddScoped<INormalizationRuleService, ApiNormalizationRuleService>();
 builder.Services.AddScoped<IReleaseHealthService, ApiReleaseHealthService>();
+builder.Services.AddScoped<IBadgeService, ApiBadgeService>();
+builder.Services.AddScoped<ISearchService, ApiSearchService>();
 builder.Services.AddScoped<IUserPreferenceService, LocalStoragePreferenceService>();
 
 await builder.Build().RunAsync();

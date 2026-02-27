@@ -10,41 +10,48 @@ internal class BookmarkService(SigilDbContext dbContext, IDateTime dateTime, IIs
 {
     public async Task<bool> ToggleBookmarkAsync(int issueId, Guid userId)
     {
-        var existing = await dbContext.IssueBookmarks.AsTracking()
-            .FirstOrDefaultAsync(b => b.UserId == userId && b.IssueId == issueId);
+        var state = await dbContext.UserIssueStates.AsTracking()
+            .FirstOrDefaultAsync(s => s.UserId == userId && s.IssueId == issueId);
 
-        if (existing is not null)
+        if (state is not null)
         {
-            dbContext.IssueBookmarks.Remove(existing);
-            await dbContext.SaveChangesAsync();
-            return false;
+            state.IsBookmarked = !state.IsBookmarked;
+            state.BookmarkedAt = state.IsBookmarked ? dateTime.UtcNow : null;
+        }
+        else
+        {
+            state = new UserIssueState
+            {
+                UserId = userId,
+                IssueId = issueId,
+                IsBookmarked = true,
+                BookmarkedAt = dateTime.UtcNow
+            };
+            dbContext.UserIssueStates.Add(state);
         }
 
-        dbContext.IssueBookmarks.Add(new IssueBookmark
-        {
-            UserId = userId,
-            IssueId = issueId,
-            CreatedAt = dateTime.UtcNow
-        });
         await dbContext.SaveChangesAsync();
-        await activityService.LogActivityAsync(issueId, IssueActivityAction.Bookmarked, userId);
-        return true;
+
+        if (state.IsBookmarked)
+            await activityService.LogActivityAsync(issueId, IssueActivityAction.Bookmarked, userId);
+
+        return state.IsBookmarked;
     }
 
     public async Task<bool> IsBookmarkedAsync(int issueId, Guid userId)
     {
-        return await dbContext.IssueBookmarks
-            .AnyAsync(b => b.UserId == userId && b.IssueId == issueId);
+        return await dbContext.UserIssueStates
+            .AnyAsync(s => s.UserId == userId && s.IssueId == issueId && s.IsBookmarked);
     }
 
     public async Task<List<IssueSummary>> GetBookmarkedIssuesAsync(Guid userId)
     {
-        var bookmarkedIssues = await dbContext.IssueBookmarks
-            .Where(b => b.UserId == userId)
-            .Include(b => b.Issue!.AssignedTo)
-            .Include(b => b.Issue!.MergeSet)
-            .OrderByDescending(b => b.Issue!.LastSeen)
-            .Select(b => b.Issue!)
+        var bookmarkedIssues = await dbContext.UserIssueStates
+            .Where(s => s.UserId == userId && s.IsBookmarked)
+            .Include(s => s.Issue!.AssignedTo)
+            .Include(s => s.Issue!.MergeSet)
+            .OrderByDescending(s => s.Issue!.LastSeen)
+            .Select(s => s.Issue!)
             .ToListAsync();
 
         return bookmarkedIssues.Select(i => new IssueSummary(
@@ -56,5 +63,27 @@ internal class BookmarkService(SigilDbContext dbContext, IDateTime dateTime, IIs
             i.MergeSet?.OccurrenceCount ?? i.OccurrenceCount,
             i.AssignedTo?.DisplayName,
             i.MergeSetId)).ToList();
+    }
+
+    public async Task RecordIssueViewAsync(int issueId, Guid userId)
+    {
+        var state = await dbContext.UserIssueStates.AsTracking()
+            .FirstOrDefaultAsync(s => s.UserId == userId && s.IssueId == issueId);
+
+        if (state is not null)
+        {
+            state.LastViewedAt = dateTime.UtcNow;
+        }
+        else
+        {
+            dbContext.UserIssueStates.Add(new UserIssueState
+            {
+                UserId = userId,
+                IssueId = issueId,
+                LastViewedAt = dateTime.UtcNow
+            });
+        }
+
+        await dbContext.SaveChangesAsync();
     }
 }

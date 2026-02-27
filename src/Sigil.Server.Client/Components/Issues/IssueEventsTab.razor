@@ -35,33 +35,29 @@ else
         </table>
     </div>
 
-    <Pagination Page="_page" TotalCount="_events.TotalCount" PageSize="PageSize"
-                OnPageChanged="OnPageChanged" />
+    <Pagination Page="Page" TotalCount="_events.TotalCount" PageSize="PageSize"/>
 }
 
 @code {
     [Parameter, EditorRequired] public int ProjectId { get; set; }
     [Parameter, EditorRequired] public int IssueId { get; set; }
 
+    [SupplyParameterFromQuery(Name = "page")] public int Page { get; set; } = 1;
+
     private const int PageSize = 50;
-    private int _page = 1;
     private PagedResponse<EventSummary>? _events;
 
     protected override async Task OnParametersSetAsync()
     {
-        _page = 1;
+        if (Page < 1)
+            Page = 1;
+        
         await LoadEvents();
     }
 
     private async Task LoadEvents()
     {
-        try { _events = await EventService.GetEventSummariesAsync(IssueId, _page, PageSize); }
+        try { _events = await EventService.GetEventSummariesAsync(IssueId, Page, PageSize); }
         catch { _events = null; }
-    }
-
-    private async Task OnPageChanged(int page)
-    {
-        _page = page;
-        await LoadEvents();
     }
 }

@@ -55,7 +55,7 @@ else
 
     private async Task<string?> GetRedirectFor(string uri)
     {
-        var path = "/" + Navigation.ToBaseRelativePath(uri);
+        string path = Path.Combine( "/", uri.StartsWith(Navigation.BaseUri, StringComparison.OrdinalIgnoreCase)? Navigation.ToBaseRelativePath(uri) : uri);
         if(path.StartsWith(SetupWizardPath, StringComparison.OrdinalIgnoreCase))
             return null;
         

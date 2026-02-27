@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using Sigil.Application.Models.Releases
 @inject IReleaseHealthService ReleaseHealthService
+@inject IIssueService IssueService
 
 <PageTitle>Release — Sigil</PageTitle>
 
@@ -56,6 +57,16 @@ else
             </div>
         </div>
 
+        @if (_releaseHistogram.Count > 0)
+        {
+            <div class="card bg-base-200">
+                <div class="card-body p-4">
+                    <h2 class="card-title text-base mb-2">Event Activity (14 days)</h2>
+                    <Sparkline Data="_releaseHistogram" Width="560" Height="48" Class="w-full text-primary" />
+                </div>
+            </div>
+        }
+
         @if (release.TopIssues.Count > 0)
         {
             <div class="card bg-base-200">
@@ -73,10 +84,9 @@ else
                         <tbody>
                             @foreach (var issue in release.TopIssues.OrderByDescending(i => i.IsNew))
                             {
-                                <tr class="hover cursor-pointer @(issue.IsNew ? "bg-error/5 border-l-2 border-error" : "")"
-                                    @onclick="() => GoToIssue(issue.IssueId)">
+                                <tr class="relative hover cursor-pointer @(issue.IsNew ? "bg-error/5 border-l-2 border-error" : "")">
                                     <td>
-                                        <div class="flex items-center gap-2">
+                                        <a class="flex items-center gap-2 stretched-link" href="/projects/@ProjectId/issues/@issue.IssueId">
                                             @if (issue.IsNew)
                                             {
                                                 <span class="badge badge-sm badge-error">New</span>
@@ -89,7 +99,7 @@ else
                                                     <div class="text-xs opacity-50 font-mono">@issue.ExceptionType</div>
                                                 }
                                             </div>
-                                        </div>
+                                        </a>
                                     </td>
                                     <td class="text-right font-mono text-sm">@issue.EventCount.ToString("N0")</td>
                                 </tr>
@@ -110,15 +120,34 @@ else
 
     private ReleaseDetailResponse? release;
     private bool loading = true;
+    private List<int> _releaseHistogram = [];
 
     protected override async Task OnParametersSetAsync()
     {
         loading = true;
+        _releaseHistogram = [];
         try { release = await ReleaseHealthService.GetReleaseDetailAsync(ReleaseId); }
         catch { release = null; }
         loading = false;
+
+        if (release?.TopIssues.Count > 0)
+            _ = LoadHistogramAsync(release.TopIssues.Select(i => i.IssueId).ToList());
     }
 
-    private void GoToIssue(int issueId) =>
-        Navigation.NavigateTo($"/projects/{ProjectId}/issues/{issueId}");
+    private async Task LoadHistogramAsync(List<int> issueIds)
+    {
+        try
+        {
+            var bulk = await IssueService.GetBulkHistogramsAsync(issueIds);
+            if (bulk.Count == 0) return;
+            var len = bulk.Values.Max(v => v.Count);
+            var combined = new int[len];
+            foreach (var counts in bulk.Values)
+                for (var i = 0; i < counts.Count; i++)
+                    combined[i] += counts[i];
+            _releaseHistogram = [.. combined];
+            StateHasChanged();
+        }
+        catch { /* silently ignore histogram load failures */ }
+    }
 }

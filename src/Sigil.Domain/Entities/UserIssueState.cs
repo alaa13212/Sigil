@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Sigil.Domain.Entities;
 
-public class IssueBookmark
+public class UserIssueState
 {
     [ForeignKey(nameof(User))]
     public Guid UserId { get; set; }
@@ -12,5 +12,8 @@ public class IssueBookmark
     public int IssueId { get; set; }
     public Issue? Issue { get; set; }
 
-    public DateTime CreatedAt { get; set; }
+    public bool IsBookmarked { get; set; }
+    public DateTime? BookmarkedAt { get; set; }
+
+    public DateTime? LastViewedAt { get; set; }
 }

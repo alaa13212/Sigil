@@ -27,4 +27,11 @@ public interface IIssueService
 
     // Discovery
     Task<List<IssueSummary>> GetSimilarIssuesAsync(int issueId);
+
+    // View tracking
+    Task RecordPageViewAsync(Guid userId, int projectId, PageType pageType);
+
+    // Histogram
+    Task<List<int>> GetHistogramAsync(int issueId, int days = 14);
+    Task<Dictionary<int, List<int>>> GetBulkHistogramsAsync(List<int> issueIds, int days = 14);
 }

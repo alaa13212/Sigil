@@ -18,7 +18,8 @@ public record IssueSummary(
     string? AssignedToName,
     int? MergeSetId = null,
     int MergeSetSize = 0,
-    ISet<string>? SystemTagKeys = null);
+    ISet<string>? SystemTagKeys = null,
+    bool IsUnviewed = false);
 
 public record IssueDetailResponse(
     int Id,

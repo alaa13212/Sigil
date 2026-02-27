@@ -64,8 +64,7 @@ else
             </div>
 
             <!-- Tab bar -->
-            <TabBar TTab="Tab" Tabs="_visibleTabs" ActiveTab="_activeTab"
-                    OnTabChanged="SetActiveTab" TabLabel="GetTabLabel" />
+            <TabBar TTab="Tab" Tabs="_visibleTabs" ActiveTab="_activeTab" TabLabel="GetTabLabel" />
 
             <!-- Tab content -->
             @if (_activeTab == Tab.SuggestedEvent && eventDetail is not null)
@@ -142,11 +141,11 @@ else
 
         _activeTab = TabParam?.ToLower() switch
         {
-            "event"    => issue?.SuggestedEvent is not null ? Tab.SuggestedEvent : Tab.Events,
-            "events"   => Tab.Events,
-            "activity" => Tab.Activity,
-            "similar"  => Tab.Similar,
-            _          => issue?.SuggestedEvent is not null ? Tab.SuggestedEvent : Tab.Events
+            "suggestedevent" => issue?.SuggestedEvent is not null ? Tab.SuggestedEvent : Tab.Events,
+            "events"         => Tab.Events,
+            "activity"       => Tab.Activity,
+            "similar"        => Tab.Similar,
+            _                => issue?.SuggestedEvent is not null ? Tab.SuggestedEvent : Tab.Events
         };
 
         loading = false;
@@ -215,19 +214,6 @@ else
     }
 
     private async Task OnIssueChanged<T>(T _) => await LoadIssue();
-
-    private void SetActiveTab(Tab tab)
-    {
-        var tabStr = tab switch
-        {
-            Tab.SuggestedEvent => "event",
-            Tab.Events         => "events",
-            Tab.Activity       => "activity",
-            Tab.Similar        => "similar",
-            _                  => "events"
-        };
-        Navigation.NavigateTo($"/projects/{ProjectId}/issues/{IssueId}?tab={tabStr}", forceLoad: false);
-    }
 
     private static string GetTabLabel(Tab tab) => tab switch
     {

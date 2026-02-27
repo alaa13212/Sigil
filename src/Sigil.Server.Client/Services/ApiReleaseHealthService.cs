@@ -19,4 +19,10 @@ public class ApiReleaseHealthService(HttpClient http) : IReleaseHealthService
         try { return await http.GetFromJsonAsync<ReleaseDetailResponse>($"api/releases/{releaseId}"); }
         catch (HttpRequestException) { return null; }
     }
+
+    public async Task<int> GetUnseenReleaseCountAsync(int projectId, Guid userId)
+    {
+        try { return await http.GetFromJsonAsync<int>($"api/projects/{projectId}/unseen-releases?userId={userId}"); }
+        catch { return 0; }
+    }
 }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using NpgsqlTypes;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Application.Models.Events;
@@ -128,41 +129,46 @@ internal class IssueService(
             q = q.Where(i => i.AssignedToId == query.AssignedToId.Value);
 
         if (query.BookmarkedByUserId.HasValue)
-            q = q.Where(i => dbContext.IssueBookmarks.Any(b => b.IssueId == i.Id && b.UserId == query.BookmarkedByUserId.Value));
+            q = q.Where(i => dbContext.UserIssueStates.Any(s => s.IssueId == i.Id && s.UserId == query.BookmarkedByUserId.Value && s.IsBookmarked));
 
         var (freeText, tagFilters) = ParseSearch(query.Search);
-        if (!string.IsNullOrEmpty(freeText))
+        bool hasFullTextSearch = !string.IsNullOrEmpty(freeText);
+        if (hasFullTextSearch)
         {
-            var search = freeText.ToLower();
-            q = q.Where(i =>
-                i.Title.ToLower().Contains(search) ||
-                (i.ExceptionType != null && i.ExceptionType.ToLower().Contains(search)) ||
-                (i.Culprit != null && i.Culprit.ToLower().Contains(search)));
+            freeText = SearchService.BuildPrefixQuery(freeText!);
+            q = q.Where(i => EF.Property<NpgsqlTsVector>(i, "SearchVector").Matches(EF.Functions.ToTsQuery("simple", freeText!)));
         }
         foreach (var (tagKey, tagValue) in tagFilters)
         {
-            var k = tagKey;
-            var v = tagValue;
-            q = q.Where(i => i.Tags.Any(t => t.TagValue!.TagKey!.Key == k && t.TagValue.Value == v));
+            q = q.Where(i => i.Tags.Any(t => EF.Functions.ILike(t.TagValue!.TagKey!.Key, tagKey) && EF.Functions.ILike(t.TagValue.Value, tagValue)));
         }
 
         int totalCount = await q.CountAsync();
 
-        q = query.SortBy switch
+        if (hasFullTextSearch)
         {
-            IssueSortBy.FirstSeen => query.SortDescending
-                ? q.OrderByDescending(i => i.MergeSet != null ? i.MergeSet.FirstSeen : i.FirstSeen)
-                : q.OrderBy(i => i.MergeSet != null ? i.MergeSet.FirstSeen : i.FirstSeen),
-            IssueSortBy.OccurrenceCount => query.SortDescending
-                ? q.OrderByDescending(i => i.MergeSet != null ? i.MergeSet.OccurrenceCount : i.OccurrenceCount)
-                : q.OrderBy(i => i.MergeSet != null ? i.MergeSet.OccurrenceCount : i.OccurrenceCount),
-            IssueSortBy.Priority => query.SortDescending
-                ? q.OrderByDescending(i => i.Priority)
-                : q.OrderBy(i => i.Priority),
-            _ => query.SortDescending
-                ? q.OrderByDescending(i => i.MergeSet != null ? i.MergeSet.LastSeen : i.LastSeen)
-                : q.OrderBy(i => i.MergeSet != null ? i.MergeSet.LastSeen : i.LastSeen),
-        };
+            // ReSharper disable EntityFramework.ClientSideDbFunctionCall
+            q = q.OrderByDescending(i => EF.Property<NpgsqlTsVector>(i, "SearchVector").Rank(EF.Functions.ToTsQuery("simple", freeText!)));
+            // ReSharper enable EntityFramework.ClientSideDbFunctionCall
+        }
+        else
+        {
+            q = query.SortBy switch
+            {
+                IssueSortBy.FirstSeen => query.SortDescending
+                    ? q.OrderByDescending(i => i.MergeSet != null ? i.MergeSet.FirstSeen : i.FirstSeen)
+                    : q.OrderBy(i => i.MergeSet != null ? i.MergeSet.FirstSeen : i.FirstSeen),
+                IssueSortBy.OccurrenceCount => query.SortDescending
+                    ? q.OrderByDescending(i => i.MergeSet != null ? i.MergeSet.OccurrenceCount : i.OccurrenceCount)
+                    : q.OrderBy(i => i.MergeSet != null ? i.MergeSet.OccurrenceCount : i.OccurrenceCount),
+                IssueSortBy.Priority => query.SortDescending
+                    ? q.OrderByDescending(i => i.Priority)
+                    : q.OrderBy(i => i.Priority),
+                _ => query.SortDescending
+                    ? q.OrderByDescending(i => i.MergeSet != null ? i.MergeSet.LastSeen : i.LastSeen)
+                    : q.OrderBy(i => i.MergeSet != null ? i.MergeSet.LastSeen : i.LastSeen),
+            };
+        }
 
         var items = await q
             .Include(i => i.AssignedTo)
@@ -323,21 +329,33 @@ internal class IssueService(
                 .ToDictionary(g => g.Key, g => g.Select(r => r.Key).ToHashSet());
         }
 
+        Dictionary<int, DateTime?> lastViewedByIssue = [];
+        if (query.ViewerUserId.HasValue && issueIds.Count > 0)
+        {
+            lastViewedByIssue = await dbContext.UserIssueStates
+                .Where(s => s.UserId == query.ViewerUserId.Value && issueIds.Contains(s.IssueId))
+                .ToDictionaryAsync(s => s.IssueId, s => s.LastViewedAt);
+        }
+
         var summaries = items.Select(i =>
         {
             var ms = i.MergeSet;
             systemTagsByIssue.TryGetValue(i.Id, out var stags);
+            var lastSeen = ms?.LastSeen ?? i.LastSeen;
+            var isUnviewed = query.ViewerUserId.HasValue &&
+                             (!lastViewedByIssue.TryGetValue(i.Id, out var lv) || lv is null || lv < lastSeen);
             return new IssueSummary(
                 i.Id, i.Title, i.ExceptionType, i.Culprit,
                 i.Status, i.Priority,
                 ms?.Level ?? i.Level,
                 ms?.FirstSeen ?? i.FirstSeen,
-                ms?.LastSeen ?? i.LastSeen,
+                lastSeen,
                 ms?.OccurrenceCount ?? i.OccurrenceCount,
                 i.AssignedTo?.DisplayName,
                 i.MergeSetId,
                 i.MergeSetId.HasValue ? memberCounts.GetValueOrDefault(i.MergeSetId.Value, 0) : 0,
-                stags);
+                stags,
+                isUnviewed);
         }).ToList();
 
         return new PagedResponse<IssueSummary>(summaries, totalCount, query.Page, query.PageSize);
@@ -434,6 +452,71 @@ internal class IssueService(
             i.Status, i.Priority, i.Level,
             i.FirstSeen, i.LastSeen, i.OccurrenceCount,
             i.AssignedTo?.DisplayName)).ToList();
+    }
+
+    public async Task<List<int>> GetHistogramAsync(int issueId, int days = 14)
+    {
+        var since = DateTime.UtcNow.Date.AddDays(-days + 1);
+        var buckets = await dbContext.EventBuckets
+            .Where(b => b.IssueId == issueId && b.BucketStart >= since)
+            .GroupBy(b => b.BucketStart.Date)
+            .Select(g => new { Day = g.Key, Count = g.Sum(b => b.Count) })
+            .ToListAsync();
+
+        var result = new List<int>(days);
+        for (int i = 0; i < days; i++)
+        {
+            var day = since.AddDays(i);
+            result.Add(buckets.FirstOrDefault(b => b.Day == day)?.Count ?? 0);
+        }
+        return result;
+    }
+
+    public async Task<Dictionary<int, List<int>>> GetBulkHistogramsAsync(List<int> issueIds, int days = 14)
+    {
+        if (issueIds.Count == 0) return [];
+        var since = DateTime.UtcNow.Date.AddDays(-days + 1);
+
+        var buckets = await dbContext.EventBuckets
+            .Where(b => issueIds.Contains(b.IssueId) && b.BucketStart >= since)
+            .GroupBy(b => new { b.IssueId, Day = b.BucketStart.Date })
+            .Select(g => new { g.Key.IssueId, g.Key.Day, Count = g.Sum(b => b.Count) })
+            .ToListAsync();
+
+        return issueIds.ToDictionary(id => id, id =>
+        {
+            var issueBuckets = buckets.Where(b => b.IssueId == id).ToList();
+            var result = new List<int>(days);
+            for (int i = 0; i < days; i++)
+            {
+                var day = since.AddDays(i);
+                result.Add(issueBuckets.FirstOrDefault(b => b.Day == day)?.Count ?? 0);
+            }
+            return result;
+        });
+    }
+
+    public async Task RecordPageViewAsync(Guid userId, int projectId, PageType pageType)
+    {
+        var view = await dbContext.UserPageViews.AsTracking()
+            .FirstOrDefaultAsync(v => v.UserId == userId && v.ProjectId == projectId && v.PageType == pageType);
+
+        if (view is not null)
+        {
+            view.LastViewedAt = dateTime.UtcNow;
+        }
+        else
+        {
+            dbContext.UserPageViews.Add(new UserPageView
+            {
+                UserId = userId,
+                ProjectId = projectId,
+                PageType = pageType,
+                LastViewedAt = dateTime.UtcNow
+            });
+        }
+
+        await dbContext.SaveChangesAsync();
     }
 
     internal class IssueReleaseRange

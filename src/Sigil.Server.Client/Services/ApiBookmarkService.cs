@@ -25,5 +25,7 @@ public class ApiBookmarkService(HttpClient http) : IBookmarkService
         return await http.GetFromJsonAsync<List<IssueSummary>>("api/bookmarks") ?? [];
     }
 
+    public Task RecordIssueViewAsync(int issueId, Guid userId) => Task.CompletedTask;
+
     private record BookmarkStatusResult(bool IsBookmarked);
 }

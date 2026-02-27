@@ -42,13 +42,15 @@
                     <tbody>
                         @foreach (var r in response.Items)
                         {
-                            <tr class="hover cursor-pointer" @onclick="() => GoToRelease(r.Id)">
+                            <tr class="relative hover cursor-pointer">
                                 <td>
                                     @if (!string.IsNullOrEmpty(r.SemanticVersion) && r.SemanticVersion != r.RawName)
                                     {
                                         <div class="font-mono font-medium text-sm">@r.SemanticVersion</div>
                                     }
-                                    <div class="text-xs opacity-50">@r.RawName</div>
+                                    <a class="text-xs opacity-50 stretched-link" href="/projects/@ProjectId/releases/@r.Id">
+                                        @r.RawName
+                                    </a>
                                 </td>
                                 <td class="text-sm"><RelativeTime Value="r.FirstSeenAt" /></td>
                                 <td class="text-sm">
@@ -80,7 +82,7 @@
             </div>
         </div>
 
-        <Pagination Page="page" TotalCount="response.TotalCount" PageSize="PageSize" OnPageChanged="OnPageChanged" />
+        <Pagination Page="Page" TotalCount="response.TotalCount" PageSize="PageSize" />
     }
 </div>
 
@@ -88,10 +90,10 @@
     [Parameter] public int ProjectId { get; set; }
 
     [Inject] private NavigationManager Navigation { get; set; } = default!;
+    [SupplyParameterFromQuery(Name = "page")] int Page { get; set; } = 1;
 
     private PagedResponse<ReleaseHealthSummary>? response;
     private bool loading = true;
-    private int page = 1;
     private const int PageSize = 20;
 
     protected override async Task OnParametersSetAsync() => await Load();
@@ -99,17 +101,8 @@
     private async Task Load()
     {
         loading = true;
-        try { response = await ReleaseHealthService.GetReleaseHealthAsync(ProjectId, page, PageSize); }
+        try { response = await ReleaseHealthService.GetReleaseHealthAsync(ProjectId, Page, PageSize); }
         catch { response = null; }
         loading = false;
     }
-
-    private async Task OnPageChanged(int newPage)
-    {
-        page = newPage;
-        await Load();
-    }
-
-    private void GoToRelease(int releaseId) =>
-        Navigation.NavigateTo($"/projects/{ProjectId}/releases/{releaseId}");
 }

@@ -24,6 +24,7 @@ public class ApiIssueService(HttpClient http) : IIssueService
         qs["page"] = query.Page.ToString();
         qs["pageSize"] = query.PageSize.ToString();
         if (query.Bookmarked) qs["bookmarked"] = "true";
+        qs["includeViewedInfo"] = "true";
 
         return await http.GetFromJsonAsync<PagedResponse<IssueSummary>>(
             $"api/projects/{projectId}/issues?{qs}") ?? new PagedResponse<IssueSummary>([], 0, 1, query.PageSize);
@@ -98,4 +99,23 @@ public class ApiIssueService(HttpClient http) : IIssueService
 
     public Task<List<Issue>> BulkGetOrCreateIssuesAsync(Project project, IEnumerable<IGrouping<string, ParsedEvent>> eventsByFingerprint) =>
         throw new NotSupportedException("Not available on client.");
+
+    public Task RecordPageViewAsync(Guid userId, int projectId, PageType pageType) => Task.CompletedTask;
+
+    public async Task<int> GetUnseenIssueCountAsync(int projectId, Guid userId)
+    {
+        try { return await http.GetFromJsonAsync<int>($"api/projects/{projectId}/unseen-issues?userId={userId}"); }
+        catch { return 0; }
+    }
+
+    public async Task<List<int>> GetHistogramAsync(int issueId, int days = 14)
+    {
+        return await http.GetFromJsonAsync<List<int>>($"api/issues/{issueId}/histogram?days={days}") ?? [];
+    }
+
+    public async Task<Dictionary<int, List<int>>> GetBulkHistogramsAsync(List<int> issueIds, int days = 14)
+    {
+        var response = await http.PostAsJsonAsync($"api/issues/histogram/bulk?days={days}", issueIds);
+        return await response.Content.ReadFromJsonAsync<Dictionary<int, List<int>>>() ?? [];
+    }
 }

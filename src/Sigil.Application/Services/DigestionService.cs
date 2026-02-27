@@ -17,12 +17,13 @@ public class DigestionService(
     ITagService tagService,
     IEventRanker eventRanker,
     IEventFilterService eventFilterService,
-    IWorker<PostDigestionWork> postDigestionQueue
+    IWorker<PostDigestionWork> postDigestionQueue,
+    IDateTime dateTime
 ) : IDigestionService
 {
     public async Task BulkDigestAsync(EventParsingContext context, List<ParsedEvent> parsedEvents, CancellationToken ct = default)
     {
-        var project = await projectService.GetProjectByIdAsync(context.ProjectId);
+        Project? project = await projectService.GetProjectByIdAsync(context.ProjectId);
         ArgumentNullException.ThrowIfNull(project);
 
         var existingIds = await eventService.FindExistingEventIdsAsync(parsedEvents.Select(e => e.EventId));
@@ -37,13 +38,9 @@ public class DigestionService(
 
         Dictionary<string, Release> releases = (await releaseService.BulkGetOrCreateReleasesAsync(context.ProjectId, parsedEvents)).ToDictionary(r => r.RawName);
 
-        var userTagPairs = parsedEvents.Where(item => item.Tags != null).SelectMany(item => item.Tags!).Distinct().ToList();
-        var systemTagPairs = new List<KeyValuePair<string, string>>
-        {
-            new(SystemTags.Regression, "true"),
-            new(SystemTags.Reopened,   "true"),
-            new(SystemTags.HighVolume, "true"),
-        };
+        List<KeyValuePair<string, string>> userTagPairs = parsedEvents.Where(item => item.Tags != null).SelectMany(item => item.Tags!).Distinct().ToList();
+        List<KeyValuePair<string, string>> systemTagPairs = SystemTags.AllPairs;
+        
         List<KeyValuePair<string, string>> requiredTags = [.. userTagPairs, .. systemTagPairs];
         Dictionary<string, Dictionary<string, int>> tagValues = (await tagService.BulkGetOrCreateTagsAsync(requiredTags))
             .ToLookup(t => t.TagKey!.Key)
@@ -65,7 +62,7 @@ public class DigestionService(
             .Select(i => i.Id)
             .ToHashSet();
 
-        var now = DateTime.UtcNow;
+        DateTime now = dateTime.UtcNow;
 
         foreach (IGrouping<string, ParsedEvent> group in issueGrouping)
         {
@@ -97,7 +94,8 @@ public class DigestionService(
             context.ProjectId,
             issues.Values.Select(i => i.Id).ToList(),
             newIssueIds,
-            regressionIssueIds));
+            regressionIssueIds,
+            AggregateEventCountsByBucket(parsedEvents, issues)));
     }
 
     private static bool IsReleaseRegression(Issue issue, IEnumerable<ParsedEvent> events, Dictionary<string, Release> releases)
@@ -135,7 +133,7 @@ public class DigestionService(
         if (!tagValues.TryGetValue(tagKey, out var valueMap)) return;
         if (!valueMap.TryGetValue("true", out var tagValueId)) return;
 
-        var existing = issue.Tags.FirstOrDefault(t => t.TagValueId == tagValueId);
+        IssueTag? existing = issue.Tags.FirstOrDefault(t => t.TagValueId == tagValueId);
         if (existing is null)
         {
             issue.Tags.Add(new IssueTag
@@ -167,6 +165,22 @@ public class DigestionService(
         issueTag.OccurrenceCount++;
         issueTag.FirstSeen = TimeMath.Earlier(issueTag.FirstSeen, parsedEvent.Timestamp);
         issueTag.LastSeen = TimeMath.Later(issueTag.LastSeen, parsedEvent.Timestamp);
+    }
+    
+    
+
+    private static List<EventBucketIncrement> AggregateEventCountsByBucket(List<ParsedEvent> parsedEvents, Dictionary<string, Issue> issues)
+    {
+        List<EventBucketIncrement> bucketIncrements = parsedEvents
+            .Where(e => !e.Fingerprint.IsNullOrEmpty() && issues.ContainsKey(e.Fingerprint!))
+            .GroupBy(e => new
+            {
+                IssueId = issues[e.Fingerprint!].Id,
+                BucketStart = new DateTime(e.Timestamp.Year, e.Timestamp.Month, e.Timestamp.Day, e.Timestamp.Hour, 0, 0, DateTimeKind.Utc)
+            })
+            .Select(g => new EventBucketIncrement(g.Key.IssueId, g.Key.BucketStart, g.Count()))
+            .ToList();
+        return bucketIncrements;
     }
 
 }

@@ -2,7 +2,6 @@
 @attribute [Authorize]
 @using Sigil.Application.Models.Events
 @inject IEventService EventService
-@inject NavigationManager Navigation
 
 <PageTitle>Event — Sigil</PageTitle>
 
@@ -55,8 +54,7 @@ else
     }
 
     <!-- Tabs -->
-    <TabBar TTab="Tab" Tabs="@_tabs" ActiveTab="activeTab"
-            OnTabChanged="SetActiveTab" TabLabel="GetTabLabel" Class="mb-4" />
+    <TabBar TTab="Tab" Tabs="@_tabs" ActiveTab="activeTab" TabLabel="GetTabLabel" Class="mb-4" />
 
     @if (activeTab == Tab.Details)
     {
@@ -106,11 +104,11 @@ else
         loading = true;
         breadcrumbs = [];
 
-        activeTab = TabParam?.ToLower() switch
+        activeTab = TabParam switch
         {
-            "breadcrumbs" => Tab.Breadcrumbs,
-            "raw"         => Tab.Raw,
-            _             => Tab.Details
+            nameof(Tab.Breadcrumbs) => Tab.Breadcrumbs,
+            nameof(Tab.Raw)         => Tab.Raw,
+            _                       => Tab.Details
         };
 
         try
@@ -131,18 +129,6 @@ else
         {
             loading = false;
         }
-    }
-
-    private void SetActiveTab(Tab tab)
-    {
-        var tabStr = tab switch
-        {
-            Tab.Details     => "details",
-            Tab.Breadcrumbs => "breadcrumbs",
-            Tab.Raw         => "raw",
-            _               => "details"
-        };
-        Navigation.NavigateTo($"/projects/{ProjectId}/issues/{IssueId}/events/{EventId}?tab={tabStr}", forceLoad: false);
     }
 
     private static string GetTabLabel(Tab tab) => tab switch

@@ -94,6 +94,13 @@
                 <span class="opacity-60">Events</span>
                 <span class="font-mono">@Issue.OccurrenceCount</span>
             </div>
+            @if (_histogram is not null && _histogram.Any(v => v > 0))
+            {
+                <div class="pt-1">
+                    <div class="text-xs opacity-60 mb-1">Last 14 days</div>
+                    <Sparkline Data="_histogram" Width="248" Height="32" Class="w-full text-primary" />
+                </div>
+            }
             @if (Issue.MergeSet is not null)
             {
                 <div class="flex justify-between">
@@ -179,6 +186,13 @@
     [Parameter] public EventCallback<Priority> OnPriorityChanged { get; set; }
 
     private bool _loading;
+    private List<int>? _histogram;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try { _histogram = await IssueService.GetHistogramAsync(Issue.Id); }
+        catch { _histogram = null; }
+    }
 
     private async Task UpdateStatus(IssueStatus status)
     {

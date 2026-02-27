@@ -59,16 +59,16 @@
             </table>
         </div>
 
-        <Pagination Page="page" TotalCount="response.TotalCount" PageSize="PageSize" OnPageChanged="OnPageChanged" />
+        <Pagination Page="Page" TotalCount="response.TotalCount" PageSize="PageSize" />
     }
 </div>
 
 @code {
     [Parameter] public int ProjectId { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] public int Page { get; set; } = 1;
 
-    private Application.Models.PagedResponse<AlertHistoryResponse>? response;
+    private PagedResponse<AlertHistoryResponse>? response;
     private bool loading = true;
-    private int page = 1;
     private const int PageSize = 50;
 
     protected override async Task OnParametersSetAsync() => await Load();
@@ -76,14 +76,8 @@
     private async Task Load()
     {
         loading = true;
-        response = await AlertService.GetAlertHistoryAsync(ProjectId, page, PageSize);
+        response = await AlertService.GetAlertHistoryAsync(ProjectId, Page, PageSize);
         loading = false;
-    }
-
-    private async Task OnPageChanged(int newPage)
-    {
-        page = newPage;
-        await Load();
     }
 
     private static string StatusClass(AlertDeliveryStatus s) => s switch

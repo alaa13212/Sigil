@@ -1,13 +1,15 @@
+@inject NavigationManager NavigationManager
+
 @if (TotalPages > 1)
 {
     <div class="join mt-4">
-        <button class="join-item btn btn-sm" disabled="@(!HasPrevious)" @onclick="() => OnPageChanged.InvokeAsync(Page - 1)">«</button>
+        <a class="join-item btn btn-sm" disabled="@(!HasPrevious)" href="@NavigationManager.GetUriWithQueryParameter("page", Page - 1)">«</a>
         @for (int i = StartPage; i <= EndPage; i++)
         {
             var pageNum = i;
-            <button class="join-item btn btn-sm @(pageNum == Page ? "btn-active" : "")" @onclick="() => OnPageChanged.InvokeAsync(pageNum)">@pageNum</button>
+            <a class="join-item btn btn-sm @(pageNum == Page ? "btn-active" : "")" href="@NavigationManager.GetUriWithQueryParameter("page", pageNum)">@pageNum</a>
         }
-        <button class="join-item btn btn-sm" disabled="@(!HasNext)" @onclick="() => OnPageChanged.InvokeAsync(Page + 1)">»</button>
+        <a class="join-item btn btn-sm" disabled="@(!HasNext)" href="@NavigationManager.GetUriWithQueryParameter("page", Page + 1)">»</a>
     </div>
 }
 
@@ -15,12 +17,11 @@
     [Parameter] public int Page { get; set; } = 1;
     [Parameter] public int TotalCount { get; set; }
     [Parameter] public int PageSize { get; set; } = 50;
-    [Parameter] public EventCallback<int> OnPageChanged { get; set; }
 
     private int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
     private bool HasPrevious => Page > 1;
     private bool HasNext => Page < TotalPages;
 
-    private int StartPage => Math.Max(1, Page - 2);
-    private int EndPage => Math.Min(TotalPages, Page + 2);
+    private int StartPage => Math.Max(1, Page - 3);
+    private int EndPage => Math.Min(TotalPages, Page + 3);
 }

@@ -25,7 +25,9 @@ internal class SigilDbContext(DbContextOptions<SigilDbContext> options) : SaveSu
     public DbSet<UserPasskey> Passkeys => Set<UserPasskey>();
     public DbSet<EventFilter> EventFilters => Set<EventFilter>();
     public DbSet<MergeSet> MergeSets => Set<MergeSet>();
-    public DbSet<IssueBookmark> IssueBookmarks => Set<IssueBookmark>();
+    public DbSet<UserIssueState> UserIssueStates => Set<UserIssueState>();
+    public DbSet<UserPageView> UserPageViews => Set<UserPageView>();
+    public DbSet<EventBucket> EventBuckets => Set<EventBucket>();
     public DbSet<AlertRule> AlertRules => Set<AlertRule>();
     public DbSet<AlertHistory> AlertHistory => Set<AlertHistory>();
     public DbSet<AutoTagRule> AutoTagRules => Set<AutoTagRule>();

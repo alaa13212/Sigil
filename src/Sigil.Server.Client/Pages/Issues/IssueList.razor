@@ -39,8 +39,8 @@
     <!-- Filters -->
     <div class="flex flex-wrap gap-2 items-center">
         <!-- Status tabs -->
-        <form class="filter">
-            <input class="btn btn-sm btn-square" type="reset" value="x" @onclick="() => SetStatusFilter(null)"/>
+        <form >
+            <input class="btn btn-sm btn-square @(statusFilter == null ? "bg-primary" : "")" type="reset" value="All" @onclick="() => SetStatusFilter(null)"/>
             @foreach (var s in statusOptions)
             {
                 <input class="btn btn-sm" type="radio" name="status" checked="@(statusFilter == s.Value)" @onclick="() => SetStatusFilter(s.Value)" aria-label="@s.Label"/>
@@ -127,6 +127,7 @@
                         <th>Status</th>
                         <th>Priority</th>
                         <th class="text-right">Events</th>
+                        <th class="w-28">Last 14d</th>
                         <th>Last Seen</th>
                         <th>Assigned</th>
                     </tr>
@@ -150,6 +151,10 @@
                             <td>
                                 <a href="@targetUrl" class="stretched-link after:start-12! cursor-pointer"></a>
                                 <div class="font-semibold flex items-center gap-1.5">
+                                    @if (issue.IsUnviewed)
+                                    {
+                                        <span class="w-2 h-2 rounded-full bg-primary shrink-0" title="New activity since your last visit"></span>
+                                    }
                                     @if (isMerged && issue.MergeSetSize > 1)
                                     {
                                         <!-- Stacked layers icon for merged issues -->
@@ -193,6 +198,12 @@
                             <td><StatusBadge Status="issue.Status" /></td>
                             <td class="text-sm @(@issue.Priority == Priority.Low? "opacity-70" : "")">@issue.Priority</td>
                             <td class="text-right font-mono">@issue.OccurrenceCount</td>
+                            <td class="opacity-60">
+                                @if (_histograms.TryGetValue(issue.Id, out var hist))
+                                {
+                                    <Sparkline Data="hist" Width="100" Height="20" />
+                                }
+                            </td>
                             <td><RelativeTime Value="issue.LastSeen" /></td>
                             <td class="text-sm opacity-70">@(issue.AssignedToName ?? "—")</td>
                         </tr>
@@ -201,8 +212,7 @@
             </table>
         </div>
 
-        <Pagination Page="currentPage" TotalCount="Response.TotalCount" PageSize="PageSize"
-                    OnPageChanged="OnPageChanged" />
+        <Pagination Page="currentPage" TotalCount="Response.TotalCount" PageSize="PageSize"/>
     }
 </div>
 
@@ -228,6 +238,9 @@
     // Bookmark state: IDs of bookmarked issues in the current page
     private HashSet<int> bookmarkedIssueIds = [];
     private Guid currentUserId;
+
+    // Histograms: issueId → daily event counts for last 14 days
+    private Dictionary<int, List<int>> _histograms = [];
 
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
 
@@ -299,6 +312,9 @@
 
             Response = await IssueService.GetIssueSummariesAsync(ProjectId, query);
 
+            // Load histograms in background (fire and don't block UI)
+            _ = LoadHistogramsAsync(Response.Items.Select(i => i.Id).ToList());
+
             // Load bookmark states for visible issues
             var bookmarked = await BookmarkService.GetBookmarkedIssuesAsync(currentUserId);
             bookmarkedIssueIds = bookmarked.Select(i => i.Id).ToHashSet();
@@ -351,13 +367,8 @@
 
     private void ApplySearch()
     {
-        var q = string.IsNullOrWhiteSpace(searchText) ? "" : $"&q={Uri.EscapeDataString(searchText)}";
-        Navigation.NavigateTo($"/projects/{ProjectId}/issues?page=1{q}", forceLoad: false);
-    }
-
-    private void OnPageChanged(int newPage)
-    {
-        Navigation.NavigateTo($"projects/{ProjectId}/issues/?page={newPage}");
+        string quary = string.IsNullOrWhiteSpace(searchText) ? "" : $"&q={Uri.EscapeDataString(searchText)}";
+        Navigation.NavigateTo($"/projects/{ProjectId}/issues?page=1{quary}", forceLoad: false);
     }
 
     private async Task ToggleBookmarkedFilter()
@@ -384,6 +395,16 @@
     {
         searchText = "";
         Navigation.NavigateTo($"/projects/{ProjectId}/issues?page=1", forceLoad: false);
+    }
+
+    private async Task LoadHistogramsAsync(List<int> issueIds)
+    {
+        try
+        {
+            _histograms = await IssueService.GetBulkHistogramsAsync(issueIds);
+            StateHasChanged();
+        }
+        catch { /* silently ignore histogram load failures */ }
     }
 
     private async Task ToggleIssueBookmark(int issueId)

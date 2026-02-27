@@ -44,7 +44,7 @@ internal class SlackAlertSender(HttpClient http) : IAlertSender
                 new
                 {
                     type = "section",
-                    text = new { type = "mrkdwn", text = $"*<{issueUrl}|{EscapeSlack(issue.Title)}>*" }
+                    text = new { type = "mrkdwn", text = $"*<{issueUrl}|{EscapeSlack(issue.Title ?? string.Empty)}>*" }
                 },
                 new
                 {

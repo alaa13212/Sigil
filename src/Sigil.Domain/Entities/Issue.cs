@@ -65,4 +65,10 @@ public class Issue
     [ForeignKey(nameof(IgnoreFilter))]
     public int? IgnoreFilterId { get; set; }
     public EventFilter? IgnoreFilter { get; set; }
+
+    // Denormalized for full-text search
+    [MaxLength(1000)]
+    public string? SuggestedEventMessage { get; set; }
+    [MaxLength(2000)]
+    public string? SuggestedFramesSummary { get; set; }
 }

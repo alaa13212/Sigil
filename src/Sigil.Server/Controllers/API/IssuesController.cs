@@ -6,6 +6,7 @@ using Sigil.Application.Models;
 using Sigil.Application.Models.Issues;
 using Sigil.Domain.Enums;
 using Sigil.Server.Framework;
+using PageType = Sigil.Domain.Enums.PageType;
 
 namespace Sigil.Server.Controllers.API;
 
@@ -14,7 +15,8 @@ namespace Sigil.Server.Controllers.API;
 public class IssuesController(
     IIssueService issueService,
     IIssueActivityService activityService,
-    IProjectService projectService) : SigilController
+    IProjectService projectService,
+    IBookmarkService bookmarkService) : SigilController
 {
     [HttpGet("api/projects/{projectId:int}/issues")]
     public async Task<IActionResult> List(
@@ -28,11 +30,13 @@ public class IssuesController(
         [FromQuery] bool sortDesc = true,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
-        [FromQuery] bool bookmarked = false)
+        [FromQuery] bool bookmarked = false,
+        [FromQuery] bool includeViewedInfo = false)
     {
         if (await projectService.GetProjectByIdAsync(projectId) is null)
             return NotFound();
 
+        var userId = GetUserId();
         var query = new IssueQueryParams
         {
             Status = status,
@@ -44,17 +48,29 @@ public class IssuesController(
             SortDescending = sortDesc,
             Page = page,
             PageSize = Math.Clamp(pageSize, 1, 100),
-            BookmarkedByUserId = bookmarked ? GetUserId() : null
+            BookmarkedByUserId = bookmarked ? userId : null,
+            ViewerUserId = includeViewedInfo ? userId : null
         };
 
-        return Ok(await issueService.GetIssueSummariesAsync(projectId, query));
+        var summaries = await issueService.GetIssueSummariesAsync(projectId, query);
+
+        if (userId.HasValue)
+            await issueService.RecordPageViewAsync(userId.Value, projectId, PageType.Issues);
+
+        return Ok(summaries);
     }
 
     [HttpGet("api/issues/{id:int}")]
     public async Task<IActionResult> Get(int id)
     {
         var detail = await issueService.GetIssueDetailAsync(id);
-        return detail is not null ? Ok(detail) : NotFound();
+        if (detail is null) return NotFound();
+
+        var userId = GetUserId();
+        if (userId.HasValue)
+            await bookmarkService.RecordIssueViewAsync(id, userId.Value);
+
+        return Ok(detail);
     }
 
     [HttpPut("api/issues/{id:int}/status")]
@@ -110,6 +126,19 @@ public class IssuesController(
 
         var activity = await activityService.LogActivityAsync(id, IssueActivityAction.Commented, userId.Value, request.Message.Trim());
         return Ok(new ActivityResponse(activity.Id, activity.Action, activity.Message, activity.Timestamp, null, userId.Value));
+    }
+
+    [HttpGet("api/issues/{id:int}/histogram")]
+    public async Task<IActionResult> GetHistogram(int id, [FromQuery] int days = 14)
+    {
+        return Ok(await issueService.GetHistogramAsync(id, Math.Clamp(days, 1, 90)));
+    }
+
+    [HttpPost("api/issues/histogram/bulk")]
+    public async Task<IActionResult> GetBulkHistograms([FromBody] List<int> issueIds, [FromQuery] int days = 14)
+    {
+        if (issueIds.Count == 0) return Ok(new Dictionary<int, List<int>>());
+        return Ok(await issueService.GetBulkHistogramsAsync(issueIds, Math.Clamp(days, 1, 90)));
     }
 
     private Guid? GetUserId()
