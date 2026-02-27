@@ -173,7 +173,7 @@
                                             var css = tagKey == SystemTags.Regression ? "badge-error"
                                                     : tagKey == SystemTags.HighVolume  ? "badge-info"
                                                     : "badge-warning";
-                                            <span class="badge badge-sm break-keep @css">@label</span>
+                                            <span class="badge badge-sm text-nowrap @css">@label</span>
                                         }
                                     }
                                     @if (!string.IsNullOrEmpty(issue.ExceptionType))
