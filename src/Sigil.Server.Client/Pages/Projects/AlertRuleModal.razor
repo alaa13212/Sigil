@@ -345,7 +345,7 @@
             CooldownMinutes: 30),
 
         new("Error Spike",
-            "Alert when an issue sees 10 or more events within an hour.",
+            "Alert when an issue sees 50 or more events within an hour.",
             AlertTrigger.ThresholdExceeded,
             ThresholdCount: 50,
             ThresholdWindowMinutes: 60,
@@ -355,7 +355,7 @@
             "Alert when an issue sees 200 or more events within 10 minutes.",
             AlertTrigger.ThresholdExceeded,
             ThresholdCount: 200,
-            ThresholdWindowMinutes: 30,
+            ThresholdWindowMinutes: 10,
             CooldownMinutes: 30),
     ];
 
