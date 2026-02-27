@@ -45,6 +45,7 @@ internal class PostDigestionWorker(
         var dbContext = scope.ServiceProvider.GetRequiredService<SigilDbContext>();
 
         var issues = await dbContext.Issues
+            .Include(i => i.Project)
             .Where(i => work.IssueIds.Contains(i.Id))
             .ToListAsync(ct);
 

@@ -86,6 +86,7 @@ internal class AlertService(
         {
             Id = 0,
             ProjectId = rule.ProjectId,
+            Project = rule.Project,
             Title = "Test Alert Issue",
             ExceptionType = "TestException",
             Fingerprint = "test",

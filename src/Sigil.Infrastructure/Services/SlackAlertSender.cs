@@ -39,7 +39,7 @@ internal class SlackAlertSender(HttpClient http) : IAlertSender
                 new
                 {
                     type = "header",
-                    text = new { type = "plain_text", text = $"{severityEmoji} Sigil Alert: {triggerLabel}", emoji = true }
+                    text = new { type = "plain_text", text = $"{severityEmoji} Sigil Alert for ({issue.Project?.Name}): {triggerLabel}", emoji = true }
                 },
                 new
                 {
