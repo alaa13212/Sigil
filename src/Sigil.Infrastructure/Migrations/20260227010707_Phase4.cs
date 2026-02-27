@@ -23,7 +23,7 @@ namespace Sigil.infrastructure.Migrations
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
-                name: "",
+                name: "SuggestedFramesSummary",
                 table: "Issues",
                 type: "character varying(2000)",
                 maxLength: 2000,
