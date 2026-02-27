@@ -66,11 +66,11 @@ internal class PostDigestionWorker(
         foreach (var issue in issues)
         {
             if (issue.SuggestedEvent is null) continue;
-            issue.SuggestedEventMessage = issue.SuggestedEvent.Message;
+            issue.SuggestedEventMessage = issue.SuggestedEvent.Message?.Truncate(8192);
             issue.SuggestedFramesSummary = string.Join(" ",
                 issue.SuggestedEvent.StackFrames
                     .Where(f => f.InApp)
-                    .Select(f => $"{f.Module}.{f.Function} {f.Filename} {(f.Module + " " + f.Function + " " + f.Filename) .SplitPascal()}"));
+                    .Select(f => $"{f.Module}.{f.Function} {f.Filename} {(f.Module + " " + f.Function + " " + f.Filename) .SplitPascal()}")).Truncate(8192);
         }
 
         await dbContext.SaveChangesAsync(ct);

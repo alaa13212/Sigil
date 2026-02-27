@@ -9,7 +9,7 @@ public class Issue
     [Key]
     public int Id { get; set; }
 
-    [MaxLength(1000)]
+    [MaxLength(8192)]
     public string? Title { get; set; }
     
     [Required, StringLength(64)]
@@ -18,7 +18,7 @@ public class Issue
     [MaxLength(500)]
     public string? ExceptionType { get; set; }
 
-    [MaxLength(500)]
+    [MaxLength(8192)]
     public string? Culprit { get; set; }
 
     public IssueStatus Status { get; set; }
@@ -68,8 +68,9 @@ public class Issue
     public EventFilter? IgnoreFilter { get; set; }
 
     // Denormalized for full-text search
-    [MaxLength(1000)]
+    [MaxLength(8192)]
     public string? SuggestedEventMessage { get; set; }
-    [MaxLength(2000)]
+    
+    [MaxLength(8192)]
     public string? SuggestedFramesSummary { get; set; }
 }

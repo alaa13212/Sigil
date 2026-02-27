@@ -37,9 +37,9 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
                 Timestamp = parsedEvent.Timestamp,
                 ReceivedAt = parsedEvent.ReceivedAt,
                 ProcessedAt = DateTime.UtcNow,
-                Message = parsedEvent.Message,
+                Message = parsedEvent.Message?.Truncate(8192),
                 ExceptionType = parsedEvent.ExceptionType,
-                Culprit = parsedEvent.Culprit,
+                Culprit = parsedEvent.Culprit?.Truncate(8192),
                 Level = parsedEvent.Level,
                 Logger = parsedEvent.Logger,
                 Platform = parsedEvent.Platform,
@@ -228,9 +228,9 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
     {
         return parsedEvent.Stacktrace.Select(frame => new StackFrame
         {
-            Filename = frame.Filename,
-            Function = frame.Function,
-            Module = frame.Module,
+            Filename = frame.Filename?.Truncate(500),
+            Function = frame.Function?.Truncate(500),
+            Module = frame.Module?.Truncate(500),
             LineNumber = frame.LineNumber,
             ColumnNumber = frame.ColumnNumber,
             InApp = frame.InApp,

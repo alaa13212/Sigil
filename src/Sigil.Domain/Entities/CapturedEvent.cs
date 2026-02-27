@@ -16,13 +16,13 @@ public class CapturedEvent
     public required DateTime ReceivedAt { get; set; }
     public DateTime? ProcessedAt { get; set; }
 
-    [MaxLength(1000)]
+    [MaxLength(8192)]
     public string? Message { get; set; }
 
     [MaxLength(500)]
     public string? ExceptionType { get; set; }
 
-    [MaxLength(500)]
+    [MaxLength(8192)]
     public string? Culprit { get; set; }
 
     public Severity Level { get; set; }

@@ -8,6 +8,7 @@ using Sigil.Application.Models.MergeSets;
 using Sigil.Domain;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
+using Sigil.Domain.Extensions;
 using Sigil.Domain.Ingestion;
 
 namespace Sigil.Infrastructure.Persistence;
@@ -53,7 +54,7 @@ internal class IssueService(
                     newIssues.Add(new Issue
                     {
                         ProjectId = project.Id,
-                        Title = representativeEvent.NormalizedMessage,
+                        Title = representativeEvent.NormalizedMessage?.Truncate(8192),
                         ExceptionType = representativeEvent.ExceptionType,
                         Level = representativeEvent.Level,
                         Priority = Priority.Low,
@@ -62,7 +63,7 @@ internal class IssueService(
                         FirstSeen = representativeEvent.Timestamp,
                         LastSeen = representativeEvent.Timestamp,
                         OccurrenceCount = 0,
-                        Culprit = representativeEvent.Culprit,
+                        Culprit = representativeEvent.Culprit?.Truncate(8192),
                     });
                 }
                 

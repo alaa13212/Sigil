@@ -8,16 +8,16 @@ public class StackFrame
     [Key]
     public int Id { get; set; }
 
-    [MaxLength(300)]
+    [MaxLength(500)]
     public string? Function { get; set; }
 
-    [MaxLength(300)]
+    [MaxLength(500)]
     public string? Filename { get; set; }
 
     public int? LineNumber { get; set; }
     public int? ColumnNumber { get; set; }
 
-    [MaxLength(300)]
+    [MaxLength(500)]
     public string? Module { get; set; }
 
     public bool InApp { get; set; }
