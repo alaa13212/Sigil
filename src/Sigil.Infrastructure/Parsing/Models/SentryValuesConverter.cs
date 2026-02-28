@@ -30,7 +30,15 @@ internal abstract class SentryValuesConverter<TWrapper, TItem> : JsonConverter<T
 
         if (reader.TokenType == JsonTokenType.StartObject)
         {
-            return JsonSerializer.Deserialize<TWrapper>(ref reader, options);
+            // Parse the object manually to avoid infinite recursion
+            // (calling Deserialize<TWrapper> would re-enter this converter)
+            var wrapper = new TWrapper();
+            using var doc = JsonDocument.ParseValue(ref reader);
+            if (doc.RootElement.TryGetProperty("values", out var valuesElement))
+            {
+                wrapper.Values = valuesElement.Deserialize<List<TItem>>(options);
+            }
+            return wrapper;
         }
 
         throw new JsonException($"Unexpected token type: {reader.TokenType}");
@@ -44,7 +52,10 @@ internal abstract class SentryValuesConverter<TWrapper, TItem> : JsonConverter<T
             return;
         }
 
-        JsonSerializer.Serialize(writer, value, options);
+        writer.WriteStartObject();
+        writer.WritePropertyName("values");
+        JsonSerializer.Serialize(writer, value.Values, options);
+        writer.WriteEndObject();
     }
 }
 
