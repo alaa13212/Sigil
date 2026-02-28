@@ -81,13 +81,15 @@
         </label>
         
         <!-- Search -->
-        <input type="text" placeholder="Search issues..." class="input input-sm flex-1 min-w-48"
-               @bind="searchText" @bind:event="oninput" @onkeydown="OnSearchKeyDown" />
+        <form class="flex-1 min-w-48" @onsubmit="ApplySearch" @onsubmit:preventDefault>
+            <input type="text" placeholder="Search issues..." class="input input-sm w-full"
+                   @bind="searchText" @bind:event="oninput" />
+        </form>
     </div>
 
     <!-- Active tag filter chips -->
     @{
-        var activeTagFilters = ParseTagFiltersFromSearch(SearchParam);
+        var (_, activeTagFilters) = IssueSearchParser.Parse(SearchParam);
     }
     @if (activeTagFilters.Count > 0)
     {
@@ -96,7 +98,7 @@
             {
                 <div class="badge badge-lg badge-outline gap-2">
                     <span class="font-mono">@key: @value</span>
-                    <button class="btn btn-xs btn-circle btn-ghost" @onclick="ClearSearch" title="Remove filter">×</button>
+                    <button class="btn btn-xs btn-circle btn-ghost" @onclick="() => RemoveTagFilter(key, value)" title="Remove filter">×</button>
                 </div>
             }
         </div>
@@ -361,16 +363,10 @@
         }
     }
 
-    private void OnSearchKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
-            ApplySearch();
-    }
-
     private void ApplySearch()
     {
-        string quary = string.IsNullOrWhiteSpace(searchText) ? "" : $"&q={Uri.EscapeDataString(searchText)}";
-        Navigation.NavigateTo($"/projects/{ProjectId}/issues?page=1{quary}", forceLoad: false);
+        var q = string.IsNullOrWhiteSpace(searchText) ? "" : $"&q={Uri.EscapeDataString(searchText)}";
+        Navigation.NavigateTo($"/projects/{ProjectId}/issues?page=1{q}", forceLoad: false);
     }
 
     private async Task ToggleBookmarkedFilter()
@@ -380,23 +376,14 @@
         await LoadIssues();
     }
 
-    private static List<(string Key, string Value)> ParseTagFiltersFromSearch(string? search)
+    private void RemoveTagFilter(string key, string value)
     {
-        if (string.IsNullOrWhiteSpace(search)) return [];
-        var result = new List<(string, string)>();
-        foreach (var part in search.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var idx = part.IndexOf(':');
-            if (idx > 0 && idx < part.Length - 1)
-                result.Add((part[..idx], part[(idx + 1)..]));
-        }
-        return result;
-    }
-
-    private void ClearSearch()
-    {
-        searchText = "";
-        Navigation.NavigateTo($"/projects/{ProjectId}/issues?page=1", forceLoad: false);
+        var (freeText, tags) = IssueSearchParser.Parse(SearchParam);
+        var remaining = tags.Where(t => !(t.Key == key && t.Value == value)).ToList();
+        var newSearch = IssueSearchParser.Serialize(freeText, remaining);
+        searchText = newSearch;
+        var q = string.IsNullOrEmpty(newSearch) ? "" : $"&q={Uri.EscapeDataString(newSearch)}";
+        Navigation.NavigateTo($"/projects/{ProjectId}/issues?page=1{q}", forceLoad: false);
     }
 
     private async Task LoadHistogramsAsync(List<int> issueIds)

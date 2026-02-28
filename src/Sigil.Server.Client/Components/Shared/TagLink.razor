@@ -1,6 +1,10 @@
+@using Sigil.Application.Models.Issues
 @inject ITagValueFormatter TagValueFormatter
 
-<a href="/projects/@ProjectId/issues?q=@Uri.EscapeDataString($"{Key}:{Value}")"
+@{
+    var filterExpr = Value.Contains(' ') ? $"{Key}:\"{Value}\"" : $"{Key}:{Value}";
+}
+<a href="/projects/@ProjectId/issues?q=@Uri.EscapeDataString(filterExpr)"
    class="link link-hover font-mono text-sm">@TagValueFormatter.Format(Key, Value)</a>
 
 @code {

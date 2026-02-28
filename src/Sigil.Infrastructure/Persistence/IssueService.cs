@@ -129,7 +129,7 @@ internal class IssueService(
         if (query.BookmarkedByUserId.HasValue)
             q = q.Where(i => dbContext.UserIssueStates.Any(s => s.IssueId == i.Id && s.UserId == query.BookmarkedByUserId.Value && s.IsBookmarked));
 
-        var (freeText, tagFilters) = ParseSearch(query.Search);
+        var (freeText, tagFilters) = IssueSearchParser.Parse(query.Search);
         bool hasFullTextSearch = !string.IsNullOrEmpty(freeText);
         if (hasFullTextSearch)
         {
@@ -532,23 +532,4 @@ internal class IssueService(
         public string? LastRelease { get; set; }
     }
 
-    private static (string? FreeText, List<(string Key, string Value)> TagFilters) ParseSearch(string? search)
-    {
-        if (string.IsNullOrWhiteSpace(search)) return (null, []);
-
-        var parts = search.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var tagFilters = new List<(string Key, string Value)>();
-        var freeTextParts = new List<string>();
-
-        foreach (var part in parts)
-        {
-            var colonIdx = part.IndexOf(':');
-            if (colonIdx > 0 && colonIdx < part.Length - 1)
-                tagFilters.Add((part[..colonIdx], part[(colonIdx + 1)..]));
-            else
-                freeTextParts.Add(part);
-        }
-
-        return (freeTextParts.Count > 0 ? string.Join(' ', freeTextParts) : null, tagFilters);
-    }
 }

@@ -161,7 +161,8 @@
                     <div class="px-4 py-1.5 text-xs font-semibold opacity-50 uppercase tracking-wide">Tags</div>
                     @foreach (var tag in _results.Tags)
                     {
-                        var tagUrl = $"/projects/{tag.ProjectId}/issues?q={Uri.EscapeDataString(tag.Key + ":" + tag.Value)}";
+                        var tagFilter = tag.Value.Contains(' ') ? $"{tag.Key}:\"{tag.Value}\"" : $"{tag.Key}:{tag.Value}";
+                        var tagUrl = $"/projects/{tag.ProjectId}/issues?q={Uri.EscapeDataString(tagFilter)}";
                         var tagLabel = $"{tag.Key}:{tag.Value}";
                         var ni = idx++;
                         <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-300 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-2"
