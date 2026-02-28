@@ -67,6 +67,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMergeSetService, MergeSetService>();
         services.AddScoped<IBookmarkService, BookmarkService>();
         services.AddScoped<IAlertService, AlertService>();
+        services.AddScoped<IAlertChannelService, AlertChannelService>();
         services.AddScoped<IReleaseHealthService, ReleaseHealthService>();
         services.AddScoped<IRecommendationService, RecommendationService>();
         services.AddSingleton<IProjectConfigService, ProjectConfigService>();

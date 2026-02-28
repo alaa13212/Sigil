@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Application.Models.Alerts;
-using Sigil.Domain;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 
@@ -20,6 +19,7 @@ internal class AlertService(
     public async Task<List<AlertRuleResponse>> GetRulesForProjectAsync(int projectId)
     {
         var rules = await dbContext.AlertRules
+            .Include(r => r.AlertChannel)
             .Where(r => r.ProjectId == projectId)
             .OrderBy(r => r.CreatedAt)
             .ToListAsync();
@@ -34,8 +34,7 @@ internal class AlertService(
             ProjectId = projectId,
             Name = request.Name,
             Trigger = request.Trigger,
-            Channel = request.Channel,
-            ChannelConfig = request.ChannelConfig,
+            AlertChannelId = request.AlertChannelId,
             ThresholdCount = request.ThresholdCount,
             ThresholdWindow = request.ThresholdWindow,
             MinSeverity = request.MinSeverity,
@@ -46,18 +45,21 @@ internal class AlertService(
 
         dbContext.AlertRules.Add(rule);
         await dbContext.SaveChangesAsync();
+
+        await dbContext.Entry(rule).Reference(r => r.AlertChannel).LoadAsync();
         return ToResponse(rule);
     }
 
     public async Task<AlertRuleResponse?> UpdateRuleAsync(int ruleId, UpdateAlertRuleRequest request)
     {
-        var rule = await dbContext.AlertRules.AsTracking().FirstOrDefaultAsync(r => r.Id == ruleId);
+        var rule = await dbContext.AlertRules.AsTracking()
+            .Include(r => r.AlertChannel)
+            .FirstOrDefaultAsync(r => r.Id == ruleId);
         if (rule is null) return null;
 
         rule.Name = request.Name;
         rule.Trigger = request.Trigger;
-        rule.Channel = request.Channel;
-        rule.ChannelConfig = request.ChannelConfig;
+        rule.AlertChannelId = request.AlertChannelId;
         rule.ThresholdCount = request.ThresholdCount;
         rule.ThresholdWindow = request.ThresholdWindow;
         rule.MinSeverity = request.MinSeverity;
@@ -65,6 +67,10 @@ internal class AlertService(
         rule.Enabled = request.Enabled;
 
         await dbContext.SaveChangesAsync();
+
+        if (rule.AlertChannel?.Id != request.AlertChannelId)
+            await dbContext.Entry(rule).Reference(r => r.AlertChannel).LoadAsync();
+
         return ToResponse(rule);
     }
 
@@ -74,10 +80,21 @@ internal class AlertService(
         return deleted > 0;
     }
 
+    public async Task<bool> ToggleRuleAsync(int ruleId, bool enabled)
+    {
+        var rule = await dbContext.AlertRules.AsTracking().FirstOrDefaultAsync(r => r.Id == ruleId);
+        if (rule is null) return false;
+
+        rule.Enabled = enabled;
+        await dbContext.SaveChangesAsync();
+        return true;
+    }
+
     public async Task SendTestAlertAsync(int ruleId)
     {
         var rule = await dbContext.AlertRules
             .Include(r => r.Project)
+            .Include(r => r.AlertChannel)
             .FirstOrDefaultAsync(r => r.Id == ruleId);
 
         if (rule is null) throw new InvalidOperationException($"Alert rule {ruleId} not found.");
@@ -97,7 +114,7 @@ internal class AlertService(
             LastSeen = dateTime.UtcNow
         };
 
-        var sender = GetSender(rule.Channel);
+        var sender = GetSender(rule.AlertChannel!.Type);
         var baseUrl = GetBaseUrl();
         await sender.SendAsync(rule, fakeIssue, $"{baseUrl}/projects/{rule.ProjectId}/issues/0");
     }
@@ -188,9 +205,10 @@ internal class AlertService(
 
     private string GetBaseUrl() =>
         appConfigService.HostUrl?.TrimEnd('/') ?? "";
-    
+
     private async Task<List<AlertRule>> GetEnabledRulesAsync(int projectId, AlertTrigger trigger) =>
         await dbContext.AlertRules
+            .Include(r => r.AlertChannel)
             .Where(r => r.ProjectId == projectId && r.Enabled && r.Trigger == trigger)
             .ToListAsync();
 
@@ -209,7 +227,7 @@ internal class AlertService(
 
         var baseUrl = GetBaseUrl();
         var issueUrl = issue.Id > 0 ? $"{baseUrl}/projects/{issue.ProjectId}/issues/{issue.Id}" : "";
-        var sender = GetSender(rule.Channel);
+        var sender = GetSender(rule.AlertChannel!.Type);
 
         try
         {
@@ -236,15 +254,16 @@ internal class AlertService(
         await dbContext.SaveChangesAsync();
     }
 
-    private IAlertSender GetSender(AlertChannel channel) =>
+    private IAlertSender GetSender(AlertChannelType channel) =>
         senders.FirstOrDefault(s => s.Channel == channel)
         ?? throw new InvalidOperationException($"No sender registered for channel {channel}.");
 
     private static AlertRuleResponse ToResponse(AlertRule r) => new(
-        r.Id, r.ProjectId, r.Name, r.Trigger, r.Channel,
+        r.Id, r.ProjectId, r.Name, r.Trigger,
+        r.AlertChannelId, r.AlertChannel?.Name ?? "",
         r.ThresholdCount, r.ThresholdWindow, r.MinSeverity,
-        r.ChannelConfig, r.CooldownPeriod, r.Enabled, r.CreatedAt);
-    
+        r.CooldownPeriod, r.Enabled, r.CreatedAt);
+
 
     #endregion
 }

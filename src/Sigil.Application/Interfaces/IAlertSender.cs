@@ -5,6 +5,6 @@ namespace Sigil.Application.Interfaces;
 
 public interface IAlertSender
 {
-    AlertChannel Channel { get; }
+    AlertChannelType Channel { get; }
     Task<bool> SendAsync(AlertRule rule, Issue issue, string issueUrl);
 }

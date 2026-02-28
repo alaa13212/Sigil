@@ -8,11 +8,11 @@ namespace Sigil.Infrastructure.Services;
 
 internal class SlackAlertSender(HttpClient http) : IAlertSender
 {
-    public AlertChannel Channel => AlertChannel.Slack;
+    public AlertChannelType Channel => AlertChannelType.Slack;
 
     public async Task<bool> SendAsync(AlertRule rule, Issue issue, string issueUrl)
     {
-        var config = JsonSerializer.Deserialize<SlackConfig>(rule.ChannelConfig);
+        var config = JsonSerializer.Deserialize<SlackConfig>(rule.AlertChannel!.Config);
         if (config?.WebhookUrl is null) return false;
 
         var triggerLabel = rule.Trigger switch
@@ -73,7 +73,13 @@ internal class SlackAlertSender(HttpClient http) : IAlertSender
     }
 
     private static string EscapeSlack(string text) =>
-        text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+        text
+            .Replace("&", "&amp;")
+            .Replace("<", "&lt;")
+            .Replace(">", "&gt;")
+            .Replace("|", "\u2502")
+            .Replace("`", "\u2018")
+            .Replace("*", "\u2217");
 
     private record SlackConfig(string? WebhookUrl);
 }

@@ -35,6 +35,13 @@ public class AlertsController(IAlertService alertService) : SigilController
         return deleted ? NoContent() : NotFound();
     }
 
+    [HttpPatch("api/alert-rules/{id:int}/toggle")]
+    public async Task<IActionResult> ToggleRule(int id, [FromBody] ToggleRequest body)
+    {
+        var success = await alertService.ToggleRuleAsync(id, body.Enabled);
+        return success ? Ok() : NotFound();
+    }
+
     [HttpPost("api/alert-rules/{id:int}/test")]
     public async Task<IActionResult> TestRule(int id)
     {
@@ -56,3 +63,5 @@ public class AlertsController(IAlertService alertService) : SigilController
         [FromQuery] int pageSize = 50) =>
         Ok(await alertService.GetAlertHistoryAsync(projectId, page, Math.Clamp(pageSize, 1, 100)));
 }
+
+public record ToggleRequest(bool Enabled);

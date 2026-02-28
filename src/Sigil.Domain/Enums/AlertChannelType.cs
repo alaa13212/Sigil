@@ -1,6 +1,6 @@
 namespace Sigil.Domain.Enums;
 
-public enum AlertChannel
+public enum AlertChannelType
 {
     Slack,
     Webhook,

@@ -31,6 +31,12 @@ public class ApiAlertService(HttpClient http) : IAlertService
         return response.IsSuccessStatusCode;
     }
 
+    public async Task<bool> ToggleRuleAsync(int ruleId, bool enabled)
+    {
+        var response = await http.PatchAsJsonAsync($"api/alert-rules/{ruleId}/toggle", new { enabled });
+        return response.IsSuccessStatusCode;
+    }
+
     public async Task SendTestAlertAsync(int ruleId)
     {
         var response = await http.PostAsync($"api/alert-rules/{ruleId}/test", null);

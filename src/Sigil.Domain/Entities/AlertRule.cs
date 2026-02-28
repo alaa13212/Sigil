@@ -17,16 +17,15 @@ public class AlertRule
     public required string Name { get; set; }
 
     public AlertTrigger Trigger { get; set; }
-    public AlertChannel Channel { get; set; }
+
+    [ForeignKey(nameof(AlertChannel))]
+    public int AlertChannelId { get; set; }
+    public AlertChannel? AlertChannel { get; set; }
 
     // Conditions
     public int? ThresholdCount { get; set; }
     public TimeSpan? ThresholdWindow { get; set; }
     public Severity? MinSeverity { get; set; }
-
-    // Channel-specific config stored as JSON
-    [Required]
-    public required string ChannelConfig { get; set; }
 
     // Rate limiting
     public TimeSpan CooldownPeriod { get; set; } = TimeSpan.FromMinutes(30);

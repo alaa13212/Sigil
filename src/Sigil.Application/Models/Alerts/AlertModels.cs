@@ -7,11 +7,11 @@ public record AlertRuleResponse(
     int ProjectId,
     string Name,
     AlertTrigger Trigger,
-    AlertChannel Channel,
+    int AlertChannelId,
+    string AlertChannelName,
     int? ThresholdCount,
     TimeSpan? ThresholdWindow,
     Severity? MinSeverity,
-    string ChannelConfig,
     TimeSpan CooldownPeriod,
     bool Enabled,
     DateTime CreatedAt);
@@ -19,8 +19,7 @@ public record AlertRuleResponse(
 public record CreateAlertRuleRequest(
     string Name,
     AlertTrigger Trigger,
-    AlertChannel Channel,
-    string ChannelConfig,
+    int AlertChannelId,
     int? ThresholdCount = null,
     TimeSpan? ThresholdWindow = null,
     Severity? MinSeverity = null,
@@ -30,13 +29,29 @@ public record CreateAlertRuleRequest(
 public record UpdateAlertRuleRequest(
     string Name,
     AlertTrigger Trigger,
-    AlertChannel Channel,
-    string ChannelConfig,
+    int AlertChannelId,
     int? ThresholdCount,
     TimeSpan? ThresholdWindow,
     Severity? MinSeverity,
     TimeSpan CooldownPeriod,
     bool Enabled);
+
+public record AlertChannelResponse(
+    int Id,
+    string Name,
+    AlertChannelType Type,
+    string Config,
+    DateTime CreatedAt);
+
+public record CreateAlertChannelRequest(
+    string Name,
+    AlertChannelType Type,
+    string Config);
+
+public record UpdateAlertChannelRequest(
+    string Name,
+    AlertChannelType Type,
+    string Config);
 
 public record AlertHistoryResponse(
     long Id,

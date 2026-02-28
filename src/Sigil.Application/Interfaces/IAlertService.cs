@@ -11,6 +11,7 @@ public interface IAlertService
     Task<AlertRuleResponse> CreateRuleAsync(int projectId, CreateAlertRuleRequest request);
     Task<AlertRuleResponse?> UpdateRuleAsync(int ruleId, UpdateAlertRuleRequest request);
     Task<bool> DeleteRuleAsync(int ruleId);
+    Task<bool> ToggleRuleAsync(int ruleId, bool enabled);
     Task SendTestAlertAsync(int ruleId);
 
     // Alert evaluation (server-side only, called from DigestionService)

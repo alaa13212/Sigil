@@ -1,0 +1,281 @@
+@page "/admin/alert-channels"
+@attribute [Authorize]
+@using Sigil.Application.Models.Alerts
+@inject IAlertChannelService ChannelService
+
+<PageTitle>Alert Channels — Sigil</PageTitle>
+
+<div class="max-w-3xl space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold">Alert Channels</h1>
+        <button class="btn btn-primary btn-sm" @onclick="OpenCreate">+ New Channel</button>
+    </div>
+
+    @if (loading)
+    {
+        <div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>
+    }
+    else if (channels.Count == 0)
+    {
+        <EmptyState Title="No alert channels" Description="Create a channel to use with alert rules across all projects." />
+    }
+    else
+    {
+        <div class="space-y-3">
+            @foreach (var channel in channels)
+            {
+                <div class="card bg-base-100">
+                    <div class="card-body p-4">
+                        <div class="flex items-center justify-between gap-4">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="font-semibold">@channel.Name</span>
+                                    <span class="badge badge-sm badge-info">@channel.Type</span>
+                                </div>
+                                <div class="text-xs opacity-60 mt-1">
+                                    Created @channel.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC
+                                </div>
+                            </div>
+                            <div class="flex gap-1 shrink-0">
+                                <button class="btn btn-ghost btn-xs" @onclick="() => OpenEdit(channel)">Edit</button>
+                                <button class="btn btn-ghost btn-xs text-error" @onclick="() => DeleteChannel(channel.Id)">Delete</button>
+                            </div>
+                        </div>
+
+                        @if (deleteError == channel.Id)
+                        {
+                            <div class="text-xs text-error mt-1">Cannot delete — channel is in use by one or more alert rules.</div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Modal -->
+@if (showModal)
+{
+    <ModalBase IsOpen="true" OnClose="CloseModal"
+               Title="@(editingChannel is null ? "New Channel" : "Edit Channel")"
+               Size="ModalSize.Small">
+        <div class="space-y-4">
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Name</legend>
+                <input class="input input-bordered w-full" @bind="formName" placeholder="e.g. #alerts-prod" />
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Type</legend>
+                <select class="select select-bordered w-full" @bind="formType">
+                    @foreach (var t in Enum.GetValues<AlertChannelType>())
+                    {
+                        <option value="@t">@t</option>
+                    }
+                </select>
+            </fieldset>
+
+            @if (formType == AlertChannelType.Slack)
+            {
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Slack Webhook URL</legend>
+                    <input class="input input-bordered w-full font-mono text-sm" @bind="formSlackUrl"
+                           placeholder="https://hooks.slack.com/services/..." />
+                </fieldset>
+
+                <details class="collapse collapse-arrow bg-base-200 rounded-box">
+                    <summary class="collapse-title text-sm font-medium">How to get a Slack Webhook URL</summary>
+                    <div class="collapse-content text-sm space-y-2 opacity-80">
+                        <ol class="list-decimal list-inside space-y-1">
+                            <li>Go to <strong><a href="https://api.slack.com/apps" target="_blank">api.slack.com/apps</a></strong> and click <em>Create New App → From scratch</em>.</li>
+                            <li>Give it a name (e.g. "Sigil Alerts") and select your workspace.</li>
+                            <li>In the left sidebar, click <em>Incoming Webhooks</em> and toggle it <em>On</em>.</li>
+                            <li>Click <em>Add New Webhook to Workspace</em>, choose a channel, and click <em>Allow</em>.</li>
+                            <li>Copy the Webhook URL (starts with <code>https://hooks.slack.com/services/</code>) and paste it above.</li>
+                        </ol>
+                    </div>
+                </details>
+            }
+            else if (formType == AlertChannelType.Webhook)
+            {
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Webhook URL</legend>
+                    <input class="input input-bordered w-full font-mono text-sm" @bind="formWebhookUrl"
+                           placeholder="https://example.com/webhook" />
+                </fieldset>
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">HMAC Secret (optional)</legend>
+                    <input class="input input-bordered w-full font-mono text-sm" @bind="formWebhookSecret"
+                           placeholder="Optional signing secret" />
+                </fieldset>
+
+                <details class="collapse collapse-arrow bg-base-200 rounded-box">
+                    <summary class="collapse-title text-sm font-medium">Webhook payload format</summary>
+                    <div class="collapse-content text-sm opacity-80 space-y-1">
+                        <p>Sigil sends a <code>POST</code> request with a JSON body:</p>
+                        <pre class="bg-base-300 rounded p-2 text-xs overflow-x-auto">{
+  "trigger": "NewIssue",
+  "rule": { "id": 1, "name": "..." },
+  "issue": {
+    "id": 123, "title": "...",
+    "severity": "error", "status": "open",
+    "occurrence_count": 5, "url": "..."
+  },
+  "timestamp": "2025-01-01T00:00:00Z"
+}</pre>
+                        <p>If you set an HMAC secret, each request will include an <code>X-Sigil-Signature: sha256=…</code> header you can verify.</p>
+                    </div>
+                </details>
+            }
+
+            @if (!string.IsNullOrEmpty(formError))
+            {
+                <div class="alert alert-error text-sm">@formError</div>
+            }
+
+            <div class="modal-action">
+                <button class="btn btn-ghost" @onclick="CloseModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveChannel" disabled="@formSaving">
+                    @(formSaving ? "Saving…" : (editingChannel is null ? "Create" : "Save"))
+                </button>
+            </div>
+        </div>
+    </ModalBase>
+}
+
+@code {
+    private List<AlertChannelResponse> channels = [];
+    private bool loading = true;
+    private int? deleteError;
+
+    // Modal state
+    private bool showModal;
+    private AlertChannelResponse? editingChannel;
+    private string formName = "";
+    private AlertChannelType formType = AlertChannelType.Slack;
+    private string formSlackUrl = "";
+    private string formWebhookUrl = "";
+    private string formWebhookSecret = "";
+    private string formError = "";
+    private bool formSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        channels = await ChannelService.GetAllChannelsAsync();
+        loading = false;
+    }
+
+    private void OpenCreate()
+    {
+        editingChannel = null;
+        formName = "";
+        formType = AlertChannelType.Slack;
+        formSlackUrl = "";
+        formWebhookUrl = "";
+        formWebhookSecret = "";
+        formError = "";
+        showModal = true;
+    }
+
+    private void OpenEdit(AlertChannelResponse channel)
+    {
+        editingChannel = channel;
+        formName = channel.Name;
+        formType = channel.Type;
+        formError = "";
+
+        // Parse config
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(channel.Config);
+            var root = doc.RootElement;
+            if (channel.Type == AlertChannelType.Slack)
+            {
+                formSlackUrl = root.TryGetProperty("WebhookUrl", out var v) ? v.GetString() ?? "" : "";
+                formWebhookUrl = "";
+                formWebhookSecret = "";
+            }
+            else
+            {
+                formWebhookUrl = root.TryGetProperty("Url", out var u) ? u.GetString() ?? "" : "";
+                formWebhookSecret = root.TryGetProperty("Secret", out var s) ? s.GetString() ?? "" : "";
+                formSlackUrl = "";
+            }
+        }
+        catch
+        {
+            formSlackUrl = "";
+            formWebhookUrl = "";
+            formWebhookSecret = "";
+        }
+
+        showModal = true;
+    }
+
+    private void CloseModal() => showModal = false;
+
+    private async Task SaveChannel()
+    {
+        if (string.IsNullOrWhiteSpace(formName))
+        {
+            formError = "Name is required.";
+            return;
+        }
+
+        var config = BuildConfig();
+        if (config is null)
+        {
+            formError = "Please provide the required configuration.";
+            return;
+        }
+
+        formSaving = true;
+        formError = "";
+        try
+        {
+            if (editingChannel is null)
+            {
+                var created = await ChannelService.CreateChannelAsync(new CreateAlertChannelRequest(formName, formType, config));
+                channels.Add(created);
+            }
+            else
+            {
+                var updated = await ChannelService.UpdateChannelAsync(editingChannel.Id, new UpdateAlertChannelRequest(formName, formType, config));
+                if (updated is not null)
+                {
+                    var idx = channels.FindIndex(c => c.Id == editingChannel.Id);
+                    if (idx >= 0) channels[idx] = updated;
+                }
+            }
+
+            showModal = false;
+        }
+        catch (Exception ex)
+        {
+            formError = ex.Message;
+        }
+        finally
+        {
+            formSaving = false;
+        }
+    }
+
+    private async Task DeleteChannel(int id)
+    {
+        deleteError = null;
+        var deleted = await ChannelService.DeleteChannelAsync(id);
+        if (deleted)
+            channels.RemoveAll(c => c.Id == id);
+        else
+            deleteError = id;
+    }
+
+    private string? BuildConfig() => formType switch
+    {
+        AlertChannelType.Slack when !string.IsNullOrWhiteSpace(formSlackUrl)
+            => System.Text.Json.JsonSerializer.Serialize(new { WebhookUrl = formSlackUrl }),
+        AlertChannelType.Webhook when !string.IsNullOrWhiteSpace(formWebhookUrl)
+            => System.Text.Json.JsonSerializer.Serialize(new { Url = formWebhookUrl, Secret = formWebhookSecret }),
+        _ => null
+    };
+}

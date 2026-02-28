@@ -9,11 +9,11 @@ namespace Sigil.Infrastructure.Services;
 
 internal class WebhookAlertSender(HttpClient http) : IAlertSender
 {
-    public AlertChannel Channel => AlertChannel.Webhook;
+    public AlertChannelType Channel => AlertChannelType.Webhook;
 
     public async Task<bool> SendAsync(AlertRule rule, Issue issue, string issueUrl)
     {
-        var config = JsonSerializer.Deserialize<WebhookConfig>(rule.ChannelConfig);
+        var config = JsonSerializer.Deserialize<WebhookConfig>(rule.AlertChannel!.Config);
         if (config?.Url is null) return false;
 
         var payload = new

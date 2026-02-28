@@ -14,5 +14,10 @@ internal class AlertRuleConfiguration : IEntityTypeConfiguration<AlertRule>
             .WithMany()
             .HasForeignKey(r => r.ProjectId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(r => r.AlertChannel)
+            .WithMany()
+            .HasForeignKey(r => r.AlertChannelId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

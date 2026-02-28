@@ -1,5 +1,6 @@
 @using Sigil.Application.Models.Alerts
 @inject IAlertService AlertService
+@inject IAlertChannelService ChannelService
 
 <ModalBase IsOpen="IsOpen" OnClose="Close"
            Title="@(EditingRule is null ? "New Alert Rule" : "Edit Alert Rule")"
@@ -70,14 +71,89 @@
 
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Channel</legend>
-                        <select class="select select-bordered w-full" @bind="form.Channel">
-                            @foreach (var c in Enum.GetValues<AlertChannel>())
+                        <select class="select select-bordered w-full" @bind="form.SelectedChannelId">
+                            @foreach (var ch in Channels)
                             {
-                                <option value="@c">@c</option>
+                                <option value="@ch.Id">@ch.Name (@ch.Type)</option>
                             }
+                            <option value="-1">+ Create new channel...</option>
                         </select>
                     </fieldset>
                 </div>
+
+                @if (form.SelectedChannelId == -1)
+                {
+                    <div class="border border-base-300 rounded-lg p-3 space-y-3 bg-base-200/50">
+                        <p class="text-xs font-semibold opacity-60 uppercase tracking-wide">New Channel</p>
+                        <fieldset class="fieldset">
+                            <legend class="fieldset-legend">Channel Name</legend>
+                            <input class="input input-bordered w-full" @bind="form.NewChannelName" placeholder="e.g. #alerts-prod" />
+                        </fieldset>
+
+                        <fieldset class="fieldset">
+                            <legend class="fieldset-legend">Type</legend>
+                            <select class="select select-bordered w-full" @bind="form.NewAlertChannelType">
+                                @foreach (var c in Enum.GetValues<AlertChannelType>())
+                                {
+                                    <option value="@c">@c</option>
+                                }
+                            </select>
+                        </fieldset>
+
+                        @if (form.NewAlertChannelType == AlertChannelType.Slack)
+                        {
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Slack Webhook URL</legend>
+                                <input class="input input-bordered w-full font-mono text-sm" @bind="form.SlackWebhookUrl"
+                                       placeholder="https://hooks.slack.com/services/..." />
+                            </fieldset>
+
+                            <details class="collapse collapse-arrow bg-base-200 rounded-box">
+                                <summary class="collapse-title text-sm font-medium">How to get a Slack Webhook URL</summary>
+                                <div class="collapse-content text-sm space-y-2 opacity-80">
+                                    <ol class="list-decimal list-inside space-y-1">
+                                        <li>Go to <strong><a href="https://api.slack.com/apps" target="_blank">api.slack.com/apps</a></strong> and click <em>Create New App → From scratch</em>.</li>
+                                        <li>Give it a name (e.g. "Sigil Alerts") and select your workspace.</li>
+                                        <li>In the left sidebar, click <em>Incoming Webhooks</em> and toggle it <em>On</em>.</li>
+                                        <li>Click <em>Add New Webhook to Workspace</em>, choose a channel, and click <em>Allow</em>.</li>
+                                        <li>Copy the Webhook URL (starts with <code>https://hooks.slack.com/services/</code>) and paste it above.</li>
+                                    </ol>
+                                </div>
+                            </details>
+                        }
+                        else if (form.NewAlertChannelType == AlertChannelType.Webhook)
+                        {
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Webhook URL</legend>
+                                <input class="input input-bordered w-full font-mono text-sm" @bind="form.WebhookUrl"
+                                       placeholder="https://example.com/webhook" />
+                            </fieldset>
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">HMAC Secret (optional)</legend>
+                                <input class="input input-bordered w-full font-mono text-sm" @bind="form.WebhookSecret"
+                                       placeholder="Optional signing secret" />
+                            </fieldset>
+
+                            <details class="collapse collapse-arrow bg-base-200 rounded-box">
+                                <summary class="collapse-title text-sm font-medium">Webhook payload format</summary>
+                                <div class="collapse-content text-sm opacity-80 space-y-1">
+                                    <p>Sigil sends a <code>POST</code> request with a JSON body:</p>
+                                    <pre class="bg-base-300 rounded p-2 text-xs overflow-x-auto">{
+  "trigger": "NewIssue",
+  "rule": { "id": 1, "name": "..." },
+  "issue": {
+    "id": 123, "title": "...",
+    "severity": "error", "status": "open",
+    "occurrence_count": 5, "url": "..."
+  },
+  "timestamp": "2025-01-01T00:00:00Z"
+}</pre>
+                                    <p>If you set an HMAC secret, each request will include an <code>X-Sigil-Signature: sha256=…</code> header you can verify.</p>
+                                </div>
+                            </details>
+                        }
+                    </div>
+                }
 
                 @if (form.Trigger == AlertTrigger.ThresholdExceeded)
                 {
@@ -110,59 +186,6 @@
                     </fieldset>
                 </div>
 
-                @if (form.Channel == AlertChannel.Slack)
-                {
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Slack Webhook URL</legend>
-                        <input class="input input-bordered w-full font-mono text-sm" @bind="form.SlackWebhookUrl"
-                               placeholder="https://hooks.slack.com/services/..." />
-                    </fieldset>
-
-                    <details class="collapse collapse-arrow bg-base-200 rounded-box">
-                        <summary class="collapse-title text-sm font-medium">How to get a Slack Webhook URL</summary>
-                        <div class="collapse-content text-sm space-y-2 opacity-80">
-                            <ol class="list-decimal list-inside space-y-1">
-                                <li>Go to <strong><a href="https://api.slack.com/apps">api.slack.com/apps</a></strong> and click <em>Create New App → From scratch</em>.</li>
-                                <li>Give it a name (e.g. "Sigil Alerts") and select your workspace.</li>
-                                <li>In the left sidebar, click <em>Incoming Webhooks</em> and toggle it <em>On</em>.</li>
-                                <li>Click <em>Add New Webhook to Workspace</em>, choose a channel, and click <em>Allow</em>.</li>
-                                <li>Copy the Webhook URL (starts with <code>https://hooks.slack.com/services/</code>) and paste it above.</li>
-                            </ol>
-                        </div>
-                    </details>
-                }
-                else if (form.Channel == AlertChannel.Webhook)
-                {
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Webhook URL</legend>
-                        <input class="input input-bordered w-full font-mono text-sm" @bind="form.WebhookUrl"
-                               placeholder="https://example.com/webhook" />
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">HMAC Secret (optional)</legend>
-                        <input class="input input-bordered w-full font-mono text-sm" @bind="form.WebhookSecret"
-                               placeholder="Optional signing secret" />
-                    </fieldset>
-
-                    <details class="collapse collapse-arrow bg-base-200 rounded-box">
-                        <summary class="collapse-title text-sm font-medium">Webhook payload format</summary>
-                        <div class="collapse-content text-sm opacity-80 space-y-1">
-                            <p>Sigil sends a <code>POST</code> request with a JSON body:</p>
-                            <pre class="bg-base-300 rounded p-2 text-xs overflow-x-auto">{
-  "trigger": "NewIssue",
-  "rule": { "id": 1, "name": "..." },
-  "issue": {
-    "id": 123, "title": "...",
-    "severity": "error", "status": "open",
-    "occurrence_count": 5, "url": "..."
-  },
-  "timestamp": "2025-01-01T00:00:00Z"
-}</pre>
-                            <p>If you set an HMAC secret, each request will include an <code>X-Sigil-Signature: sha256=…</code> header you can verify.</p>
-                        </div>
-                    </details>
-                }
-
                 <label class="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" class="checkbox checkbox-sm" @bind="form.Enabled" />
                     <span class="text-sm">Enabled</span>
@@ -187,6 +210,7 @@
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public int ProjectId { get; set; }
     [Parameter] public AlertRuleResponse? EditingRule { get; set; }
+    [Parameter] public List<AlertChannelResponse> Channels { get; set; } = [];
     [Parameter] public EventCallback<AlertRuleResponse> OnSaved { get; set; }
     [Parameter] public EventCallback OnClosed { get; set; }
 
@@ -202,6 +226,8 @@
         if (EditingRule is null)
         {
             form = new FormModel();
+            if (Channels.Count > 0)
+                form.SelectedChannelId = Channels[0].Id;
             showTemplateStep = true;
         }
         else
@@ -227,6 +253,10 @@
                 ThresholdWindowMinutes = tpl.ThresholdWindowMinutes,
                 CooldownMinutes = tpl.CooldownMinutes,
             };
+
+        if (Channels.Count > 0)
+            form.SelectedChannelId = Channels[0].Id;
+
         showTemplateStep = false;
     }
 
@@ -238,22 +268,40 @@
             return;
         }
 
-        var channelConfig = BuildChannelConfig();
-        if (channelConfig is null)
-        {
-            error = "Please provide the required channel configuration.";
-            return;
-        }
-
         saving = true;
         error = "";
         try
         {
+            var channelId = form.SelectedChannelId;
+
+            // Create new channel inline if requested
+            if (channelId == -1)
+            {
+                var channelConfig = BuildNewChannelConfig();
+                if (channelConfig is null)
+                {
+                    error = "Please provide the required channel configuration.";
+                    saving = false;
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(form.NewChannelName))
+                {
+                    error = "Channel name is required.";
+                    saving = false;
+                    return;
+                }
+
+                var newChannel = await ChannelService.CreateChannelAsync(
+                    new CreateAlertChannelRequest(form.NewChannelName, form.NewAlertChannelType, channelConfig));
+                channelId = newChannel.Id;
+            }
+
             AlertRuleResponse result;
             if (EditingRule is null)
             {
                 var request = new CreateAlertRuleRequest(
-                    form.Name, form.Trigger, form.Channel, channelConfig,
+                    form.Name, form.Trigger, channelId,
                     form.Trigger == AlertTrigger.ThresholdExceeded ? form.ThresholdCount : null,
                     form.Trigger == AlertTrigger.ThresholdExceeded && form.ThresholdWindowMinutes > 0
                         ? TimeSpan.FromMinutes(form.ThresholdWindowMinutes) : null,
@@ -265,7 +313,7 @@
             else
             {
                 var request = new UpdateAlertRuleRequest(
-                    form.Name, form.Trigger, form.Channel, channelConfig,
+                    form.Name, form.Trigger, channelId,
                     form.Trigger == AlertTrigger.ThresholdExceeded ? form.ThresholdCount : null,
                     form.Trigger == AlertTrigger.ThresholdExceeded && form.ThresholdWindowMinutes > 0
                         ? TimeSpan.FromMinutes(form.ThresholdWindowMinutes) : null,
@@ -290,11 +338,11 @@
 
     private Task Close() => OnClosed.InvokeAsync();
 
-    private string? BuildChannelConfig() => form.Channel switch
+    private string? BuildNewChannelConfig() => form.NewAlertChannelType switch
     {
-        AlertChannel.Slack when !string.IsNullOrWhiteSpace(form.SlackWebhookUrl)
+        AlertChannelType.Slack when !string.IsNullOrWhiteSpace(form.SlackWebhookUrl)
             => System.Text.Json.JsonSerializer.Serialize(new { WebhookUrl = form.SlackWebhookUrl }),
-        AlertChannel.Webhook when !string.IsNullOrWhiteSpace(form.WebhookUrl)
+        AlertChannelType.Webhook when !string.IsNullOrWhiteSpace(form.WebhookUrl)
             => System.Text.Json.JsonSerializer.Serialize(new { Url = form.WebhookUrl, Secret = form.WebhookSecret }),
         _ => null
     };
@@ -363,45 +411,30 @@
     {
         public string Name { get; set; } = "";
         public AlertTrigger Trigger { get; set; } = AlertTrigger.NewIssue;
-        public AlertChannel Channel { get; set; } = AlertChannel.Slack;
+        public int SelectedChannelId { get; set; }
         public int? ThresholdCount { get; set; }
         public int ThresholdWindowMinutes { get; set; } = 60;
         public string MinSeverityStr { get; set; } = "";
         public int CooldownMinutes { get; set; } = 30;
         public bool Enabled { get; set; } = true;
+
+        // New channel fields
+        public string NewChannelName { get; set; } = "";
+        public AlertChannelType NewAlertChannelType { get; set; } = AlertChannelType.Slack;
         public string SlackWebhookUrl { get; set; } = "";
         public string WebhookUrl { get; set; } = "";
         public string WebhookSecret { get; set; } = "";
 
-        public static FormModel From(AlertRuleResponse r)
+        public static FormModel From(AlertRuleResponse r) => new()
         {
-            var model = new FormModel
-            {
-                Name = r.Name,
-                Trigger = r.Trigger,
-                Channel = r.Channel,
-                ThresholdCount = r.ThresholdCount,
-                ThresholdWindowMinutes = (int)(r.ThresholdWindow?.TotalMinutes ?? 60),
-                MinSeverityStr = r.MinSeverity?.ToString() ?? "",
-                CooldownMinutes = (int)r.CooldownPeriod.TotalMinutes,
-                Enabled = r.Enabled
-            };
-
-            try
-            {
-                using var doc = System.Text.Json.JsonDocument.Parse(r.ChannelConfig);
-                var root = doc.RootElement;
-                if (r.Channel == AlertChannel.Slack)
-                    model.SlackWebhookUrl = root.TryGetProperty("WebhookUrl", out var v) ? v.GetString() ?? "" : "";
-                else if (r.Channel == AlertChannel.Webhook)
-                {
-                    model.WebhookUrl = root.TryGetProperty("Url", out var u) ? u.GetString() ?? "" : "";
-                    model.WebhookSecret = root.TryGetProperty("Secret", out var s) ? s.GetString() ?? "" : "";
-                }
-            }
-            catch { /* ignore parse errors */ }
-
-            return model;
-        }
+            Name = r.Name,
+            Trigger = r.Trigger,
+            SelectedChannelId = r.AlertChannelId,
+            ThresholdCount = r.ThresholdCount,
+            ThresholdWindowMinutes = (int)(r.ThresholdWindow?.TotalMinutes ?? 60),
+            MinSeverityStr = r.MinSeverity?.ToString() ?? "",
+            CooldownMinutes = (int)r.CooldownPeriod.TotalMinutes,
+            Enabled = r.Enabled
+        };
     }
 }

@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using Sigil.Application.Models.Alerts
 @inject IAlertService AlertService
+@inject IAlertChannelService ChannelService
 
 @layout ProjectSettingsLayout
 
@@ -31,12 +32,12 @@
                         <div class="flex items-start justify-between gap-4">
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-2 flex-wrap">
+                                    <input type="checkbox" class="toggle toggle-sm toggle-success"
+                                           checked="@rule.Enabled"
+                                           @onchange="e => ToggleRule(rule, (bool)e.Value!)" />
                                     <span class="font-semibold">@rule.Name</span>
-                                    <span class="badge badge-sm @(rule.Enabled ? "badge-success" : "badge-ghost")">
-                                        @(rule.Enabled ? "Enabled" : "Disabled")
-                                    </span>
                                     <span class="badge badge-sm badge-neutral">@FormatTrigger(rule.Trigger)</span>
-                                    <span class="badge badge-sm badge-neutral">@rule.Channel</span>
+                                    <span class="badge badge-sm badge-info">@rule.AlertChannelName</span>
                                 </div>
                                 <div class="text-xs opacity-60 mt-1 space-x-3">
                                     @if (rule.ThresholdCount.HasValue && rule.ThresholdWindow.HasValue)
@@ -79,6 +80,7 @@
 <AlertRuleModal IsOpen="showModal"
                 ProjectId="ProjectId"
                 EditingRule="editingRule"
+                Channels="channels"
                 OnSaved="OnRuleSaved"
                 OnClosed="CloseModal" />
 
@@ -86,6 +88,7 @@
     [Parameter] public int ProjectId { get; set; }
 
     private List<AlertRuleResponse> rules = [];
+    private List<AlertChannelResponse> channels = [];
     private bool loading = true;
     private bool showModal;
     private AlertRuleResponse? editingRule;
@@ -98,6 +101,7 @@
     {
         loading = true;
         rules = await AlertService.GetRulesForProjectAsync(ProjectId);
+        channels = await ChannelService.GetAllChannelsAsync();
         loading = false;
     }
 
@@ -115,7 +119,7 @@
 
     private void CloseModal() => showModal = false;
 
-    private void OnRuleSaved(AlertRuleResponse saved)
+    private async void OnRuleSaved(AlertRuleResponse saved)
     {
         if (editingRule is null)
         {
@@ -127,6 +131,21 @@
             if (idx >= 0) rules[idx] = saved;
         }
         showModal = false;
+
+        // Refresh channels in case a new one was created inline
+        channels = await ChannelService.GetAllChannelsAsync();
+        StateHasChanged();
+    }
+
+    private async Task ToggleRule(AlertRuleResponse rule, bool enabled)
+    {
+        await AlertService.ToggleRuleAsync(rule.Id, enabled);
+        var idx = rules.FindIndex(r => r.Id == rule.Id);
+        if (idx >= 0)
+        {
+            var r = rules[idx];
+            rules[idx] = r with { Enabled = enabled };
+        }
     }
 
     private async Task DeleteRule(int ruleId)
