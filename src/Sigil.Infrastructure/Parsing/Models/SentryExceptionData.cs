@@ -1,7 +1,10 @@
+using System.Text.Json.Serialization;
+
 namespace Sigil.Infrastructure.Parsing.Models;
 
 [Serializable]
-internal class SentryExceptionData
+[JsonConverter(typeof(SentryExceptionDataValuesConverter))]
+internal class SentryExceptionData : ISentryValuesWrapper<SentryException>
 {
     public List<SentryException>? Values { get; set; }
 }

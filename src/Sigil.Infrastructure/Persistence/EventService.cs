@@ -7,11 +7,18 @@ using Sigil.Application.Models.Events;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Extensions;
 using Sigil.Domain.Ingestion;
+using Sigil.Infrastructure.Parsing;
+using Sigil.Infrastructure.Parsing.Models;
 
 namespace Sigil.Infrastructure.Persistence;
 
 internal class EventService(SigilDbContext dbContext, ICompressionService compressionService) : IEventService
 {
+    private static readonly JsonSerializerOptions SnakeCaseOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+    };
+
     public async Task<HashSet<string>> FindExistingEventIdsAsync(IEnumerable<string> eventIds)
     {
         var ids = eventIds.ToList();
@@ -170,6 +177,35 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
             sb.AppendLine("```");
         }
 
+        if (evt.Exceptions is { Count: > 1 })
+        {
+            var others = evt.Exceptions.Where(e => !e.IsPrimary).ToList();
+            if (others.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("## Additional Exceptions");
+                foreach (var ex in others)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine($"### {ex.Type ?? "Unknown"}: {ex.Value ?? ""}");
+                    if (ex.StackFrames.Count > 0)
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("```");
+                        foreach (var frame in ex.StackFrames)
+                        {
+                            var location = frame.Filename is not null
+                                ? $" in {frame.Filename}{(frame.LineNumber.HasValue ? $":{frame.LineNumber}" : "")}"
+                                : "";
+                            var inApp = frame.InApp ? "" : " [external]";
+                            sb.AppendLine($"  at {frame.Function ?? "?"}{location}{inApp}");
+                        }
+                        sb.AppendLine("```");
+                    }
+                }
+            }
+        }
+
         if (evt.User is not null)
         {
             sb.AppendLine();
@@ -280,10 +316,13 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
 
         var environment = tags.FirstOrDefault(t => t.Key == "environment")?.Value;
 
+        var exceptions = await ExtractExceptionsAsync(eventId);
+
         return new EventDetailResponse(
             e.Id, e.EventId, e.IssueId, e.Message, e.ExceptionType, e.Culprit, e.Level,
             e.Timestamp, e.Platform, e.Release?.RawName,
-            environment, user, stackFrames, tags, e.Extra);
+            environment, user, stackFrames, tags, e.Extra,
+            exceptions is { Count: > 1 } ? exceptions : null);
     }
 
     public async Task<IssueEventDetailResponse?> GetIssueEventDetailAsync(int issueId, long eventId)
@@ -341,6 +380,53 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
             .FirstOrDefaultAsync();
 
         return new EventNavigationResponse(previousId, nextId);
+    }
+
+    private async Task<List<ExceptionResponse>?> ExtractExceptionsAsync(long eventId)
+    {
+        var rawBytes = await GetRawEventJsonAsync(eventId);
+        if (rawBytes is null) return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(rawBytes);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("exception", out var exceptionEl))
+                return null;
+
+            JsonElement valuesArray;
+            if (exceptionEl.ValueKind == JsonValueKind.Object &&
+                exceptionEl.TryGetProperty("values", out var vals))
+                valuesArray = vals;
+            else if (exceptionEl.ValueKind == JsonValueKind.Array)
+                valuesArray = exceptionEl;
+            else
+                return null;
+
+            // Deserialize into our models to reuse SelectPrimaryException
+            var sentryExceptions = JsonSerializer.Deserialize<List<SentryException>>(valuesArray.GetRawText(), SnakeCaseOptions);
+            if (sentryExceptions is null or { Count: 0 })
+                return null;
+
+            var primary = SentryEventParser.SelectPrimaryException(sentryExceptions);
+
+            return sentryExceptions.Select(ex => new ExceptionResponse(
+                ex.Type,
+                ex.Value,
+                ex.Module,
+                IsPrimary: ReferenceEquals(ex, primary),
+                IsSynthetic: ex.Mechanism?.Synthetic == true,
+                StackFrames: ex.Stacktrace?.Frames?
+                    .Select(f => new StackFrameResponse(f.Function, f.Filename, f.LineNumber, f.ColumnNumber, f.Module, f.InApp == true))
+                    .Reverse()
+                    .ToList() ?? []
+            )).ToList();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public async Task<List<BreadcrumbResponse>> GetBreadcrumbsAsync(long eventId)

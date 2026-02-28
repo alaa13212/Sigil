@@ -27,7 +27,8 @@ public record EventDetailResponse(
     EventUserResponse? User,
     List<StackFrameResponse> StackFrames,
     List<TagSummary> Tags,
-    Dictionary<string, string>? Extra);
+    Dictionary<string, string>? Extra,
+    List<ExceptionResponse>? Exceptions = null);
 
 public record IssueEventDetailResponse(
     EventDetailResponse Event,
@@ -56,5 +57,13 @@ public record BreadcrumbResponse(
     string? Level,
     string? Type,
     Dictionary<string, object>? Data);
+
+public record ExceptionResponse(
+    string? Type,
+    string? Value,
+    string? Module,
+    bool IsPrimary,
+    bool IsSynthetic,
+    List<StackFrameResponse> StackFrames);
 
 public record EventNavigationResponse(long? PreviousEventId, long? NextEventId);

@@ -46,6 +46,8 @@ internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSeri
         ArgumentNullException.ThrowIfNull(eventData.Timestamp);
         ArgumentNullException.ThrowIfNull(eventData.Platform);
         
+        SentryException? primary = SelectPrimaryException(eventData.Exception?.Values);
+
         return new ParsedEvent
         {
             EventId = eventData.EventId,
@@ -54,10 +56,10 @@ internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSeri
             Level = SeverityHelper.Parse(eventData.Level),
             ServerName = eventData.ServerName,
             Release = eventData.Release,
-            
-            ExceptionType = eventData.Exception?.Values?.LastOrDefault()?.Type,
-            Message = GetMessage(eventData),
-            Culprit = GetCulprit(eventData),
+
+            ExceptionType = primary?.Type ?? eventData.Exception?.Values?.LastOrDefault()?.Type,
+            Message = GetMessage(eventData, primary),
+            Culprit = GetCulprit(eventData, primary),
             Environment = eventData.Environment,
             Logger = eventData.Logger,
             Runtime = GetRuntime(eventData),
@@ -66,7 +68,7 @@ internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSeri
             Tags = eventData.Tags,
             User = ConvertToParsedEventUser(eventData.User),
             FingerprintHints = eventData.Fingerprint,
-            Stacktrace = GetStackFrames(eventData)?
+            Stacktrace = GetStackFrames(eventData, primary)?
             .Select(f => new ParsedStackFrame
             {
                 Filename = f.Filename,
@@ -78,15 +80,57 @@ internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSeri
             })
             .Reverse()
             .ToList() ?? [],
-            
+
         };
+    }
+
+    /// <summary>
+    /// Selects the primary exception using Sentry's mechanism metadata.
+    /// Algorithm:
+    /// 1. Find root: exception where mechanism.exception_id == 0, or fall back to last
+    /// 2. Resolve groups: if mechanism.is_exception_group, find last child with matching parent_id, recurse
+    /// 3. Handle synthetic: if mechanism.synthetic, substitute Value with last in-app frame's Function
+    /// </summary>
+    internal static SentryException? SelectPrimaryException(List<SentryException>? exceptions)
+    {
+        if (exceptions is null or { Count: 0 })
+            return null;
+
+        // If no exceptions have mechanism metadata, fall back to last
+        if (exceptions.All(e => e.Mechanism is null))
+            return exceptions.Last();
+
+        // Find root: exception_id == 0, or fall back to last
+        var root = exceptions.FirstOrDefault(e => e.Mechanism?.ExceptionId == 0)
+                   ?? exceptions.Last();
+
+        // Resolve exception groups: drill down into children
+        var current = root;
+        while (current.Mechanism?.IsExceptionGroup == true)
+        {
+            var parentId = current.Mechanism.ExceptionId;
+            var lastChild = exceptions.LastOrDefault(e => e.Mechanism?.ParentId == parentId);
+            if (lastChild == null || lastChild == current)
+                break;
+            current = lastChild;
+        }
+
+        // Handle synthetic exceptions: substitute Value with last in-app frame's Function
+        if (current.Mechanism?.Synthetic == true && current.Stacktrace?.Frames is { Count: > 0 } frames)
+        {
+            var lastInAppFrame = frames.LastOrDefault(f => f.InApp == true);
+            if (lastInAppFrame?.Function != null)
+                current.Value = lastInAppFrame.Function;
+        }
+
+        return current;
     }
 
     private ParsedEventUser? ConvertToParsedEventUser(SentryUser? eventDataUser)
     {
         if (eventDataUser?.Id == null && eventDataUser?.Username == null && eventDataUser?.Email == null && eventDataUser?.IpAddress == null)
             return null;
-        
+
         return new ParsedEventUser
         {
             Id = eventDataUser.Id,
@@ -97,17 +141,19 @@ internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSeri
         };
     }
 
-    private static string? GetMessage(SentryEvent sentryEvent) => sentryEvent switch {
+    private static string? GetMessage(SentryEvent sentryEvent, SentryException? primary) => sentryEvent switch {
         { LogEntry.Formatted: not null, Threads.Values.Count: > 0 } => sentryEvent.LogEntry.Formatted,
         { LogEntry.Message: not null, Threads.Values.Count: > 0 } => sentryEvent.LogEntry.Message,
         { Message.Formatted: not null, Threads.Values.Count: > 0 } => sentryEvent.Message.Formatted,
         { Message.Message: not null, Threads.Values.Count: > 0 } => sentryEvent.Message.Message,
+        { Exception.Values: [..] } when primary?.Value is not null => primary.Value,
         { Exception.Values: [.., var last] } => last.Value,
         _ => null
     };
     
-    private static List<SentryStackFrame>? GetStackFrames(SentryEvent sentryEvent) => sentryEvent switch
+    private static List<SentryStackFrame>? GetStackFrames(SentryEvent sentryEvent, SentryException? primary) => sentryEvent switch
     {
+        { Exception.Values: [..] } when primary?.Stacktrace?.Frames is not null => primary.Stacktrace.Frames,
         { Exception.Values: [.., {Stacktrace: not null} last]  } => last.Stacktrace.Frames,
         { LogEntry.Formatted: not null, Threads.Values: [.., {Stacktrace: not null} last] } => last.Stacktrace.Frames,
         { Message.Formatted: not null, Threads.Values: [.., {Stacktrace: not null} last] } => last.Stacktrace.Frames,
@@ -130,9 +176,12 @@ internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSeri
         return sentryEvent.Extra?.ToDictionary(pair => pair.Key, pair => pair.Value.GetString()!);
     }
 
-    private static string? GetCulprit(SentryEvent sentryEvent)
+    private static string? GetCulprit(SentryEvent sentryEvent, SentryException? primary)
     {
-        var frames = GetStackFrames(sentryEvent);
+        if (primary?.Mechanism?.Synthetic == true)
+            return null;
+        
+        var frames = GetStackFrames(sentryEvent, primary);
         if (frames.IsNullOrEmpty())
             return null;
         

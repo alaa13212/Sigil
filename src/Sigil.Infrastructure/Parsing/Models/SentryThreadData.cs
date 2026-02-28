@@ -1,7 +1,10 @@
+using System.Text.Json.Serialization;
+
 namespace Sigil.Infrastructure.Parsing.Models;
 
 [Serializable]
-internal class SentryThreadData
+[JsonConverter(typeof(SentryThreadDataValuesConverter))]
+internal class SentryThreadData : ISentryValuesWrapper<SentryThread>
 {
     public List<SentryThread>? Values { get; set; }
 }

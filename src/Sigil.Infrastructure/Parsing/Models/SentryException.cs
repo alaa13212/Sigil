@@ -9,4 +9,5 @@ internal class SentryException
     public int ThreadId { get; set; }
 
     public SentryStacktrace? Stacktrace { get; set; }
+    public SentryMechanism? Mechanism { get; set; }
 }
