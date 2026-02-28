@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -10,13 +9,10 @@ public class CookieAuthenticationStateProvider : AuthenticationStateProvider
 {
     private static readonly AuthenticationState Anonymous = new(new ClaimsPrincipal(new ClaimsIdentity()));
 
-    private readonly HttpClient _http;
-    private readonly Task<AuthenticationState> _initialState;
+    private Task<AuthenticationState> _initialState;
 
-    public CookieAuthenticationStateProvider(HttpClient http, PersistentComponentState state)
+    public CookieAuthenticationStateProvider(PersistentComponentState state)
     {
-        _http = http;
-
         // Try to read persisted auth state from server prerender
         if (state.TryTakeFromJson<UserInfo>(nameof(UserInfo), out var userInfo) && userInfo is not null)
         {
@@ -38,22 +34,10 @@ public class CookieAuthenticationStateProvider : AuthenticationStateProvider
         return Anonymous;
     }
 
-    public void NotifyAuthStateChanged()
+    public void NotifyAuthStateChanged(UserInfo? user = null)
     {
-        NotifyAuthenticationStateChanged(FetchAuthStateAsync());
-    }
-
-    private async Task<AuthenticationState> FetchAuthStateAsync()
-    {
-        try
-        {
-            var user = await _http.GetFromJsonAsync<UserInfo>("api/account/me");
-            return user is null ? Anonymous : BuildAuthState(user);
-        }
-        catch
-        {
-            return Anonymous;
-        }
+        _initialState = Task.FromResult(user is not null ? BuildAuthState(user) : Anonymous);
+        NotifyAuthenticationStateChanged(_initialState);
     }
 
     private static AuthenticationState BuildAuthState(UserInfo user)

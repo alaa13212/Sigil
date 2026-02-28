@@ -19,7 +19,7 @@ public class ApiAuthService(HttpClient http, AuthenticationStateProvider authSta
 
         var user = await response.Content.ReadFromJsonAsync<UserInfo>();
         if (authStateProvider is CookieAuthenticationStateProvider cookie)
-            cookie.NotifyAuthStateChanged();
+            cookie.NotifyAuthStateChanged(user);
 
         return AuthResult.Success(user!);
     }
