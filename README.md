@@ -11,7 +11,7 @@ Built with .NET 10, PostgreSQL, and Blazor.
 ## Quick Start
 Run the following line in your terminal and then follow the on-screen instructions:
 ```bash
-curl -fsSL https://github.com/alaa13212/sigil/releases/latest/download/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/alaa13212/Sigil/refs/heads/master/deploy/install.sh | bash
 ```
 
 Open **http://localhost:8080** and complete the setup wizard to create your admin account and first project.
