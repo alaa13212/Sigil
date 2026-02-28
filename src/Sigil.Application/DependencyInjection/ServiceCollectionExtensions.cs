@@ -13,18 +13,31 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static void AddApplicationClient(this IServiceCollection services)
     {
+        // Tag value formatting (used for display)
+        services.AddSingleton<IInternalTagValueFormatter, ReleaseTagValueFormatter>();
+        services.AddSingleton<ITagValueFormatter, CompositeTagValueFormatter>();
+
+        // Message normalization (used for preview/test in settings UI)
+        services.AddSingleton<IMessageNormalizer, MessageNormalizer>();
+
+        // Platform info (used for SDK snippets and recommendations display)
+        services.AddSingleton<PlatformInfoProvider>();
+        
+        
+        services.AddSingleton<IStackFrameCleaner, CSharpStackFrameCleaner>();
+        services.AddSingleton<IStackFrameCleaner, JavaStackFrameCleaner>();
+        services.AddSingleton<IStackFrameCleaner, JavaScriptStackFrameCleaner>();
+        services.AddSingleton<IStackFrameCleaner, PythonStackFrameCleaner>();
+        services.AddSingleton<StackFrameCleanerService>();
 
     }
 
     public static void AddApplication(this IServiceCollection services)
     {
-        services.AddSingleton<IInternalTagValueFormatter, ReleaseTagValueFormatter>();
-        services.AddSingleton<ITagValueFormatter, CompositeTagValueFormatter>();
+        // Shared client-safe services
+        AddApplicationClient(services);
 
-        services.AddSingleton<IMessageNormalizer, MessageNormalizer>();
-
-        services.AddSingleton<PlatformInfoProvider>();
-
+        // Server-only: enrichers and fingerprinting
         services.AddSingleton<IFingerprintGenerator, DefaultFingerprintGenerator>();
 
         services.AddSingleton<IEventEnricher, PredefinedTagsEnricher>();
@@ -34,12 +47,5 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IEventEnricher, StackTraceFilterEnricher>();
         services.AddSingleton<IEventEnricher, FingerprintEventEnricher>();
         services.AddSingleton<IEventEnricher, AutoTagsEventEnricher>();
-        
-        
-        services.AddSingleton<IStackFrameCleaner, CSharpStackFrameCleaner>();
-        services.AddSingleton<IStackFrameCleaner, JavaStackFrameCleaner>();
-        services.AddSingleton<IStackFrameCleaner, JavaScriptStackFrameCleaner>();
-        services.AddSingleton<IStackFrameCleaner, PythonStackFrameCleaner>();
-        services.AddSingleton<StackFrameCleanerService>();
     }
 }

@@ -15,7 +15,7 @@ builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredServ
 builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 
 builder.Services.AddDomain();
-builder.Services.AddApplication();
+builder.Services.AddApplicationClient();
 builder.Services.AddInfrastructure();
 
 await builder.Build().RunAsync();
