@@ -9,6 +9,7 @@ namespace Sigil.Infrastructure.Persistence;
 
 internal class AuthService(
     UserManager<User> userManager,
+    RoleManager<IdentityRole<Guid>> roleManager,
     SignInManager<User> signInManager,
     IAppConfigService configService) : IAuthService
 {
@@ -53,10 +54,28 @@ internal class AuthService(
             if (!u.EmailConfirmed)
                 token = await userManager.GeneratePasswordResetTokenAsync(u);
 
+            var roles = await userManager.GetRolesAsync(u);
             string? activationUri = GetActivationUri(u.Email!, token);
-            result.Add(new UserInfo(u.Id, u.Email!, u.DisplayName, u.CreatedAt, u.LastLogin, [], u.EmailConfirmed, activationUri));
+            result.Add(new UserInfo(u.Id, u.Email!, u.DisplayName, u.CreatedAt, u.LastLogin, roles.ToList(), u.EmailConfirmed, activationUri));
         }
         return result;
+    }
+
+    public async Task SetUserAdminAsync(Guid userId, bool isAdmin)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString())
+            ?? throw new InvalidOperationException("User not found.");
+
+        if (isAdmin)
+        {
+            if (!await roleManager.RoleExistsAsync("Admin"))
+                await roleManager.CreateAsync(new IdentityRole<Guid> { Name = "Admin" });
+            await userManager.AddToRoleAsync(user, "Admin");
+        }
+        else
+        {
+            await userManager.RemoveFromRoleAsync(user, "Admin");
+        }
     }
 
     public async Task<InviteResult> InviteUserAsync(InviteRequest request)

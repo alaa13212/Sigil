@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sigil.Application.Interfaces;
@@ -21,9 +20,4 @@ public class BadgesController(IBadgeService badgeService) : SigilController
         return Ok(counts);
     }
 
-    private Guid? GetUserId()
-    {
-        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return claim is not null ? Guid.Parse(claim) : null;
-    }
 }

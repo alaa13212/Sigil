@@ -18,6 +18,7 @@ else
     private const string SetupWizardPath = "/setup";
     private const string LoginPath = "/login";
     private const string ActivatePath = "/activate";
+    private const string SharedPath = "/shared/";
     private const string MigrationsPath = "/admin/migrations";
     
     [Parameter] public RenderFragment ChildContent { get; set; } = null!;
@@ -68,6 +69,9 @@ else
             return null;
 
         if (path.StartsWith(ActivatePath, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        if (path.StartsWith(SharedPath, StringComparison.OrdinalIgnoreCase))
             return null;
 
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();

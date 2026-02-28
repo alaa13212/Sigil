@@ -47,5 +47,6 @@ builder.Services.AddScoped<IStackTraceFilterService, ApiStackTraceFilterService>
 builder.Services.AddScoped<IUserPreferenceService, LocalStoragePreferenceService>();
 builder.Services.AddScoped<IAppConfigEditorService, ApiAppConfigEditorService>();
 builder.Services.AddScoped<IProjectConfigEditorService, ApiProjectConfigEditorService>();
+builder.Services.AddScoped<ISharedLinkService, ApiSharedLinkService>();
 
 await builder.Build().RunAsync();

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Projects;
 using Sigil.Server.Framework;
@@ -23,10 +24,11 @@ public class ProjectsController(IProjectService projectService, IProjectConfigEd
         return Ok(await projectService.GetAllProjectOverviewsAsync());
     }
 
-    [HttpGet("{id:int}")]
-    public async Task<IActionResult> Get(int id)
+    [Authorize(Policy = SigilPermissions.CanViewProject)]
+    [HttpGet("{projectId:int}")]
+    public async Task<IActionResult> Get(int projectId)
     {
-        var detail = await projectService.GetProjectDetailAsync(id);
+        var detail = await projectService.GetProjectDetailAsync(projectId);
         return detail is not null ? Ok(detail) : NotFound();
     }
 
@@ -34,47 +36,52 @@ public class ProjectsController(IProjectService projectService, IProjectConfigEd
     public async Task<IActionResult> Create([FromBody] CreateProjectRequest request)
     {
         var project = await projectService.CreateProjectAsync(request.Name, request.Platform, request.TeamId);
-        return CreatedAtAction(nameof(Get), new { id = project.Id },
+        return CreatedAtAction(nameof(Get), new { projectId = project.Id },
             new ProjectResponse(project.Id, project.Name, project.Platform, project.ApiKey));
     }
 
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, [FromBody] UpdateProjectRequest request)
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
+    [HttpPut("{projectId:int}")]
+    public async Task<IActionResult> Update(int projectId, [FromBody] UpdateProjectRequest request)
     {
-        var existing = await projectService.GetProjectByIdAsync(id);
+        var existing = await projectService.GetProjectByIdAsync(projectId);
         if (existing is null)
             return NotFound();
 
-        var project = await projectService.UpdateProjectAsync(id, request.Name);
+        var project = await projectService.UpdateProjectAsync(projectId, request.Name);
         return Ok(new ProjectResponse(project.Id, project.Name, project.Platform, project.ApiKey));
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [Authorize(Policy = SigilPermissions.CanDeleteProject)]
+    [HttpDelete("{projectId:int}")]
+    public async Task<IActionResult> Delete(int projectId)
     {
-        var deleted = await projectService.DeleteProjectAsync(id);
+        var deleted = await projectService.DeleteProjectAsync(projectId);
         return deleted ? NoContent() : NotFound();
     }
 
-    [HttpPost("{id:int}/rotate-key")]
-    public async Task<IActionResult> RotateKey(int id)
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
+    [HttpPost("{projectId:int}/rotate-key")]
+    public async Task<IActionResult> RotateKey(int projectId)
     {
-        var existing = await projectService.GetProjectByIdAsync(id);
+        var existing = await projectService.GetProjectByIdAsync(projectId);
         if (existing is null)
             return NotFound();
 
-        var newKey = await projectService.RotateApiKeyAsync(id);
+        var newKey = await projectService.RotateApiKeyAsync(projectId);
         return Ok(new { apiKey = newKey });
     }
 
-    [HttpGet("{id:int}/config")]
-    public async Task<IActionResult> GetConfig(int id)
-        => Ok(await projectConfigEditorService.GetAllAsync(id));
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
+    [HttpGet("{projectId:int}/config")]
+    public async Task<IActionResult> GetConfig(int projectId)
+        => Ok(await projectConfigEditorService.GetAllAsync(projectId));
 
-    [HttpPut("{id:int}/config/{key}")]
-    public async Task<IActionResult> SetConfig(int id, string key, [FromBody] SetConfigValueRequest request)
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
+    [HttpPut("{projectId:int}/config/{key}")]
+    public async Task<IActionResult> SetConfig(int projectId, string key, [FromBody] SetConfigValueRequest request)
     {
-        await projectConfigEditorService.SetAsync(id, key, request.Value);
+        await projectConfigEditorService.SetAsync(projectId, key, request.Value);
         return NoContent();
     }
 }

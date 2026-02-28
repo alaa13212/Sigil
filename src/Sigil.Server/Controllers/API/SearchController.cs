@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sigil.Application.Interfaces;
@@ -23,9 +22,4 @@ public class SearchController(ISearchService searchService) : SigilController
         return Ok(results);
     }
 
-    private Guid? GetUserId()
-    {
-        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return claim is not null ? Guid.Parse(claim) : null;
-    }
 }

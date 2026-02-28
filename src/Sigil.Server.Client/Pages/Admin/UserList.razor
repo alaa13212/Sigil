@@ -2,15 +2,20 @@
 @attribute [Authorize]
 @using Sigil.Application.Models.Auth
 @inject IAuthService AuthService
-@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Users — Sigil</PageTitle>
 
-<div class="max-w-4xl space-y-6 mx-auto">
+<div class="max-w-4xl space-y-6">
     <div class="flex items-center justify-between">
         <h1 class="text-2xl font-bold">Users</h1>
         <a href="/admin/users/register" class="btn btn-primary btn-sm">Invite User</a>
     </div>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="alert alert-error text-sm">@_error</div>
+    }
 
     @if (loading)
     {
@@ -34,12 +39,15 @@
                                 <th>Email</th>
                                 <th>Created</th>
                                 <th>Last Login</th>
+                                <th>Admin</th>
                                 <th></th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var user in Users)
                             {
+                                var isAdmin = user.Roles.Contains("Admin");
+                                var isSelf = user.Id == _currentUserId;
                                 <tr>
                                     <td>@(user.DisplayName ?? "—")</td>
                                     <td>
@@ -51,6 +59,13 @@
                                     </td>
                                     <td>@user.CreatedAt.ToString("yyyy-MM-dd")</td>
                                     <td>@(user.LastLogin?.ToString("yyyy-MM-dd HH:mm") ?? "Never")</td>
+                                    <td>
+                                        <input type="checkbox" class="toggle toggle-sm"
+                                               checked="@isAdmin"
+                                               disabled="@isSelf"
+                                               title="@(isSelf ? "Cannot change your own admin role" : "")"
+                                               @onchange="e => ToggleAdmin(user.Id, (bool)e.Value!)" />
+                                    </td>
                                     <td>
                                         @if (user is { IsActivated: false, ActivationUri: not null })
                                         {
@@ -73,9 +88,15 @@
 @code {
     [PersistentState] public List<UserInfo>? Users { get; set; }
     private bool loading = true;
+    private string? _error;
+    private Guid _currentUserId;
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var claim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (claim is not null) Guid.TryParse(claim, out _currentUserId);
+
         if (Users is not null)
         {
             loading = false;
@@ -94,6 +115,20 @@
         finally
         {
             loading = false;
+        }
+    }
+
+    private async Task ToggleAdmin(Guid userId, bool isAdmin)
+    {
+        _error = null;
+        try
+        {
+            await AuthService.SetUserAdminAsync(userId, isAdmin);
+            Users = await AuthService.GetAllUsersAsync();
+        }
+        catch
+        {
+            _error = "Failed to update admin role.";
         }
     }
 }

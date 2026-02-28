@@ -9,8 +9,7 @@ public record EventSummary(
     string? Message,
     Severity Level,
     DateTime Timestamp,
-    string? Release,
-    string? UserIdentifier);
+    string? Release);
 
 public record EventDetailResponse(
     long Id,

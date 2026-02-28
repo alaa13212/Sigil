@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Application.Models.Issues;
@@ -18,6 +18,7 @@ public class IssuesController(
     IProjectService projectService,
     IBookmarkService bookmarkService) : SigilController
 {
+    [Authorize(Policy = SigilPermissions.CanViewProject)]
     [HttpGet("api/projects/{projectId:int}/issues")]
     public async Task<IActionResult> List(
         int projectId,
@@ -73,6 +74,7 @@ public class IssuesController(
         return Ok(detail);
     }
 
+    [Authorize(Policy = SigilPermissions.CanEditIssue)]
     [HttpPut("api/issues/{id:int}/status")]
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateStatusRequest request)
     {
@@ -81,6 +83,7 @@ public class IssuesController(
         return Ok(new { issue.Id, issue.Status });
     }
 
+    [Authorize(Policy = SigilPermissions.CanEditIssue)]
     [HttpPut("api/issues/{id:int}/assign")]
     public async Task<IActionResult> Assign(int id, [FromBody] AssignRequest request)
     {
@@ -89,6 +92,7 @@ public class IssuesController(
         return Ok(new { issue.Id, issue.AssignedToId });
     }
 
+    [Authorize(Policy = SigilPermissions.CanEditIssue)]
     [HttpPut("api/issues/{id:int}/priority")]
     public async Task<IActionResult> UpdatePriority(int id, [FromBody] UpdatePriorityRequest request)
     {
@@ -97,6 +101,7 @@ public class IssuesController(
         return Ok(new { issue.Id, issue.Priority });
     }
 
+    [Authorize(Policy = SigilPermissions.CanDeleteIssue)]
     [HttpDelete("api/issues/{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
@@ -116,6 +121,7 @@ public class IssuesController(
         return Ok(await issueService.GetSimilarIssuesAsync(id));
     }
 
+    [Authorize(Policy = SigilPermissions.CanEditIssue)]
     [HttpPost("api/issues/{id:int}/comments")]
     public async Task<IActionResult> AddComment(int id, [FromBody] AddCommentRequest request)
     {
@@ -142,9 +148,4 @@ public class IssuesController(
         return Ok(await issueService.GetBulkHistogramsAsync(issueIds, Math.Clamp(days, 1, 90)));
     }
 
-    private Guid? GetUserId()
-    {
-        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return claim is not null ? Guid.Parse(claim) : null;
-    }
 }

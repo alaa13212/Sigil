@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Alerts;
 using Sigil.Server.Framework;
@@ -7,7 +8,7 @@ using Sigil.Server.Framework;
 namespace Sigil.Server.Controllers.API;
 
 [ApiController]
-[Authorize]
+[Authorize(Policy = SigilPermissions.CanAccessAdmin)]
 public class AlertChannelsController(IAlertChannelService channelService) : SigilController
 {
     [HttpGet("api/alert-channels")]

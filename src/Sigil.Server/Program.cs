@@ -4,12 +4,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using Sigil.Application.Authorization;
 using Sigil.Application.DependencyInjection;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Auth;
 using Sigil.Domain.DependencyInjection;
 using Sigil.Infrastructure.DependencyInjection;
 using Sigil.Server.Auth;
+using Sigil.Server.Authorization;
 using Sigil.Server.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -84,8 +86,33 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("SetupNotComplete", policy =>
         policy.AddRequirements(new SetupNotCompleteRequirement()));
+
+    // Project-scoped
+    options.AddPolicy(SigilPermissions.CanViewProject,
+        p => p.AddRequirements(new SigilPermissionRequirement(SigilPermissions.CanViewProject)));
+    options.AddPolicy(SigilPermissions.CanEditIssue,
+        p => p.AddRequirements(new SigilPermissionRequirement(SigilPermissions.CanEditIssue)));
+    options.AddPolicy(SigilPermissions.CanDeleteIssue,
+        p => p.AddRequirements(new SigilPermissionRequirement(SigilPermissions.CanDeleteIssue)));
+    options.AddPolicy(SigilPermissions.CanManageProject,
+        p => p.AddRequirements(new SigilPermissionRequirement(SigilPermissions.CanManageProject)));
+    options.AddPolicy(SigilPermissions.CanDeleteProject,
+        p => p.AddRequirements(new SigilPermissionRequirement(SigilPermissions.CanDeleteProject)));
+
+    // Team-scoped
+    options.AddPolicy(SigilPermissions.CanViewTeam,
+        p => p.AddRequirements(new SigilPermissionRequirement(SigilPermissions.CanViewTeam)));
+    options.AddPolicy(SigilPermissions.CanManageTeam,
+        p => p.AddRequirements(new SigilPermissionRequirement(SigilPermissions.CanManageTeam)));
+
+    // Admin
+    options.AddPolicy(SigilPermissions.CanAccessAdmin,
+        p => p.AddRequirements(new SigilPermissionRequirement(SigilPermissions.CanAccessAdmin)));
+    options.AddPolicy(SigilPermissions.CanInviteUsers,
+        p => p.AddRequirements(new SigilPermissionRequirement(SigilPermissions.CanInviteUsers)));
 });
 builder.Services.AddScoped<IAuthorizationHandler, SetupNotCompleteHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, SigilPermissionHandler>();
 builder.Services.AddScoped<AuthenticationStateProvider, PersistingServerAuthenticationStateProvider>();
 builder.Services.AddCascadingAuthenticationState();
 

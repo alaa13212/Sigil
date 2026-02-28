@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Server.Framework;
 
 namespace Sigil.Server.Controllers.API;
 
-[ApiController, Authorize]
+[ApiController]
+[Authorize(Policy = SigilPermissions.CanAccessAdmin)]
 public class DigestionController(IDigestionMonitorService monitorService) : SigilController
 {
     [HttpGet("api/admin/digestion/stats")]

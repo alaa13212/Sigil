@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Domain.Enums;
 using Sigil.Server.Framework;
@@ -11,6 +11,7 @@ namespace Sigil.Server.Controllers.API;
 [Authorize]
 public class ReleasesController(IReleaseHealthService releaseHealthService, IIssueService issueService) : SigilController
 {
+    [Authorize(Policy = SigilPermissions.CanViewProject)]
     [HttpGet("api/projects/{projectId:int}/releases")]
     public async Task<IActionResult> GetReleases(int projectId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
@@ -21,12 +22,6 @@ public class ReleasesController(IReleaseHealthService releaseHealthService, IIss
             await issueService.RecordPageViewAsync(userId.Value, projectId, PageType.Releases);
 
         return Ok(result);
-    }
-
-    private Guid? GetUserId()
-    {
-        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return claim is not null ? Guid.Parse(claim) : null;
     }
 
     [HttpGet("api/releases/{id:int}")]

@@ -13,4 +13,6 @@ public interface ITeamService
     Task<bool> AddMemberAsync(int teamId, Guid userId, TeamRole role);
     Task<bool> RemoveMemberAsync(int teamId, Guid userId);
     Task<bool> UpdateMemberRoleAsync(int teamId, Guid userId, TeamRole role);
+    Task<TeamRole?> GetUserRoleForProjectAsync(Guid userId, int projectId);
+    Task<TeamRole?> GetUserRoleForTeamAsync(Guid userId, int teamId);
 }

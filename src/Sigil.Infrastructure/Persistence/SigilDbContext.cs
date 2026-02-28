@@ -38,6 +38,7 @@ internal class SigilDbContext(DbContextOptions<SigilDbContext> options) : SaveSu
     public DbSet<StackTraceFilter> StackTraceFilters => Set<StackTraceFilter>();
     public DbSet<IngestionSpike> IngestionSpikes => Set<IngestionSpike>();
     public DbSet<DigestBatchMetric> DigestBatchMetrics => Set<DigestBatchMetric>();
+    public DbSet<SharedIssueLink> SharedIssueLinks => Set<SharedIssueLink>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

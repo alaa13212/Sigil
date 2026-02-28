@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.AutoTags;
 using Sigil.Server.Framework;
@@ -10,6 +11,7 @@ namespace Sigil.Server.Controllers.API;
 [Authorize]
 public class AutoTagController(IAutoTagService autoTagService) : SigilController
 {
+    [Authorize(Policy = SigilPermissions.CanViewProject)]
     [HttpGet("api/projects/{projectId:int}/auto-tags")]
     public async Task<IActionResult> GetRules(int projectId)
     {
@@ -17,6 +19,7 @@ public class AutoTagController(IAutoTagService autoTagService) : SigilController
         return Ok(rules);
     }
 
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
     [HttpPost("api/projects/{projectId:int}/auto-tags")]
     public async Task<IActionResult> CreateRule(int projectId, [FromBody] CreateAutoTagRuleRequest request)
     {

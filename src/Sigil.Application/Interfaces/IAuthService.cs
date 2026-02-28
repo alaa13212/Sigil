@@ -9,4 +9,5 @@ public interface IAuthService
     Task<List<UserInfo>> GetAllUsersAsync();
     Task<InviteResult> InviteUserAsync(InviteRequest request);
     Task<AuthResult> ActivateAccountAsync(ActivateRequest request);
+    Task SetUserAdminAsync(Guid userId, bool isAdmin);
 }

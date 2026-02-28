@@ -110,4 +110,27 @@ internal class TeamService(SigilDbContext dbContext) : ITeamService
         await dbContext.SaveChangesAsync();
         return true;
     }
+
+    public async Task<TeamRole?> GetUserRoleForProjectAsync(Guid userId, int projectId)
+    {
+        var teamId = await dbContext.Projects
+            .Where(p => p.Id == projectId)
+            .Select(p => p.TeamId)
+            .FirstOrDefaultAsync();
+
+        if (teamId is null) return null;
+
+        return await dbContext.TeamMemberships
+            .Where(m => m.TeamId == teamId && m.UserId == userId)
+            .Select(m => (TeamRole?)m.Role)
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task<TeamRole?> GetUserRoleForTeamAsync(Guid userId, int teamId)
+    {
+        return await dbContext.TeamMemberships
+            .Where(m => m.TeamId == teamId && m.UserId == userId)
+            .Select(m => (TeamRole?)m.Role)
+            .FirstOrDefaultAsync();
+    }
 }

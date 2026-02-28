@@ -61,6 +61,12 @@ public class ApiAuthService(HttpClient http, AuthenticationStateProvider authSta
         return AuthResult.Success((await response.Content.ReadFromJsonAsync<UserInfo>())!);
     }
 
+    public async Task SetUserAdminAsync(Guid userId, bool isAdmin)
+    {
+        var response = await http.PutAsJsonAsync($"api/account/users/{userId}/admin", new { IsAdmin = isAdmin });
+        response.EnsureSuccessStatusCode();
+    }
+
     private record ErrorBody(IReadOnlyList<string> Errors);
     private record InviteBody(string Email, string ActivationUri);
 }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.NormalizationRules;
 using Sigil.Server.Framework;
@@ -10,12 +11,14 @@ namespace Sigil.Server.Controllers.API;
 [Authorize]
 public class NormalizationRulesController(INormalizationRuleService service) : SigilController
 {
+    [Authorize(Policy = SigilPermissions.CanViewProject)]
     [HttpGet("api/projects/{projectId:int}/normalization-rules")]
     public async Task<IActionResult> List(int projectId)
     {
         return Ok(await service.GetRulesAsync(projectId));
     }
 
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
     [HttpPost("api/projects/{projectId:int}/normalization-rules")]
     public async Task<IActionResult> Create(int projectId, [FromBody] CreateNormalizationRuleRequest request)
     {

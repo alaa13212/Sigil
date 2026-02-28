@@ -1,0 +1,82 @@
+@using Sigil.Application.Models.Shared
+@inject ISharedLinkService SharedLinkService
+
+<ModalBase IsOpen="IsOpen" Title="Share Issue" Size="ModalSize.Small" OnClose="OnClose">
+    @if (_shareLink is null)
+    {
+        <fieldset class="fieldset mb-4">
+            <legend class="fieldset-legend">Link expires after</legend>
+            <select class="select select-sm w-full" @bind="_durationHours">
+                <option value="1">1 hour</option>
+                <option value="24">24 hours</option>
+                <option value="168">7 days</option>
+            </select>
+        </fieldset>
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-error alert-sm mb-3 text-sm">@_error</div>
+        }
+    }
+    else
+    {
+        <div class="mb-4">
+            <label class="fieldset-label text-sm mb-1">Shareable link</label>
+            <div class="flex gap-2">
+                <input class="input input-sm w-full font-mono text-xs" readonly value="@_shareLink.Url" />
+                <CopyButton Text="@_shareLink.Url" Label="Copy" Class="btn btn-sm btn-outline" />
+            </div>
+            <p class="text-xs opacity-50 mt-1">Expires @_shareLink.ExpiresAt.ToLocalTime().ToString("MMM d, yyyy 'at' h:mm tt")</p>
+        </div>
+    }
+
+    <div class="modal-action">
+        <button class="btn btn-ghost btn-sm" @onclick="OnClose">Close</button>
+        @if (_shareLink is null)
+        {
+            <button class="btn btn-primary btn-sm" @onclick="CreateLink" disabled="@_loading">
+                @if (_loading) { <span class="loading loading-spinner loading-xs"></span> }
+                Create Link
+            </button>
+        }
+    </div>
+</ModalBase>
+
+@code {
+    [Parameter, EditorRequired] public int IssueId { get; set; }
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private int _durationHours = 24;
+    private bool _loading;
+    private string? _error;
+    private SharedIssueLinkResponse? _shareLink;
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+        {
+            _shareLink = null;
+            _error = null;
+        }
+    }
+
+    private async Task CreateLink()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _shareLink = await SharedLinkService.CreateLinkAsync(IssueId, Guid.Empty, string.Empty,
+                TimeSpan.FromHours(_durationHours));
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

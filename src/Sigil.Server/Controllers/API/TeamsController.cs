@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Identity;
+using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Teams;
 using Sigil.Domain.Entities;
@@ -21,6 +22,7 @@ public class TeamsController(ITeamService teamService, UserManager<User> userMan
         return Ok(teams);
     }
 
+    [Authorize(Policy = SigilPermissions.CanViewTeam)]
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Get(int id)
     {
@@ -38,6 +40,7 @@ public class TeamsController(ITeamService teamService, UserManager<User> userMan
         return CreatedAtAction(nameof(Get), new { id = team.Id }, team);
     }
 
+    [Authorize(Policy = SigilPermissions.CanManageTeam)]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] CreateTeamRequest request)
     {
@@ -45,6 +48,7 @@ public class TeamsController(ITeamService teamService, UserManager<User> userMan
         return result is not null ? Ok(result) : NotFound();
     }
 
+    [Authorize(Policy = SigilPermissions.CanManageTeam)]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
@@ -52,6 +56,7 @@ public class TeamsController(ITeamService teamService, UserManager<User> userMan
         return deleted ? NoContent() : NotFound();
     }
 
+    [Authorize(Policy = SigilPermissions.CanManageTeam)]
     [HttpPost("{id:int}/members")]
     public async Task<IActionResult> AddMember(int id, [FromBody] AddTeamMemberRequest request)
     {
@@ -59,6 +64,7 @@ public class TeamsController(ITeamService teamService, UserManager<User> userMan
         return added ? Ok() : BadRequest(new { errors = new[] { "Could not add member. User may already be a member." } });
     }
 
+    [Authorize(Policy = SigilPermissions.CanManageTeam)]
     [HttpDelete("{teamId:int}/members/{userId:guid}")]
     public async Task<IActionResult> RemoveMember(int teamId, Guid userId)
     {
@@ -66,6 +72,7 @@ public class TeamsController(ITeamService teamService, UserManager<User> userMan
         return removed ? NoContent() : NotFound();
     }
 
+    [Authorize(Policy = SigilPermissions.CanManageTeam)]
     [HttpPut("{teamId:int}/members/{userId:guid}")]
     public async Task<IActionResult> UpdateMemberRole(int teamId, Guid userId, [FromBody] UpdateMemberRoleRequest request)
     {

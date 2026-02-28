@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
 using Sigil.Server.Framework;
@@ -8,7 +9,7 @@ namespace Sigil.Server.Controllers.API;
 
 [ApiController]
 [Route("api/projects/{projectId:int}/recommendations")]
-[Authorize]
+[Authorize(Policy = SigilPermissions.CanViewProject)]
 public class RecommendationsController(IRecommendationService recommendationService, IProjectService projectService) : SigilController
 {
     [HttpGet("count")]

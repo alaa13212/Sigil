@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Filters;
 using Sigil.Server.Framework;
@@ -10,12 +11,14 @@ namespace Sigil.Server.Controllers.API;
 [Authorize]
 public class EventFiltersController(IEventFilterService filterService) : SigilController
 {
+    [Authorize(Policy = SigilPermissions.CanViewProject)]
     [HttpGet("api/projects/{projectId:int}/filters")]
     public async Task<IActionResult> List(int projectId)
     {
         return Ok(await filterService.GetFiltersAsync(projectId));
     }
 
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
     [HttpPost("api/projects/{projectId:int}/filters")]
     public async Task<IActionResult> Create(int projectId, [FromBody] CreateFilterRequest request)
     {

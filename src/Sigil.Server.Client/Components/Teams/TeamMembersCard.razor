@@ -62,7 +62,14 @@
                             <td>@(member.DisplayName ?? "—")</td>
                             <td>@member.Email</td>
                             <td>
-                                <span class="badge badge-ghost badge-sm">@member.Role</span>
+                                <select class="select select-sm select-ghost"
+                                        value="@member.Role"
+                                        @onchange="e => ChangeRole(member.UserId, Enum.Parse<TeamRole>(e.Value!.ToString()!))">
+                                    @foreach (var role in Enum.GetValues<TeamRole>())
+                                    {
+                                        <option value="@role" selected="@(role == member.Role)">@role</option>
+                                    }
+                                </select>
                             </td>
                             <td class="text-right">
                                 <button class="btn btn-ghost btn-xs text-error"
@@ -116,6 +123,20 @@
         finally
         {
             _adding = false;
+        }
+    }
+
+    private async Task ChangeRole(Guid userId, TeamRole newRole)
+    {
+        _message = null;
+        try
+        {
+            await TeamService.UpdateMemberRoleAsync(TeamId, userId, newRole);
+            await OnChanged.InvokeAsync();
+        }
+        catch
+        {
+            _message = "Failed to update role.";
         }
     }
 

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Server.Framework;
 
@@ -7,7 +8,7 @@ namespace Sigil.Server.Controllers.API;
 
 [ApiController]
 [Route("api/admin/app-config")]
-[Authorize]
+[Authorize(Policy = SigilPermissions.CanAccessAdmin)]
 public class AppConfigController(IAppConfigEditorService appConfigEditorService) : SigilController
 {
     [HttpGet]

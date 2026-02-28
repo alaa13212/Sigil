@@ -76,6 +76,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISearchService, SearchService>();
         services.AddScoped<IBadgeService, BadgeService>();
         services.AddScoped<IStackTraceFilterService, StackTraceFilterService>();
+        services.AddScoped<ISharedLinkService, SharedLinkService>();
         services.AddSingleton<IRateLimiter, SlidingWindowRateLimiter>();
         
         services.AddSingleton<IStackFrameCleaner, CSharpStackFrameCleaner>();

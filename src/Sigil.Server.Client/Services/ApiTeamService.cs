@@ -63,4 +63,10 @@ public class ApiTeamService(HttpClient http) : ITeamService
             new { Role = role });
         return response.IsSuccessStatusCode;
     }
+
+    public Task<TeamRole?> GetUserRoleForProjectAsync(Guid userId, int projectId)
+        => throw new NotSupportedException("Role lookup is server-side only.");
+
+    public Task<TeamRole?> GetUserRoleForTeamAsync(Guid userId, int teamId)
+        => throw new NotSupportedException("Role lookup is server-side only.");
 }

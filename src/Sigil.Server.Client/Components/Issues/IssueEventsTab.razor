@@ -15,7 +15,6 @@ else
                     <th>Time</th>
                     <th>Message</th>
                     <th>Severity</th>
-                    <th>User</th>
                     <th>Release</th>
                 </tr>
             </thead>
@@ -28,7 +27,6 @@ else
                         </td>
                         <td class="line-clamp-1">@(evt.Message ?? "—")</td>
                         <td><SeverityBadge Level="evt.Level" /></td>
-                        <td class="text-sm opacity-70">@(evt.UserIdentifier ?? "—")</td>
                         <td class="text-sm font-mono opacity-70">@(evt.Release ?? "—")</td>
                     </tr>
                 }

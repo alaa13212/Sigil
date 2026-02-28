@@ -41,6 +41,7 @@ internal class RetentionWorker(IServiceProvider services, IAppConfigService appC
         var dbContext = scope.ServiceProvider.GetRequiredService<SigilDbContext>();
 
         await CleanFailedEnvelopesAsync(dbContext, ct);
+        await CleanExpiredSharedLinksAsync(dbContext, ct);
 
         var projects = await dbContext.Projects.Select(p => p.Id).ToListAsync(ct);
         foreach (var projectId in projects)
@@ -49,6 +50,16 @@ internal class RetentionWorker(IServiceProvider services, IAppConfigService appC
             await EnforceAgeRetentionAsync(dbContext, projectId, ct);
             await EnforceCountRetentionAsync(dbContext, projectId, ct);
         }
+    }
+
+    private async Task CleanExpiredSharedLinksAsync(SigilDbContext dbContext, CancellationToken ct)
+    {
+        var deleted = await dbContext.SharedIssueLinks
+            .Where(l => l.ExpiresAt < DateTime.UtcNow)
+            .ExecuteDeleteAsync(ct);
+
+        if (deleted > 0)
+            logger.LogInformation("Deleted {Count} expired shared issue links", deleted);
     }
 
     private async Task CleanFailedEnvelopesAsync(SigilDbContext dbContext, CancellationToken ct)

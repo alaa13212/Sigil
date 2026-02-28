@@ -91,7 +91,6 @@ internal class IssueService(
         {
             query = query
                 .Include(i => i.SuggestedEvent!.Release)
-                .Include(i => i.SuggestedEvent!.User)
                 .Include(i => i.Tags)
                     .ThenInclude(it => it.TagValue)
                     .ThenInclude(tv => tv!.TagKey)
@@ -395,7 +394,7 @@ internal class IssueService(
             var e = issue.SuggestedEvent;
             suggestedEvent = new EventSummary(
                 e.Id, e.EventId, e.Message, e.Level,
-                e.Timestamp, e.Release?.RawName, e.User?.Identifier);
+                e.Timestamp, e.Release?.RawName);
         }
 
         var releaseInfo = await dbContext.Events

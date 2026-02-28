@@ -4,6 +4,15 @@
 @inject ITagValueFormatter TagValueFormatter
 
 <div class="w-full lg:w-72 space-y-4">
+    
+    <!-- Share button -->
+    <button class="btn btn-info btn-outline w-full" @onclick="OpenShareModal">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+        </svg>
+        Share
+    </button>
+    
     <!-- Status + Priority -->
     <div class="card bg-base-100">
         <div class="card-body p-0 divide-y divide-base-300">
@@ -12,9 +21,9 @@
                 <label tabindex="0" class="btn btn-ghost btn-sm w-full justify-between rounded-t-2xl rounded-b-none px-4 h-11" aria-disabled="@_loading">
                     <span class="text-sm opacity-60">Status</span>
                     <div class="flex items-center gap-1.5">
-                        <StatusBadge Status="Issue.Status" />
+                        <StatusBadge Status="Issue.Status"/>
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>
                     </div>
                 </label>
@@ -45,7 +54,7 @@
                     <div class="flex items-center gap-1.5">
                         <span class="text-sm">@Issue.Priority</span>
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>
                     </div>
                 </label>
@@ -64,7 +73,7 @@
         <div class="card-body p-4 space-y-1 text-sm">
             <div class="flex justify-between">
                 <span class="opacity-60">Severity</span>
-                <SeverityBadge Level="Issue.Level" />
+                <SeverityBadge Level="Issue.Level"/>
             </div>
             <div class="flex justify-between">
                 <span class="opacity-60">Assigned</span>
@@ -98,7 +107,7 @@
             {
                 <div class="pt-1">
                     <div class="text-xs opacity-60 mb-1">Last 14 days</div>
-                    <Sparkline Data="_histogram" Width="248" Height="32" Class="w-full text-primary" />
+                    <Sparkline Data="_histogram" Width="248" Height="32" Class="w-full text-primary"/>
                 </div>
             }
             @if (Issue.MergeSet is not null)
@@ -114,7 +123,7 @@
     <!-- Tags with frequency bars -->
     @{
         var systemTags = Issue.Tags.Where(t => SystemTags.IsSystemTag(t.Key)).ToList();
-        var userTags   = Issue.Tags.Where(t => !SystemTags.IsSystemTag(t.Key)).OrderBy(t => t.Key).ToList();
+        var userTags = Issue.Tags.Where(t => !SystemTags.IsSystemTag(t.Key)).OrderBy(t => t.Key).ToList();
     }
 
     @if (systemTags.Count > 0)
@@ -151,7 +160,7 @@
                             <div class="space-y-0.5">
                                 <div class="flex justify-between text-xs">
                                     <span class="font-mono line-clamp-1" title="@tagVal.Value">
-                                        <TagLink ProjectId="Issue.ProjectId" Key="@group.Key" Value="@tagVal.Value" />
+                                        <TagLink ProjectId="Issue.ProjectId" Key="@group.Key" Value="@tagVal.Value"/>
                                     </span>
                                     <span class="opacity-50 shrink-0 ml-2">@pct.ToString("F0")%</span>
                                 </div>
@@ -180,6 +189,8 @@
     }
 </div>
 
+<ShareModal IssueId="Issue.Id" IsOpen="_showShareModal" OnClose="CloseShareModal" />
+
 @code {
     [Parameter, EditorRequired] public IssueDetailResponse Issue { get; set; } = default!;
     [Parameter] public EventCallback<IssueStatus> OnStatusChanged { get; set; }
@@ -187,6 +198,8 @@
 
     private bool _loading;
     private List<int>? _histogram;
+
+    private bool _showShareModal;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -235,4 +248,7 @@
             _loading = false;
         }
     }
+
+    private void OpenShareModal() => _showShareModal = true;
+    private void CloseShareModal() => _showShareModal = false;
 }

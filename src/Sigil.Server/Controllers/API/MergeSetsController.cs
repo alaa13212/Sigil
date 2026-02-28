@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.MergeSets;
 using Sigil.Server.Framework;
@@ -11,6 +11,7 @@ namespace Sigil.Server.Controllers.API;
 [Authorize]
 public class MergeSetsController(IMergeSetService mergeSetService) : SigilController
 {
+    [Authorize(Policy = SigilPermissions.CanEditIssue)]
     [HttpPost("api/projects/{projectId:int}/merge-sets")]
     public async Task<IActionResult> Create(int projectId, [FromBody] CreateMergeSetRequest request)
     {
@@ -80,9 +81,4 @@ public class MergeSetsController(IMergeSetService mergeSetService) : SigilContro
         }
     }
 
-    private Guid? GetUserId()
-    {
-        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return claim is not null ? Guid.Parse(claim) : null;
-    }
 }

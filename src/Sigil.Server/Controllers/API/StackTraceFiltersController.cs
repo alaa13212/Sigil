@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Filters;
 using Sigil.Server.Framework;
@@ -10,10 +11,12 @@ namespace Sigil.Server.Controllers.API;
 [Authorize]
 public class StackTraceFiltersController(IStackTraceFilterService filterService) : SigilController
 {
+    [Authorize(Policy = SigilPermissions.CanViewProject)]
     [HttpGet("api/projects/{projectId:int}/stack-trace-filters")]
     public async Task<IActionResult> GetFilters(int projectId)
         => Ok(await filterService.GetFiltersAsync(projectId));
 
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
     [HttpPost("api/projects/{projectId:int}/stack-trace-filters")]
     public async Task<IActionResult> CreateFilter(int projectId, [FromBody] CreateStackTraceFilterRequest request)
         => Ok(await filterService.CreateFilterAsync(projectId, request));

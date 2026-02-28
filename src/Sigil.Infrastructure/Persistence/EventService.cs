@@ -96,7 +96,6 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         int totalCount = await query.CountAsync();
 
         var items = await query
-            .Include(e => e.User)
             .Include(e => e.Release)
             .OrderByDescending(e => e.Timestamp)
             .Skip((page - 1) * pageSize)
@@ -291,7 +290,7 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
 
         var summaries = items.Select(e => new EventSummary(
             e.Id, e.EventId, e.Message, e.Level,
-            e.Timestamp, e.Release?.RawName, e.User?.Identifier)).ToList();
+            e.Timestamp, e.Release?.RawName)).ToList();
 
         return new PagedResponse<EventSummary>(summaries, totalCount, page, pageSize);
     }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Alerts;
 using Sigil.Server.Framework;
@@ -10,10 +11,12 @@ namespace Sigil.Server.Controllers.API;
 [Authorize]
 public class AlertsController(IAlertService alertService) : SigilController
 {
+    [Authorize(Policy = SigilPermissions.CanViewProject)]
     [HttpGet("api/projects/{projectId:int}/alert-rules")]
     public async Task<IActionResult> ListRules(int projectId) =>
         Ok(await alertService.GetRulesForProjectAsync(projectId));
 
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
     [HttpPost("api/projects/{projectId:int}/alert-rules")]
     public async Task<IActionResult> CreateRule(int projectId, [FromBody] CreateAlertRuleRequest request)
     {
@@ -56,6 +59,7 @@ public class AlertsController(IAlertService alertService) : SigilController
         }
     }
 
+    [Authorize(Policy = SigilPermissions.CanViewProject)]
     [HttpGet("api/projects/{projectId:int}/alert-history")]
     public async Task<IActionResult> History(
         int projectId,

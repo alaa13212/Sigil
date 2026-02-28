@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Auth;
 using Sigil.Server.Framework;
@@ -29,7 +30,7 @@ public class AccountController(IAuthService authService) : SigilController
         return Redirect("/login");
     }
 
-    [Authorize]
+    [Authorize(Policy = SigilPermissions.CanInviteUsers)]
     [HttpGet("users")]
     public async Task<IActionResult> GetAllUsers()
     {
@@ -37,7 +38,7 @@ public class AccountController(IAuthService authService) : SigilController
         return Ok(users);
     }
 
-    [Authorize]
+    [Authorize(Policy = SigilPermissions.CanInviteUsers)]
     [HttpPost("invite")]
     public async Task<IActionResult> Invite([FromBody] InviteRequest request)
     {
@@ -46,6 +47,14 @@ public class AccountController(IAuthService authService) : SigilController
             return BadRequest(new { errors = result.Errors });
 
         return Ok(new { result.Email, result.ActivationUri });
+    }
+
+    [Authorize(Policy = SigilPermissions.CanInviteUsers)]
+    [HttpPut("users/{userId:guid}/admin")]
+    public async Task<IActionResult> SetAdmin(Guid userId, [FromBody] SetAdminRequest request)
+    {
+        await authService.SetUserAdminAsync(userId, request.IsAdmin);
+        return NoContent();
     }
 
     [AllowAnonymous]
@@ -59,3 +68,5 @@ public class AccountController(IAuthService authService) : SigilController
         return Ok(result.User);
     }
 }
+
+public record SetAdminRequest(bool IsAdmin);

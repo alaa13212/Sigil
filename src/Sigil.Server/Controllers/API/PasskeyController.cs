@@ -16,7 +16,10 @@ public class PasskeyController(IPasskeyService passkeyService) : SigilController
     public async Task<IActionResult> RegisterOptions()
     {
         var userId = GetUserId();
-        var options = await passkeyService.GetRegistrationOptionsAsync(userId);
+        if(userId is null)
+            return Unauthorized();
+        
+        var options = await passkeyService.GetRegistrationOptionsAsync(userId.Value);
         return Ok(options);
     }
 
@@ -25,7 +28,10 @@ public class PasskeyController(IPasskeyService passkeyService) : SigilController
     public async Task<IActionResult> RegisterComplete([FromBody] PasskeyRegistrationResponse request)
     {
         var userId = GetUserId();
-        var result = await passkeyService.CompleteRegistrationAsync(userId, request);
+        if(userId is null)
+            return Unauthorized();
+
+        var result = await passkeyService.CompleteRegistrationAsync(userId.Value, request);
         if (!result.Succeeded)
             return BadRequest(new { errors = result.Errors });
         return Ok(result.User);
@@ -54,7 +60,10 @@ public class PasskeyController(IPasskeyService passkeyService) : SigilController
     public async Task<IActionResult> List()
     {
         var userId = GetUserId();
-        var passkeys = await passkeyService.GetPasskeysAsync(userId);
+        if(userId is null)
+            return Unauthorized();
+
+        var passkeys = await passkeyService.GetPasskeysAsync(userId.Value);
         return Ok(passkeys);
     }
 
@@ -63,16 +72,13 @@ public class PasskeyController(IPasskeyService passkeyService) : SigilController
     public async Task<IActionResult> Delete(int id)
     {
         var userId = GetUserId();
-        var deleted = await passkeyService.DeletePasskeyAsync(userId, id);
+        if(userId is null)
+            return Unauthorized();
+
+        var deleted = await passkeyService.DeletePasskeyAsync(userId.Value, id);
         if (!deleted)
             return NotFound();
         return NoContent();
     }
 
-    private Guid GetUserId()
-    {
-        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier)
-                    ?? throw new InvalidOperationException("User ID claim not found.");
-        return Guid.Parse(claim);
-    }
 }
