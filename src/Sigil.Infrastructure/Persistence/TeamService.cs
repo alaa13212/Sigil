@@ -84,9 +84,7 @@ internal class TeamService(SigilDbContext dbContext) : ITeamService
         dbContext.TeamMemberships.Add(new TeamMembership
         {
             TeamId = teamId,
-            Team = team,
             UserId = userId,
-            User = user,
             Role = role
         });
         await dbContext.SaveChangesAsync();

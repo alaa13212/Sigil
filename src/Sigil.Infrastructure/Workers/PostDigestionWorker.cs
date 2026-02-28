@@ -111,7 +111,7 @@ internal class PostDigestionWorker(
 
     private static async Task LogPriorityChangesAsync(List<PriorityChange> changes, IServiceProvider serviceProvider)
     {
-        IssueActivityService activityService = serviceProvider.GetRequiredService<IssueActivityService>();
+        IIssueActivityService activityService = serviceProvider.GetRequiredService<IIssueActivityService>();
 
         foreach (var change in changes)
         {
