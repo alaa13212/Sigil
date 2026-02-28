@@ -6,5 +6,9 @@
     <Project Path="src/Sigil.Server.Client/Sigil.Server.Client.csproj" />
     <Project Path="src/Sigil.Server/Sigil.Server.csproj" />
   </Folder>
-  <Folder Name="/tests/" />
+  <Folder Name="/tests/">
+    <Project Path="tests/Sigil.Application.Tests/Sigil.Application.Tests.csproj" />
+    <Project Path="tests/Sigil.Domain.Tests/Sigil.Domain.Tests.csproj" />
+    <Project Path="tests/Sigil.Infrastructure.Tests/Sigil.Infrastructure.Tests.csproj" />
+  </Folder>
 </Solution>
