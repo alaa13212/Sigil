@@ -1,8 +1,10 @@
 @page "/projects/{ProjectId:int}/settings"
 @attribute [Authorize]
 @using Sigil.Application.Models.Projects
+@using Sigil.Application.Services
 @inject IProjectService ProjectService
 @inject NavigationManager NavigationManager
+@inject PlatformInfoProvider PlatformInfoProvider
 
 @layout ProjectSettingsLayout
 
@@ -86,25 +88,35 @@ else
         </div>
 
         <!-- SDK Setup -->
+        @{
+            var platformInfo = PlatformInfoProvider.GetInfo(Project.Platform);
+        }
         <div class="card bg-base-100">
             <div class="card-body p-5 space-y-3">
                 <h2 class="font-semibold">SDK Integration</h2>
-                <p class="text-sm opacity-70">Use the DSN above in your Sentry SDK configuration:</p>
-
-                <div class="space-y-3 text-sm">
-                    <div>
-                        <div class="font-semibold opacity-70">C# / .NET</div>
-                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>SentrySdk.Init(o =&gt; o.Dsn = "@(Project.Dsn)");</code></pre>
+                @if (platformInfo is not null)
+                {
+                    <div class="space-y-3 text-sm">
+                        <div>
+                            <div class="font-semibold opacity-70">Install (@platformInfo.SdkPackage)</div>
+                            <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>@platformInfo.InstallCommand</code></pre>
+                        </div>
+                        <div>
+                            <div class="font-semibold opacity-70">Initialize (@platformInfo.DisplayName)</div>
+                            <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>@PlatformInfoProvider.FormatSnippet(Project.Platform, Project.Dsn ?? "")</code></pre>
+                        </div>
+                        @if (platformInfo.DocumentationUrl is not null)
+                        {
+                            <a href="@platformInfo.DocumentationUrl" target="_blank" class="link link-hover text-sm">
+                                Full documentation →
+                            </a>
+                        }
                     </div>
-                    <div>
-                        <div class="font-semibold opacity-70">JavaScript</div>
-                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>Sentry.init({ dsn: "@(Project.Dsn)" });</code></pre>
-                    </div>
-                    <div>
-                        <div class="font-semibold opacity-70">Python</div>
-                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>sentry_sdk.init(dsn="@(Project.Dsn)")</code></pre>
-                    </div>
-                </div>
+                }
+                else
+                {
+                    <p class="text-sm opacity-70">Use the DSN above in your Sentry-compatible SDK configuration.</p>
+                }
             </div>
         </div>
     </div>

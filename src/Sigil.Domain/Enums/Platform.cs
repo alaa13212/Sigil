@@ -46,7 +46,7 @@ public static class PlatformHelper
         "python" => Platform.Python,
         "ruby" => Platform.Ruby,
         "other" => Platform.Other,
-        _ => throw new ArgumentOutOfRangeException(nameof(platform), $"Unknown platform: '{platform}'")
+        _ => Platform.Other
     };
 
     public static string ToStringValue(Platform platform) => platform switch

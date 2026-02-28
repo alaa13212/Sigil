@@ -2,8 +2,10 @@
 @attribute [AllowAnonymous]
 @using Sigil.Application.Models.Auth
 @layout SetupLayout
+@using Sigil.Application.Services
 @inject ISetupService SetupService
 @inject NavigationManager Navigation
+@inject PlatformInfoProvider PlatformInfoProvider
 
 <PageTitle>Setup — Sigil</PageTitle>
 
@@ -250,28 +252,33 @@
                             <p class="label">Use this in your Sentry SDK configuration</p>
                         </fieldset>
 
-                        <div class="collapse collapse-arrow bg-base-200">
-                            <input type="checkbox" />
-                            <div class="collapse-title font-medium text-sm">SDK Integration Examples</div>
-                            <div class="collapse-content space-y-3 text-sm">
-                                <div>
-                                    <div class="font-semibold opacity-70">C# / .NET</div>
-                                    <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>SentrySdk.Init(o =&gt; o.Dsn = "@dsn");</code></pre>
-                                </div>
-                                <div>
-                                    <div class="font-semibold opacity-70">JavaScript</div>
-                                    <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>Sentry.init({ dsn: "@dsn" });</code></pre>
-                                </div>
-                                <div>
-                                    <div class="font-semibold opacity-70">Python</div>
-                                    <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>sentry_sdk.init(dsn="@dsn")</code></pre>
-                                </div>
-                                <div>
-                                    <div class="font-semibold opacity-70">Java</div>
-                                    <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>Sentry.init(options -&gt; options.setDsn("@dsn"));</code></pre>
+                        @if (PlatformInfoProvider.GetInfo(projectPlatform) is { } setupPlatformInfo)
+                        {
+                            <div class="collapse collapse-arrow bg-base-200">
+                                <input type="checkbox" />
+                                <div class="collapse-title font-medium text-sm">@setupPlatformInfo.DisplayName SDK Setup</div>
+                                <div class="collapse-content space-y-3 text-sm">
+                                    <div>
+                                        <div class="font-semibold opacity-70">1. Install</div>
+                                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>@setupPlatformInfo.InstallCommand</code></pre>
+                                    </div>
+                                    <div>
+                                        <div class="font-semibold opacity-70">2. Initialize</div>
+                                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>@PlatformInfoProvider.FormatSnippet(projectPlatform, dsn ?? "")</code></pre>
+                                    </div>
+                                    @if (setupPlatformInfo.DocumentationUrl is not null)
+                                    {
+                                        <a href="@setupPlatformInfo.DocumentationUrl" target="_blank" class="link link-hover">
+                                            Full documentation →
+                                        </a>
+                                    }
                                 </div>
                             </div>
-                        </div>
+                        }
+                        else
+                        {
+                            <p class="text-sm opacity-70">Use the DSN above in your Sentry-compatible SDK configuration.</p>
+                        }
                     }
 
                     <div class="flex justify-center">
