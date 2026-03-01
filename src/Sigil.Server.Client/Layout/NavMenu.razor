@@ -68,38 +68,46 @@
                     Teams
                 </NavLink>
             </li>
-            <li>
-                <NavLink href="/projects/create" Match="NavLinkMatch.All" ActiveClass="menu-active">
-                    Create Project
-                </NavLink>
-            </li>
+            <AuthorizeView Roles="Admin">
+                <Authorized Context="_">
+                    <li>
+                        <NavLink href="/projects/create" Match="NavLinkMatch.All" ActiveClass="menu-active">
+                            Create Project
+                        </NavLink>
+                    </li>
+                </Authorized>
+            </AuthorizeView>
 
-            <li class="menu-title mt-4">Admin</li>
-            <li>
-                <NavLink href="/admin/users" Match="NavLinkMatch.Prefix" ActiveClass="menu-active">
-                    Users
-                </NavLink>
-            </li>
-            <li>
-                <NavLink href="/admin/migrations" Match="NavLinkMatch.All" ActiveClass="menu-active">
-                    Migrations
-                </NavLink>
-            </li>
-            <li>
-                <NavLink href="/admin/digestion" Match="NavLinkMatch.All" ActiveClass="menu-active">
-                    Digestion
-                </NavLink>
-            </li>
-            <li>
-                <NavLink href="/admin/alert-channels" Match="NavLinkMatch.All" ActiveClass="menu-active">
-                    Alert Channels
-                </NavLink>
-            </li>
-            <li>
-                <NavLink href="/admin/settings" Match="NavLinkMatch.All" ActiveClass="menu-active">
-                    Settings
-                </NavLink>
-            </li>
+            <AuthorizeView Roles="Admin">
+                <Authorized Context="_">
+                    <li class="menu-title mt-4">Admin</li>
+                    <li>
+                        <NavLink href="/admin/users" Match="NavLinkMatch.Prefix" ActiveClass="menu-active">
+                            Users
+                        </NavLink>
+                    </li>
+                    <li>
+                        <NavLink href="/admin/migrations" Match="NavLinkMatch.All" ActiveClass="menu-active">
+                            Migrations
+                        </NavLink>
+                    </li>
+                    <li>
+                        <NavLink href="/admin/digestion" Match="NavLinkMatch.All" ActiveClass="menu-active">
+                            Digestion
+                        </NavLink>
+                    </li>
+                    <li>
+                        <NavLink href="/admin/alert-channels" Match="NavLinkMatch.All" ActiveClass="menu-active">
+                            Alert Channels
+                        </NavLink>
+                    </li>
+                    <li>
+                        <NavLink href="/admin/settings" Match="NavLinkMatch.All" ActiveClass="menu-active">
+                            Settings
+                        </NavLink>
+                    </li>
+                </Authorized>
+            </AuthorizeView>
         </ul>
 
         <div class="p-3 border-t border-base-300">

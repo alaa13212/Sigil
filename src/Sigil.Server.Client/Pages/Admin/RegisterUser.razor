@@ -1,7 +1,10 @@
 @page "/admin/users/register"
 @attribute [Authorize]
 @using Sigil.Application.Models.Auth
+@using Sigil.Application.Models.Teams
+@using Sigil.Domain.Enums
 @inject IAuthService AuthService
+@inject ITeamService TeamService
 @inject NavigationManager Nav
 
 <PageTitle>Invite User — Sigil</PageTitle>
@@ -21,7 +24,7 @@
             <p class="font-semibold">Invitation created. Share this link with the user:</p>
         </div>
         <div class="join w-full">
-            <input readonly  value="@inviteLink" class="input join-item flex-1 font-mono text-sm" />
+            <input readonly value="@inviteLink" class="input join-item flex-1 font-mono text-sm" />
             <CopyButton Text="@inviteLink" Class="btn join-item" />
         </div>
         <a href="/admin/users" class="btn btn-primary">Back to Users</a>
@@ -38,6 +41,31 @@
                     <legend class="fieldset-legend">Display Name</legend>
                     <input type="text" class="input w-full" @bind="displayName" placeholder="John Doe" />
                 </fieldset>
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Team (optional)</legend>
+                    <select class="select select-sm w-full" @bind="selectedTeamId">
+                        <option value="0">— No team —</option>
+                        @foreach (var team in _teams)
+                        {
+                            <option value="@team.Id">@team.Name</option>
+                        }
+                    </select>
+                </fieldset>
+                @if (selectedTeamId > 0)
+                {
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Team Role</legend>
+                        <select class="select select-sm w-full" @bind="selectedTeamRole">
+                            <option value="@TeamRole.Member">Member</option>
+                            <option value="@TeamRole.Admin">Admin</option>
+                            <option value="@TeamRole.Owner">Owner</option>
+                        </select>
+                    </fieldset>
+                }
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" class="checkbox checkbox-sm" @bind="isAdmin" />
+                    <span class="text-sm">Grant global Admin role</span>
+                </label>
                 @if (!string.IsNullOrEmpty(error))
                 {
                     <div class="alert alert-error text-sm">@error</div>
@@ -53,9 +81,18 @@
 @code {
     private string email = "";
     private string displayName = "";
+    private bool isAdmin;
+    private int selectedTeamId;
+    private TeamRole selectedTeamRole = TeamRole.Member;
     private string? error;
     private string? inviteLink;
     private bool submitting;
+    private List<TeamResponse> _teams = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _teams = await TeamService.GetTeamsAsync();
+    }
 
     private async Task Invite()
     {
@@ -70,10 +107,19 @@
         try
         {
             var result = await AuthService.InviteUserAsync(new InviteRequest(email, displayName));
-            if (result.Succeeded)
-                inviteLink = result.ActivationUri;
-            else
+            if (!result.Succeeded)
+            {
                 error = string.Join(", ", result.Errors);
+                return;
+            }
+
+            if (isAdmin)
+                await AuthService.SetUserAdminAsync(result.UserId, true);
+
+            if (selectedTeamId > 0)
+                await TeamService.AddMemberAsync(selectedTeamId, result.UserId, selectedTeamRole);
+
+            inviteLink = result.ActivationUri;
         }
         catch
         {

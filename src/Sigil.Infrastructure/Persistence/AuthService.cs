@@ -95,7 +95,7 @@ internal class AuthService(
 
         var token = await userManager.GeneratePasswordResetTokenAsync(user);
         var activationUri = GetActivationUri(user.Email, token);
-        return InviteResult.Success(user.Email, activationUri!);
+        return InviteResult.Success(user.Id, user.Email, activationUri!);
     }
 
     private string? GetActivationUri(string email, string? token)
