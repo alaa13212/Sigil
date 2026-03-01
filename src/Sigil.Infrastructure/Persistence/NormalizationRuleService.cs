@@ -20,7 +20,7 @@ internal class NormalizationRuleService(
         new (@"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,}", "{email}", "Emails"),
         new (@"https?:\/\/[^\s/$.?#].[^\s]*", "{url}", "URLs"),
         new (@"/[A-Za-z0-9\-_]+(?:/[A-Za-z0-9\-_]+)*", "{urlpath}", "URL Paths"),
-        new ("""(?:(?:[A-Za-z]:\\|\\\\)[^\\/:*?"<>|\r\n]+(?:\\[^\\/:*?"<>|\r\n]+)*|/(?:[^/\0]+/)*[^/\0]*)""", "{filepath}", "File Paths"),
+        new (@"(/\S+){2,}\b", "{filepath}", "File Paths"),
 
         new (@"\b\d{10}\b", "{epoch}", "Epoch seconds"),
         new (@"\b\d{13}\b", "{epochms}", "Epoch millis"),
@@ -37,6 +37,8 @@ internal class NormalizationRuleService(
         
         new (@"\b\d+\b", "{int}", "Numbers"),
         new (@"\b[0-9A-Fa-f]{8,}\b", "{hex}", "Hexadecimal Numbers"),
+        
+        new (@"\b\d+(d|h|m|s)", "{int}$1", "Duration"),
     ];
 
     public List<TextNormalizationRule> CreateDefaultRulesPreset()
