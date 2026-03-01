@@ -104,7 +104,11 @@ internal class AuthService(
             return null;
 
         string? hostUri = configService.HostUrl;
-        return $"{hostUri}/activate?email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}";
+        if(hostUri is null)
+            return null;
+        
+        Uri baseUri = new Uri(hostUri);
+        return new Uri(baseUri, $"activate?email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}").AbsoluteUri;
     }
 
     public async Task<AuthResult> ActivateAccountAsync(ActivateRequest request)
