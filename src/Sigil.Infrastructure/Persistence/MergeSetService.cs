@@ -8,9 +8,9 @@ namespace Sigil.Infrastructure.Persistence;
 
 internal class MergeSetService(
     SigilDbContext dbContext,
-    IIssueActivityService activityService,
+    IIssueActivityLogger activityService,
     IIssueCache issueCache,
-    IDateTime dateTime) : IMergeSetService
+    IDateTime dateTime) : IMergeSetService, IMergeSetAggregator
 {
     public async Task<MergeSetResponse> CreateAsync(int projectId, List<int> issueIds, Guid userId)
     {

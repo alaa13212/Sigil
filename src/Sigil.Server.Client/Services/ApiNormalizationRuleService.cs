@@ -30,9 +30,4 @@ public class ApiNormalizationRuleService(HttpClient http) : INormalizationRuleSe
         return response.IsSuccessStatusCode;
     }
 
-    public List<TextNormalizationRule> CreateDefaultRulesPreset() =>
-        throw new NotSupportedException("Not available on client.");
-
-    public Task<List<TextNormalizationRule>> GetRawRulesAsync(int projectId) =>
-        throw new NotSupportedException("Not available on client.");
 }

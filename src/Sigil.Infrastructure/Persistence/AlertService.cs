@@ -11,7 +11,7 @@ internal class AlertService(
     SigilDbContext dbContext,
     IDateTime dateTime,
     IEnumerable<IAlertSender> senders,
-    IAppConfigService appConfigService) : IAlertService
+    IAppConfigService appConfigService) : IAlertService, IAlertEvaluationService
 {
     
     #region CRUD

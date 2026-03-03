@@ -98,7 +98,7 @@ internal class PostDigestionWorker(
 
     private static async Task RefreshMergeSetAggregates(List<Issue> issues, IServiceProvider serviceProvider)
     {
-        var mergeSetService = serviceProvider.GetRequiredService<IMergeSetService>();
+        var mergeSetAggregator = serviceProvider.GetRequiredService<IMergeSetAggregator>();
         var mergeSetIds = issues
             .Where(i => i.MergeSetId.HasValue)
             .Select(i => i.MergeSetId!.Value)
@@ -106,12 +106,12 @@ internal class PostDigestionWorker(
             .ToList();
 
         if (mergeSetIds.Count > 0)
-            await mergeSetService.RefreshAggregatesAsync(mergeSetIds);
+            await mergeSetAggregator.RefreshAggregatesAsync(mergeSetIds);
     }
 
     private static async Task LogPriorityChangesAsync(List<PriorityChange> changes, IServiceProvider serviceProvider)
     {
-        IIssueActivityService activityService = serviceProvider.GetRequiredService<IIssueActivityService>();
+        IIssueActivityLogger activityService = serviceProvider.GetRequiredService<IIssueActivityLogger>();
 
         foreach (var change in changes)
         {
@@ -130,15 +130,15 @@ internal class PostDigestionWorker(
 
     private static async Task FireIssueAlerts(PostDigestionWork work, List<Issue> issues, IServiceProvider serviceProvider)
     {
-        var alertService = serviceProvider.GetRequiredService<IAlertService>();
+        var alertEvaluator = serviceProvider.GetRequiredService<IAlertEvaluationService>();
         foreach (Issue issue in issues)
         {
             if (work.NewIssueIds.Contains(issue.Id))
-                await alertService.EvaluateNewIssueAsync(issue);
+                await alertEvaluator.EvaluateNewIssueAsync(issue);
             else if (work.RegressionIssueIds.Contains(issue.Id))
-                await alertService.EvaluateRegressionAsync(issue);
+                await alertEvaluator.EvaluateRegressionAsync(issue);
 
-            await alertService.EvaluateThresholdAsync(issue);
+            await alertEvaluator.EvaluateThresholdAsync(issue);
         }
     }
 }

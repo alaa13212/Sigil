@@ -9,7 +9,7 @@ namespace Sigil.Infrastructure.Persistence;
 internal class AutoTagService(
     SigilDbContext dbContext,
     IAutoTagRuleCache cache,
-    IDateTime dateTime) : IAutoTagService
+    IDateTime dateTime) : IAutoTagService, IAutoTagRuleSource
 {
     public async Task<List<AutoTagRuleResponse>> GetRulesForProjectAsync(int projectId)
     {

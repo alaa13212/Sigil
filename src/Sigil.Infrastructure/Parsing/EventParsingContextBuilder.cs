@@ -4,18 +4,18 @@ using Sigil.Domain.Ingestion;
 namespace Sigil.Infrastructure.Parsing;
 
 internal class EventParsingContextBuilder(
-    INormalizationRuleService normalizationRuleService,
-    IAutoTagService autoTagService,
-    IEventFilterService filterService,
-    IStackTraceFilterService stackTraceFilterService,
+    INormalizationRuleEngine normalizationRuleEngine,
+    IAutoTagRuleSource autoTagRuleSource,
+    IEventFilterEngine filterEngine,
+    IStackTraceFilterSource stackTraceFilterSource,
     IProjectConfigService projectConfigService) : IEventParsingContextBuilder
 {
     public async Task<EventParsingContext> BuildAsync(int projectId)
     {
-        var normTask    = normalizationRuleService.GetRawRulesAsync(projectId);
-        var autoTagTask = autoTagService.GetRawRulesForProjectAsync(projectId);
-        var filterTask  = filterService.GetRawFiltersForProjectAsync(projectId);
-        var stfTask     = stackTraceFilterService.GetRawFiltersForProjectAsync(projectId);
+        var normTask    = normalizationRuleEngine.GetRawRulesAsync(projectId);
+        var autoTagTask = autoTagRuleSource.GetRawRulesForProjectAsync(projectId);
+        var filterTask  = filterEngine.GetRawFiltersForProjectAsync(projectId);
+        var stfTask     = stackTraceFilterSource.GetRawFiltersForProjectAsync(projectId);
 
         await Task.WhenAll(normTask, autoTagTask, filterTask, stfTask);
 

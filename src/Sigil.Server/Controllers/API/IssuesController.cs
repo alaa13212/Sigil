@@ -15,7 +15,8 @@ namespace Sigil.Server.Controllers.API;
 public class IssuesController(
     IIssueService issueService,
     IIssueActivityService activityService,
-    IProjectService projectService,
+    IIssueActivityLogger activityLogger,
+    IProjectEntityAccess projectEntityAccess,
     IBookmarkService bookmarkService) : SigilController
 {
     [Authorize(Policy = SigilPermissions.CanViewProject)]
@@ -34,7 +35,7 @@ public class IssuesController(
         [FromQuery] bool bookmarked = false,
         [FromQuery] bool includeViewedInfo = false)
     {
-        if (await projectService.GetProjectByIdAsync(projectId) is null)
+        if (await projectEntityAccess.GetProjectByIdAsync(projectId) is null)
             return NotFound();
 
         var userId = GetUserId();
@@ -131,7 +132,7 @@ public class IssuesController(
         var userId = GetUserId();
         if (userId is null) return Unauthorized();
 
-        var activity = await activityService.LogActivityAsync(id, IssueActivityAction.Commented, userId.Value, request.Message.Trim());
+        var activity = await activityLogger.LogActivityAsync(id, IssueActivityAction.Commented, userId.Value, request.Message.Trim());
         return Ok(new ActivityResponse(activity.Id, activity.Action, activity.Message, activity.Timestamp, null, userId.Value));
     }
 

@@ -10,7 +10,7 @@ namespace Sigil.Server.Controllers.API;
 [ApiController]
 [Route("api/projects/{projectId:int}/recommendations")]
 [Authorize(Policy = SigilPermissions.CanViewProject)]
-public class RecommendationsController(IRecommendationService recommendationService, IProjectService projectService) : SigilController
+public class RecommendationsController(IRecommendationService recommendationService, IProjectEntityAccess projectEntityAccess) : SigilController
 {
     [HttpGet("count")]
     public async Task<IActionResult> Count(int projectId)
@@ -27,7 +27,7 @@ public class RecommendationsController(IRecommendationService recommendationServ
     [HttpPost("refresh")]
     public async Task<IActionResult> Refresh(int projectId)
     {
-        Project? project = await projectService.GetProjectByIdAsync(projectId);
+        Project? project = await projectEntityAccess.GetProjectByIdAsync(projectId);
         if (project is null)
             return NotFound();
         

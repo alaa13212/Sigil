@@ -6,7 +6,7 @@ using Sigil.Domain.Enums;
 
 namespace Sigil.Server.Authorization;
 
-public class SigilPermissionHandler(ITeamService teamService, IHttpContextAccessor httpContextAccessor)
+public class SigilPermissionHandler(ITeamRoleService teamService, IHttpContextAccessor httpContextAccessor)
     : AuthorizationHandler<SigilPermissionRequirement>
 {
     protected override async Task HandleRequirementAsync(

@@ -8,7 +8,7 @@ namespace Sigil.Infrastructure.Persistence;
 internal class NormalizationRuleService(
     SigilDbContext dbContext,
     INormalizationRuleCache cache,
-    IDateTime dateTime) : INormalizationRuleService
+    IDateTime dateTime) : INormalizationRuleService, INormalizationRuleEngine
 {
     private record TextNormalizationRulePreset(string Pattern, string Replacement, string Description);
     private static readonly List<TextNormalizationRulePreset> DefaultNormalizationRules =

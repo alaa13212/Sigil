@@ -1,19 +1,11 @@
 using Sigil.Application.Models;
 using Sigil.Application.Models.Events;
 using Sigil.Domain.Entities;
-using Sigil.Domain.Ingestion;
 
 namespace Sigil.Application.Interfaces;
 
 public interface IEventService
 {
-    // Ingestion
-    Task<HashSet<string>> FindExistingEventIdsAsync(IEnumerable<string> eventIds);
-    List<CapturedEvent> BulkCreateEventsEntities(IEnumerable<ParsedEvent> parsedEvents, Project project, Issue issue,
-        Dictionary<string, Release> releases, Dictionary<string, EventUser> users,
-        Dictionary<string, Dictionary<string, int>> tagValues);
-    Task<bool> SaveEventsAsync();
-
     // Entity access (internal use)
     Task<CapturedEvent?> GetEventByIdAsync(long eventId, bool includeStackFrames = false, bool includeTags = false);
     Task<(List<CapturedEvent> Items, int TotalCount)> GetEventsForIssueAsync(int issueId, int page = 1, int pageSize = 50);

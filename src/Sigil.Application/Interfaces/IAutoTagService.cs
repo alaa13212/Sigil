@@ -1,5 +1,4 @@
 using Sigil.Application.Models.AutoTags;
-using Sigil.Domain.Entities;
 
 namespace Sigil.Application.Interfaces;
 
@@ -9,7 +8,4 @@ public interface IAutoTagService
     Task<AutoTagRuleResponse> CreateRuleAsync(int projectId, CreateAutoTagRuleRequest request);
     Task<AutoTagRuleResponse?> UpdateRuleAsync(int ruleId, UpdateAutoTagRuleRequest request);
     Task<bool> DeleteRuleAsync(int ruleId);
-
-    // Server-only (digestion pipeline)
-    Task<List<AutoTagRule>> GetRawRulesForProjectAsync(int projectId);
 }

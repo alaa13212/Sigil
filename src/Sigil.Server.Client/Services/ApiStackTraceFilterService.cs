@@ -1,7 +1,6 @@
 using System.Net.Http.Json;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Filters;
-using Sigil.Domain.Entities;
 
 namespace Sigil.Server.Client.Services;
 
@@ -30,6 +29,4 @@ public class ApiStackTraceFilterService(HttpClient http) : IStackTraceFilterServ
         return resp.IsSuccessStatusCode;
     }
 
-    public Task<List<StackTraceFilter>> GetRawFiltersForProjectAsync(int projectId)
-        => throw new NotSupportedException("Use GetFiltersAsync for client-side usage.");
 }

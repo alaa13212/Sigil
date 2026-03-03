@@ -5,7 +5,6 @@ using Sigil.Application.Models;
 using Sigil.Application.Models.Issues;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
-using Sigil.Domain.Ingestion;
 
 namespace Sigil.Server.Client.Services;
 
@@ -96,9 +95,6 @@ public class ApiIssueService(HttpClient http) : IIssueService
     {
         return await http.GetFromJsonAsync<List<IssueSummary>>($"api/issues/{issueId}/similar") ?? [];
     }
-
-    public Task<List<Issue>> BulkGetOrCreateIssuesAsync(Project project, IEnumerable<IGrouping<string, ParsedEvent>> eventsByFingerprint) =>
-        throw new NotSupportedException("Not available on client.");
 
     public Task RecordPageViewAsync(Guid userId, int projectId, PageType pageType) => Task.CompletedTask;
 

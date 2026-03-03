@@ -44,6 +44,4 @@ public class ApiMergeSetService(HttpClient http) : IMergeSetService
         }
     }
 
-    public Task RefreshAggregatesAsync(IEnumerable<int> mergeSetIds) =>
-        throw new NotSupportedException("Not available on client.");
 }

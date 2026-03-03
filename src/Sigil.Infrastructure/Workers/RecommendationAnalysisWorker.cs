@@ -40,7 +40,7 @@ internal class RecommendationAnalysisWorker(
         List<Project> projects;
         using (var scope = services.CreateScope())
         {
-            var service = scope.ServiceProvider.GetRequiredService<IProjectService>();
+            var service = scope.ServiceProvider.GetRequiredService<IProjectEntityAccess>();
             projects = await service.GetAllProjectsAsync();
         }
 

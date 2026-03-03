@@ -3,7 +3,6 @@ using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Application.Models.Events;
 using Sigil.Domain.Entities;
-using Sigil.Domain.Ingestion;
 
 namespace Sigil.Server.Client.Services;
 
@@ -148,14 +147,4 @@ public class ApiEventService(HttpClient http) : IEventService
         }
     }
 
-    public Task<HashSet<string>> FindExistingEventIdsAsync(IEnumerable<string> eventIds) =>
-        throw new NotSupportedException("Not available on client.");
-
-    public List<CapturedEvent> BulkCreateEventsEntities(IEnumerable<ParsedEvent> parsedEvents, Project project,
-        Issue issue, Dictionary<string, Release> releases, Dictionary<string, EventUser> users,
-        Dictionary<string, Dictionary<string, int>> tagValues) =>
-        throw new NotSupportedException("Not available on client.");
-
-    public Task<bool> SaveEventsAsync() =>
-        throw new NotSupportedException("Not available on client.");
 }

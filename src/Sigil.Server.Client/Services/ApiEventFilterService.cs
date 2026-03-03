@@ -1,8 +1,6 @@
 using System.Net.Http.Json;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Filters;
-using Sigil.Domain.Entities;
-using Sigil.Domain.Ingestion;
 
 namespace Sigil.Server.Client.Services;
 
@@ -33,9 +31,4 @@ public class ApiEventFilterService(HttpClient http) : IEventFilterService
         return response.IsSuccessStatusCode;
     }
 
-    public Task<List<EventFilter>> GetRawFiltersForProjectAsync(int projectId) =>
-        throw new NotSupportedException("Not available on client.");
-
-    public bool ShouldRejectEvent(ParsedEvent parsedEvent, List<EventFilter> filters) =>
-        throw new NotSupportedException("Not available on client.");
 }

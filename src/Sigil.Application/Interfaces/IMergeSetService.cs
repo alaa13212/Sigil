@@ -9,5 +9,4 @@ public interface IMergeSetService
     Task RemoveIssueAsync(int mergeSetId, int issueId, Guid userId);
     Task SetPrimaryAsync(int mergeSetId, int issueId);
     Task<MergeSetResponse?> GetByIdAsync(int mergeSetId);
-    Task RefreshAggregatesAsync(IEnumerable<int> mergeSetIds);
 }

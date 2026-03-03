@@ -3,7 +3,6 @@ using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Application.Models.Issues;
 using Sigil.Domain.Entities;
-using Sigil.Domain.Enums;
 
 namespace Sigil.Server.Client.Services;
 
@@ -31,9 +30,6 @@ public class ApiIssueActivityService(HttpClient http) : IIssueActivityService
 
         return (items, response.TotalCount);
     }
-
-    public Task<IssueActivity> LogActivityAsync(int issueId, IssueActivityAction action, Guid? userId = null, string? message = null, Dictionary<string, string>? extra = null) =>
-        throw new NotSupportedException("Not available on client.");
 
     public async Task<ActivityResponse> AddCommentAsync(int issueId, string message)
     {

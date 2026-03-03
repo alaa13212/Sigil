@@ -44,29 +44,54 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IHashGenerator, DefaultHashGenerator>();
         services.AddScoped<ICompressionService, GzipCompressionService>();
         services.AddScoped<IDateTime, DateTimeProvider>();
-        services.AddScoped<IEventService, EventService>();
-        services.AddScoped<IProjectService, ProjectService>();
-        services.AddScoped<IIssueService, IssueService>();
+        services.AddScoped<EventService>();
+        services.AddScoped<IEventService>(UseExisting<EventService>);
+        services.AddScoped<IEventIngestionService>(UseExisting<EventService>);
+
+        services.AddScoped<ProjectService>();
+        services.AddScoped<IProjectService>(UseExisting<ProjectService>);
+        services.AddScoped<IProjectEntityAccess>(UseExisting<ProjectService>);
+
+        services.AddScoped<IssueService>();
+        services.AddScoped<IIssueService>(UseExisting<IssueService>);
+        services.AddScoped<IIssueIngestionService>(UseExisting<IssueService>);
         services.AddScoped<IReleaseService, ReleaseService>();
         services.AddScoped<IEventUserService, EventUserService>();
         services.AddScoped<ITagService, TagService>();
-        services.AddScoped<IIssueActivityService, IssueActivityService>();
+        services.AddScoped<IssueActivityService>();
+        services.AddScoped<IIssueActivityService>(UseExisting<IssueActivityService>);
+        services.AddScoped<IIssueActivityLogger>(UseExisting<IssueActivityService>);
         services.AddSingleton<IAppConfigService, AppConfigService>();
         services.AddSingleton<IAsyncStartupInitializer>(sp => (IAsyncStartupInitializer) sp.GetRequiredService<IAppConfigService>());
         services.AddScoped<IAppConfigEditorService, AppConfigEditorService>();
         services.AddScoped<IAuthService, AuthService>();
-        services.AddScoped<ITeamService, TeamService>();
+        services.AddScoped<TeamService>();
+        services.AddScoped<ITeamService>(UseExisting<TeamService>);
+        services.AddScoped<ITeamRoleService>(UseExisting<TeamService>);
         services.AddScoped<ISetupService, SetupService>();
         services.AddScoped<IRawEnvelopeService, RawEnvelopeService>();
         services.AddScoped<IDigestionService, DigestionService>();
         services.AddScoped<IDigestionMonitorService, DigestionMonitorService>();
         services.AddScoped<IPasskeyService, PasskeyService>();
-        services.AddScoped<IEventFilterService, EventFilterService>();
-        services.AddScoped<IAutoTagService, AutoTagService>();
-        services.AddScoped<INormalizationRuleService, NormalizationRuleService>();
-        services.AddScoped<IMergeSetService, MergeSetService>();
+        services.AddScoped<EventFilterService>();
+        services.AddScoped<IEventFilterService>(UseExisting<EventFilterService>);
+        services.AddScoped<IEventFilterEngine>(UseExisting<EventFilterService>);
+
+        services.AddScoped<AutoTagService>();
+        services.AddScoped<IAutoTagService>(UseExisting<AutoTagService>);
+        services.AddScoped<IAutoTagRuleSource>(UseExisting<AutoTagService>);
+
+        services.AddScoped<NormalizationRuleService>();
+        services.AddScoped<INormalizationRuleService>(UseExisting<NormalizationRuleService>);
+        services.AddScoped<INormalizationRuleEngine>(UseExisting<NormalizationRuleService>);
+
+        services.AddScoped<MergeSetService>();
+        services.AddScoped<IMergeSetService>(UseExisting<MergeSetService>);
+        services.AddScoped<IMergeSetAggregator>(UseExisting<MergeSetService>);
         services.AddScoped<IBookmarkService, BookmarkService>();
-        services.AddScoped<IAlertService, AlertService>();
+        services.AddScoped<AlertService>();
+        services.AddScoped<IAlertService>(UseExisting<AlertService>);
+        services.AddScoped<IAlertEvaluationService>(sp => sp.GetRequiredService<AlertService>());
         services.AddScoped<IAlertChannelService, AlertChannelService>();
         services.AddScoped<IReleaseHealthService, ReleaseHealthService>();
         services.AddScoped<IRecommendationService, RecommendationService>();
@@ -75,7 +100,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IProjectConfigEditorService, ProjectConfigEditorService>();
         services.AddScoped<ISearchService, SearchService>();
         services.AddScoped<IBadgeService, BadgeService>();
-        services.AddScoped<IStackTraceFilterService, StackTraceFilterService>();
+        services.AddScoped<StackTraceFilterService>();
+        services.AddScoped<IStackTraceFilterService>(UseExisting<StackTraceFilterService>);
+        services.AddScoped<IStackTraceFilterSource>(UseExisting<StackTraceFilterService>);
         services.AddScoped<ISharedLinkService, SharedLinkService>();
         services.AddSingleton<IRateLimiter, SlidingWindowRateLimiter>();
         

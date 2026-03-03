@@ -6,10 +6,6 @@ namespace Sigil.Application.Interfaces;
 
 public interface IProjectService
 {
-    // Entity access
-    Task<Project?> GetProjectByIdAsync(int id);
-    Task<List<Project>> GetAllProjectsAsync();
-
     // DTO access (UI/API)
     Task<List<ProjectResponse>> GetProjectListAsync();
     Task<ProjectDetailResponse?> GetProjectDetailAsync(int id);

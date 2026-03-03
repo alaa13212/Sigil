@@ -5,7 +5,7 @@ using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class StackTraceFilterService(SigilDbContext dbContext, IStackTraceFilterCache cache, IDateTime dateTime) : IStackTraceFilterService
+internal class StackTraceFilterService(SigilDbContext dbContext, IStackTraceFilterCache cache, IDateTime dateTime) : IStackTraceFilterService, IStackTraceFilterSource
 {
     public async Task<List<StackTraceFilterResponse>> GetFiltersAsync(int projectId)
     {

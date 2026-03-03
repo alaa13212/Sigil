@@ -6,7 +6,7 @@ using Sigil.Domain.Enums;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class BookmarkService(SigilDbContext dbContext, IDateTime dateTime, IIssueActivityService activityService) : IBookmarkService
+internal class BookmarkService(SigilDbContext dbContext, IDateTime dateTime, IIssueActivityLogger activityService) : IBookmarkService
 {
     public async Task<bool> ToggleBookmarkAsync(int issueId, Guid userId)
     {

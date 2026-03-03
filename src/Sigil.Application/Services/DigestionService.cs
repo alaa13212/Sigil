@@ -9,30 +9,30 @@ using Sigil.Domain.Ingestion;
 namespace Sigil.Application.Services;
 
 public class DigestionService(
-    IProjectService projectService,
-    IIssueService issueService,
-    IEventService eventService,
+    IProjectEntityAccess projectAccess,
+    IIssueIngestionService issueIngestion,
+    IEventIngestionService eventIngestion,
     IReleaseService releaseService,
     IEventUserService eventUserService,
     ITagService tagService,
     IEventRanker eventRanker,
-    IEventFilterService eventFilterService,
+    IEventFilterEngine eventFilterEngine,
     IWorker<PostDigestionWork> postDigestionQueue,
     IDateTime dateTime
 ) : IDigestionService
 {
     public async Task BulkDigestAsync(EventParsingContext context, List<ParsedEvent> parsedEvents, CancellationToken ct = default)
     {
-        Project? project = await projectService.GetProjectByIdAsync(context.ProjectId);
+        Project? project = await projectAccess.GetProjectByIdAsync(context.ProjectId);
         ArgumentNullException.ThrowIfNull(project);
 
-        var existingIds = await eventService.FindExistingEventIdsAsync(parsedEvents.Select(e => e.EventId));
+        var existingIds = await eventIngestion.FindExistingEventIdsAsync(parsedEvents.Select(e => e.EventId));
         parsedEvents.RemoveAll(e => existingIds.Contains(e.EventId));
         if (parsedEvents.Count == 0)
             return;
 
         if (context.InboundFilters.Count > 0)
-            parsedEvents.RemoveAll(e => eventFilterService.ShouldRejectEvent(e, context.InboundFilters));
+            parsedEvents.RemoveAll(e => eventFilterEngine.ShouldRejectEvent(e, context.InboundFilters));
         if (parsedEvents.Count == 0)
             return;
 
@@ -52,7 +52,7 @@ public class DigestionService(
         ILookup<string, ParsedEvent> issueGrouping = parsedEvents
             .Where(e => !e.Fingerprint.IsNullOrEmpty())
             .ToLookup(e => e.Fingerprint!);
-        Dictionary<string, Issue> issues = (await issueService.BulkGetOrCreateIssuesAsync(project, issueGrouping)).ToDictionary(i => i.Fingerprint);
+        Dictionary<string, Issue> issues = (await issueIngestion.BulkGetOrCreateIssuesAsync(project, issueGrouping)).ToDictionary(i => i.Fingerprint);
 
         // Track alert signals before mutation
         HashSet<int> newIssueIds = issues.Values.Where(i => i.OccurrenceCount == 0).Select(i => i.Id).ToHashSet();
@@ -70,7 +70,7 @@ public class DigestionService(
 
             UpdateIssueWithParsedEvents(group, tagValues, issue);
 
-            List<CapturedEvent> eventsEntities = eventService.BulkCreateEventsEntities(group, project, issue, releases, eventUsers, tagValues);
+            List<CapturedEvent> eventsEntities = eventIngestion.BulkCreateEventsEntities(group, project, issue, releases, eventUsers, tagValues);
             issue.SuggestedEvent = eventRanker.GetMostRelevantEvent(eventsEntities.Union(issue.SuggestedEvent != null ? [issue.SuggestedEvent] : []));
         }
 
@@ -78,7 +78,7 @@ public class DigestionService(
 
         List<PriorityChange> priorityChanges = ElevateIssuePriorities(context, regressionIssueIds, issues);
 
-        await eventService.SaveEventsAsync();
+        await eventIngestion.SaveEventsAsync();
 
         postDigestionQueue.TryEnqueue(new PostDigestionWork(
             context.ProjectId,

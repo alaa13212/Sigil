@@ -7,7 +7,7 @@ using Sigil.Domain.Enums;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class IssueActivityService(SigilDbContext dbContext, IDateTime dateTime) : IIssueActivityService
+internal class IssueActivityService(SigilDbContext dbContext, IDateTime dateTime) : IIssueActivityService, IIssueActivityLogger
 {
     public async Task<(List<IssueActivity> Items, int TotalCount)> GetActivitiesForIssueAsync(int issueId, int page = 1, int pageSize = 50)
     {

@@ -67,9 +67,4 @@ public class ApiProjectService(HttpClient http) : IProjectService
     private record RotateKeyResponse(string ApiKey);
     
     
-    public Task<Project?> GetProjectByIdAsync(int id) =>
-        throw new NotSupportedException("Not available on client.");
-    
-    public Task<List<Project>> GetAllProjectsAsync() =>
-        throw new NotSupportedException("Not available on client.");
 }

@@ -12,7 +12,7 @@ using Sigil.Infrastructure.Parsing.Models;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class EventService(SigilDbContext dbContext, ICompressionService compressionService) : IEventService
+internal class EventService(SigilDbContext dbContext, ICompressionService compressionService) : IEventService, IEventIngestionService
 {
     private static readonly JsonSerializerOptions SnakeCaseOptions = new()
     {

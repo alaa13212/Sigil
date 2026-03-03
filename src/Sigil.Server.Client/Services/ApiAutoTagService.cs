@@ -1,7 +1,6 @@
 using System.Net.Http.Json;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.AutoTags;
-using Sigil.Domain.Entities;
 
 namespace Sigil.Server.Client.Services;
 
@@ -29,8 +28,5 @@ public class ApiAutoTagService(HttpClient http) : IAutoTagService
         var response = await http.DeleteAsync($"api/auto-tags/{ruleId}");
         return response.IsSuccessStatusCode;
     }
-
-    public Task<List<AutoTagRule>> GetRawRulesForProjectAsync(int projectId) =>
-        throw new NotSupportedException("Not available on client.");
 
 }

@@ -18,8 +18,8 @@ internal class IssueService(
     IEventRanker eventRanker,
     IDateTime dateTime,
     IIssueCache issueCache,
-    IIssueActivityService activityService,
-    IEventFilterService eventFilterService) : IIssueService
+    IIssueActivityLogger activityService,
+    IEventFilterService eventFilterService) : IIssueService, IIssueIngestionService
 {
     public async Task<List<Issue>> BulkGetOrCreateIssuesAsync(Project project, IEnumerable<IGrouping<string, ParsedEvent>> eventsByFingerprint)
     {

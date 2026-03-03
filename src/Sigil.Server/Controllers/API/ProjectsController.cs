@@ -10,7 +10,7 @@ namespace Sigil.Server.Controllers.API;
 [ApiController]
 [Route("api/projects")]
 [Authorize]
-public class ProjectsController(IProjectService projectService, IProjectConfigEditorService projectConfigEditorService) : SigilController
+public class ProjectsController(IProjectService projectService, IProjectEntityAccess projectEntityAccess, IProjectConfigEditorService projectConfigEditorService) : SigilController
 {
     [HttpGet]
     public async Task<IActionResult> List()
@@ -44,7 +44,7 @@ public class ProjectsController(IProjectService projectService, IProjectConfigEd
     [HttpPut("{projectId:int}")]
     public async Task<IActionResult> Update(int projectId, [FromBody] UpdateProjectRequest request)
     {
-        var existing = await projectService.GetProjectByIdAsync(projectId);
+        var existing = await projectEntityAccess.GetProjectByIdAsync(projectId);
         if (existing is null)
             return NotFound();
 
@@ -64,7 +64,7 @@ public class ProjectsController(IProjectService projectService, IProjectConfigEd
     [HttpPost("{projectId:int}/rotate-key")]
     public async Task<IActionResult> RotateKey(int projectId)
     {
-        var existing = await projectService.GetProjectByIdAsync(projectId);
+        var existing = await projectEntityAccess.GetProjectByIdAsync(projectId);
         if (existing is null)
             return NotFound();
 

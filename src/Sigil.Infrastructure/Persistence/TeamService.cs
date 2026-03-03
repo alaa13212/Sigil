@@ -6,7 +6,7 @@ using Sigil.Domain.Enums;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class TeamService(SigilDbContext dbContext) : ITeamService
+internal class TeamService(SigilDbContext dbContext) : ITeamService, ITeamRoleService
 {
     public async Task<List<TeamResponse>> GetTeamsAsync()
     {
