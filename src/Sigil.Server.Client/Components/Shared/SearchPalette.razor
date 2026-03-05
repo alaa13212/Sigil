@@ -7,9 +7,9 @@
 @inject ISearchService SearchService
 @inject IUserPreferenceService Preferences
 
-<ModalBase IsOpen="_isOpen" OnClose="Close" Size="ModalSize.Large" BoxClass="relative flex flex-col max-md:h-[85vh] md:mb-[10vh] md:h-[clamp(13rem,80vh,80vh)] md:w-11/12">
+<ModalBase IsOpen="_isOpen" OnClose="Close" Size="ModalSize.Large" BoxClass="relative flex flex-col px-0 max-md:h-[85vh] md:mb-[10vh] md:h-[clamp(13rem,80vh,80vh)] md:w-11/12">
     <!-- Search input -->
-    <div class="flex items-baseline gap-2 pb-3 border-b border-base-300 -mx-4 px-4 -mt-1">
+    <div class="flex items-baseline gap-2 pb-3 border-b border-base-300 px-4 -mt-1">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
@@ -20,178 +20,119 @@
         {
             <button class="btn btn-xs btn-ghost btn-circle" @onclick="ResetState">×</button>
         }
-        <span class="flex items-center gap-1 text opacity-40">
-            <kbd class="kbd kbd">↵</kbd> Go
-        </span>
-        <span class="flex items-center gap-1 text opacity-40">
-            <kbd class="kbd kbd">↑</kbd>/<kbd class="kbd kbd">↓</kbd> Select
-        </span>
-        <span class="flex items-center gap-1 text opacity-40">
-            <kbd class="kbd kbd">ESC</kbd> Close
-        </span>
+        <span class="flex items-center gap-1 text opacity-70"><kbd class="kbd">↵</kbd> Go</span>
+        <span class="flex items-center gap-1 text opacity-70"><kbd class="kbd">↑</kbd>/<kbd class="kbd">↓</kbd> Select</span>
+        <span class="flex items-center gap-1 text opacity-70"><kbd class="kbd">ESC</kbd> Close</span>
     </div>
 
     <!-- Scope toggle (only when on a project page) -->
     @if (_currentProjectId.HasValue)
     {
-        <div class="flex gap-1 py-2 border-b border-base-300 -mx-4 px-4">
-            <button class="btn btn @(_scopeAll ? "" : "btn-primary")" @onclick='() => SetScope(false)'>
-                Current Project
-            </button>
-            <button class="btn btn @(_scopeAll ? "btn-primary" : "")" @onclick='() => SetScope(true)'>
-                All
-            </button>
+        <div class="flex gap-1 py-2 border-b border-base-300 px-4">
+            <button class="btn btn @(_scopeAll ? "" : "btn-primary")" @onclick='() => SetScope(false)'>Current Project</button>
+            <button class="btn btn @(_scopeAll ? "btn-primary" : "")" @onclick='() => SetScope(true)'>All</button>
         </div>
     }
 
     <div class="flex-grow overflow-x-hidden overflow-y-auto">
-
-        <!-- Results -->
-        <div class="max-h-[90vh] overflow-y-auto -mx-4">
+        <div class="max-h-[90vh] overflow-y-auto">
             @{ int idx = 0; }
             @if (_loading)
             {
                 <div class="flex justify-center py-6"><span class="loading loading-spinner loading-sm"></span></div>
             }
-            else if (string.IsNullOrWhiteSpace(_query))
-            {
-                @if (_recents.Count > 0)
-                {
-                    <div class="flex items-center px-4 py-1.5">
-                        <span class="text-xs font-semibold opacity-50 uppercase tracking-wide flex-1">Recent</span>
-                        <button class="text-xs opacity-40 hover:opacity-70 transition-opacity" @onclick="ClearAllRecentsAsync">Clear all</button>
-                    </div>
-                    @foreach (var recent in _recents)
-                    {
-                        var r = recent;
-                        var ni = idx++;
-                        <div id="sr-@ni" class="flex items-center gap-2 px-4 py-2.5 hover:bg-base-200 @(ni == _focusedIndex ? "bg-base-200" : "") group">
-                            <span class="badge badge-xs badge-ghost opacity-60 shrink-0">@r.Type</span>
-                            <a class="flex-1 min-w-0 text-left" href="@r.Url" @onclick="() => SaveRecent(r.Label, r.Url, r.Type)">
-                                <span class="text-sm truncate block">@r.Label</span>
-                            </a>
-                            <button class="btn btn-xs btn-ghost btn-circle opacity-0 group-hover:opacity-100 shrink-0 transition-opacity"
-                                    @onclick="() => RemoveRecentAsync(r)">×</button>
-                        </div>
-                    }
-                }
-
-                @if (_currentProjectId.HasValue && !_scopeAll)
-                {
-                    <div class="px-4 py-1.5 text-xs font-semibold opacity-50 uppercase tracking-wide">Project Pages</div>
-                    @foreach (var (name, path) in ProjectSettingsPages)
-                    {
-                        var ppUrl = $"/projects/{_currentProjectId.Value}/{path}";
-                        var ppName = name;
-                        var ni = idx++;
-                        <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-300 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-2"
-                           href="@ppUrl" @onclick='() => SaveRecent(ppName, ppUrl, "page")'>
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                            </svg>
-                            <span class="text-sm">@name</span>
-                        </a>
-                    }
-                }
-
-                <div class="px-4 py-1.5 text-xs font-semibold opacity-50 uppercase tracking-wide">Pages</div>
-                @foreach (var gp in GlobalPages)
-                {
-                    var gpUrl = gp.Url;
-                    var gpName = gp.Name;
-                    var ni = idx++;
-                    <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-300 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-2"
-                       href="@gpUrl" @onclick='() => SaveRecent(gpName, gpUrl, "page")'>
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                        <span class="text-sm">@gp.Name</span>
-                    </a>
-                }
-            }
-            else if (HasNoResults)
+            else if (!string.IsNullOrWhiteSpace(_query) && _sections.Count == 0)
             {
                 <div class="text-sm opacity-50 text-center py-6">No results for "@_query"</div>
             }
             else
             {
-                @if (_results is not null && _results.Issues.Count > 0)
+                @foreach (var section in _sections)
                 {
-                    <div class="px-4 py-1.5 text-xs font-semibold opacity-50 uppercase tracking-wide">Issues</div>
-                    @foreach (var issue in _results.Issues)
+                    var s = section;
+                    <div class="flex items-center px-4 py-1.5">
+                        <span class="text-xs font-semibold opacity-50 uppercase tracking-wide flex-1">@s.Title</span>
+                        @if (s.OnClearAll is not null)
+                        {
+                            <button class="text-xs opacity-40 hover:opacity-70 transition-opacity"
+                                    @onclick="async () => await s.OnClearAll()">Clear all</button>
+                        }
+                    </div>
+                    @foreach (var result in s.Results)
                     {
-                        var issueUrl = $"/projects/{issue.ProjectId}/issues/{issue.Id}";
-                        var issueLabel = string.IsNullOrEmpty(issue.ExceptionType)
-                            ? (issue.Title ?? "(no title)")
-                            : $"{issue.ExceptionType}: {issue.Title ?? "(no title)"}";
-                        var ni = idx++;
-                        <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-300 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-3"
-                           href="@issueUrl" @onclick='() => SaveRecent(issueLabel, issueUrl, "issue")'>
-                            <SeverityBadge Level="issue.Level" />
-                            <div class="min-w-0 flex-1">
-                                <div class="text-sm font-medium truncate">
-                                    @if (!string.IsNullOrEmpty(issue.ExceptionType))
-                                    {
-                                        <span class="opacity-70">@issue.ExceptionType: </span>
-                                    }
-                                    @(issue.Title ?? "(no title)")
-                                </div>
-                            </div>
-                            <StatusBadge Status="issue.Status" />
-                        </a>
-                    }
-                }
-
-                @if (_results is not null && _results.Releases.Count > 0)
-                {
-                    <div class="px-4 py-1.5 text-xs font-semibold opacity-50 uppercase tracking-wide">Releases</div>
-                    @foreach (var release in _results.Releases)
-                    {
-                        var releaseUrl = $"/projects/{release.ProjectId}/releases/{release.Id}";
-                        var ni = idx++;
-                        <a id="sr-@ni" class="block w-full text-left px-4 py-2.5 hover:bg-base-300 @(ni == _focusedIndex ? "bg-base-200" : "")"
-                           href="@releaseUrl" @onclick='() => SaveRecent(release.RawName, releaseUrl, "release")'>
-                            <span class="text-sm font-mono">@release.RawName</span>
-                        </a>
-                    }
-                }
-
-                @if (_results is not null && _results.Tags.Count > 0)
-                {
-                    <div class="px-4 py-1.5 text-xs font-semibold opacity-50 uppercase tracking-wide">Tags</div>
-                    @foreach (var tag in _results.Tags)
-                    {
-                        var tagFilter = tag.Value.Contains(' ') ? $"{tag.Key}:\"{tag.Value}\"" : $"{tag.Key}:{tag.Value}";
-                        var tagUrl = $"/projects/{tag.ProjectId}/issues?q={Uri.EscapeDataString(tagFilter)}";
-                        var tagLabel = $"{tag.Key}:{tag.Value}";
-                        var ni = idx++;
-                        <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-300 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-2"
-                           href="@tagUrl" @onclick='() => SaveRecent(tagLabel, tagUrl, "tag")'>
-                            <span class="text-sm font-mono flex-1"><span class="opacity-60">@tag.Key:</span>@tag.Value</span>
-                            <span class="text-xs opacity-50">@tag.IssueCount @(tag.IssueCount == 1 ? "issue" : "issues")</span>
-                            @if (!_currentProjectId.HasValue || _scopeAll)
+                        SearchResult r = result;
+                        int ni = idx++;
+                        <div id="sr-@ni" class="flex items-center gap-2 px-4 py-2.5 hover:bg-base-300 @FocusClass(ni) @(r.IsRecent ? "group" : "")">
+                            @* Leading badge (recents only — shown outside the link) *@
+                            @if (r.IsRecent)
                             {
-                                <span class="badge badge-xs badge-ghost">@tag.ProjectName</span>
+                                <span class="badge badge-xs badge-ghost opacity-60 shrink-0">@r.Kind</span>
                             }
-                        </a>
-                    }
-                }
-
-                @if (_pageResults.Count > 0)
-                {
-                    <div class="px-4 py-1.5 text-xs font-semibold opacity-50 uppercase tracking-wide">Pages</div>
-                    @foreach (var pg in _pageResults)
-                    {
-                        var pgUrl = pg.Url;
-                        var pgName = pg.Name;
-                        var ni = idx++;
-                        <a id="sr-@ni" class="w-full text-left px-4 py-2.5 hover:bg-base-300 @(ni == _focusedIndex ? "bg-base-200" : "") flex items-center gap-2"
-                           href="@pgUrl" @onclick='() => SaveRecent(pgName, pgUrl, "page")'>
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                            </svg>
-                            <span class="text-sm">@pg.Name</span>
-                        </a>
+                            <a class="flex-1 min-w-0 flex items-center gap-2" href="@r.Url"
+                               @onclick='() => SaveRecent(r.Label, r.Url, r.Kind)'>
+                                @* Leading icon (issues & pages) *@
+                                @if (!r.IsRecent && r.Kind == "issue")
+                                {
+                                    <SeverityBadge Level="r.Level!.Value" />
+                                }
+                                else if (r.Kind == "page")
+                                {
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                    </svg>
+                                }
+                                @* Main label *@
+                                <div class="min-w-0 flex-1">
+                                    @if (!r.IsRecent && r.Kind == "issue")
+                                    {
+                                        <div class="text-sm font-medium truncate">
+                                            @if (r.Prefix is not null)
+                                            {
+                                                <span class="opacity-70">@r.Prefix: </span>
+                                            }
+                                            @r.Suffix
+                                        </div>
+                                    }
+                                    else if (!r.IsRecent && r.Kind == "tag")
+                                    {
+                                        <span class="text-sm font-mono flex-1">
+                                            <span class="opacity-60">@r.Prefix:</span>@r.Suffix
+                                        </span>
+                                    }
+                                    else if (!r.IsRecent && r.Kind == "release")
+                                    {
+                                        <span class="text-sm font-mono">@r.Label</span>
+                                    }
+                                    else if (r.IsRecent)
+                                    {
+                                        <span class="text-sm truncate block">@r.Label</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-sm">@r.Label</span>
+                                    }
+                                </div>
+                                @* Trailing badges *@
+                                @if (!r.IsRecent && r.Kind == "issue")
+                                {
+                                    <StatusBadge Status="r.Status!.Value" />
+                                }
+                                @if (!r.IsRecent && r.Kind == "tag")
+                                {
+                                    <span class="text-xs opacity-50">@r.Count @(r.Count == 1 ? "issue" : "issues")</span>
+                                    @if (r.ProjectBadge is not null)
+                                    {
+                                        <span class="badge badge-xs badge-ghost">@r.ProjectBadge</span>
+                                    }
+                                }
+                            </a>
+                            @* Remove button (recents only) *@
+                            @if (r.IsRecent)
+                            {
+                                <button class="btn btn-xs btn-ghost btn-circle opacity-0 group-hover:opacity-100 shrink-0 transition-opacity"
+                                        @onclick="() => RemoveRecentAsync(r.SourceRecent!)">×</button>
+                            }
+                        </div>
                     }
                 }
             }
@@ -202,6 +143,26 @@
 @code {
     private record StaticPage(string Name, string Url);
     private record RecentItem(string Label, string Url, string Type);
+
+    private record SearchResult(
+        string Label,
+        string Url,
+        string Kind,                     // always the real kind: "issue", "release", "tag", "page"
+        bool IsRecent = false,           // true → show type badge + remove button; Kind stays the original item type
+        Severity? Level = null,          // issue
+        IssueStatus? Status = null,      // issue
+        string? Prefix = null,           // ExceptionType (issue) or tag key
+        string? Suffix = null,           // Title (issue) or tag value
+        int? Count = null,               // tag issue count
+        string? ProjectBadge = null,     // tag project name (when not scoped to one project)
+        RecentItem? SourceRecent = null  // non-null for recent rows; used by remove button
+    );
+
+    private record SearchResultSection(
+        string Title,
+        IReadOnlyList<SearchResult> Results,
+        Func<Task>? OnClearAll = null
+    );
 
     private const string RecentsKey = "search.recents";
     private const int MaxRecents = 8;
@@ -237,18 +198,77 @@
     private int? _currentProjectId;
     private string _query = string.Empty;
     private bool _loading;
-    private SearchResultsResponse? _results;
+    private SearchResultsResponse? _apiResults;
     private List<StaticPage> _pageResults = [];
     private List<RecentItem> _recents = [];
-    private List<(string Url, string Label, string Type)> _navItems = [];
+    private List<SearchResultSection> _sections = [];
+    private List<(string Url, string Label, string Kind)> _navItems = [];
     private int _focusedIndex = -1;
     private System.Timers.Timer? _debounce;
     private IJSObjectReference? _module;
     private DotNetObjectReference<SearchPalette>? _dotNetRef;
 
-    private bool HasNoResults =>
-        (_results is null || (_results.Issues.Count == 0 && _results.Releases.Count == 0 && _results.Tags.Count == 0))
-        && _pageResults.Count == 0;
+    private string FocusClass(int i) => i == _focusedIndex ? "bg-base-300" : "";
+
+    private void BuildSections()
+    {
+        _focusedIndex = -1;
+        var sections = new List<SearchResultSection>();
+
+        if (string.IsNullOrWhiteSpace(_query))
+        {
+            if (_recents.Count > 0)
+                sections.Add(new SearchResultSection("Recent",
+                    _recents.Select(r => new SearchResult(r.Label, r.Url, r.Type, IsRecent: true, SourceRecent: r)).ToList(),
+                    OnClearAll: ClearAllRecentsAsync));
+
+            if (_currentProjectId.HasValue && !_scopeAll)
+                sections.Add(new SearchResultSection("Project Pages",
+                    ProjectSettingsPages.Select(p => new SearchResult(p.Name, $"/projects/{_currentProjectId.Value}/{p.Path}", "page")).ToList()));
+
+            sections.Add(new SearchResultSection("Pages",
+                GlobalPages.Select(p => new SearchResult(p.Name, p.Url, "page")).ToList()));
+        }
+        else
+        {
+            if (_apiResults?.Issues.Count > 0)
+                sections.Add(new SearchResultSection("Issues",
+                    _apiResults.Issues.Select(i =>
+                    {
+                        var label = string.IsNullOrEmpty(i.ExceptionType)
+                            ? (i.Title ?? "(no title)")
+                            : $"{i.ExceptionType}: {i.Title ?? "(no title)"}";
+                        return new SearchResult(label, $"/projects/{i.ProjectId}/issues/{i.Id}", "issue",
+                            Level: i.Level, Status: i.Status,
+                            Prefix: i.ExceptionType, Suffix: i.Title ?? "(no title)");
+                    }).ToList()));
+
+            if (_apiResults?.Releases.Count > 0)
+                sections.Add(new SearchResultSection("Releases",
+                    _apiResults.Releases.Select(r =>
+                        new SearchResult(r.RawName, $"/projects/{r.ProjectId}/releases/{r.Id}", "release")).ToList()));
+
+            if (_apiResults?.Tags.Count > 0)
+                sections.Add(new SearchResultSection("Tags",
+                    _apiResults.Tags.Select(t =>
+                    {
+                        var tagFilter = t.Value.Contains(' ') ? $"{t.Key}:\"{t.Value}\"" : $"{t.Key}:{t.Value}";
+                        return new SearchResult($"{t.Key}:{t.Value}", $"/projects/{t.ProjectId}/issues?q={Uri.EscapeDataString(tagFilter)}", "tag",
+                            Prefix: t.Key, Suffix: t.Value,
+                            Count: t.IssueCount,
+                            ProjectBadge: (!_currentProjectId.HasValue || _scopeAll) ? t.ProjectName : null);
+                    }).ToList()));
+
+            if (_pageResults.Count > 0)
+                sections.Add(new SearchResultSection("Pages",
+                    _pageResults.Select(p => new SearchResult(p.Name, p.Url, "page")).ToList()));
+        }
+
+        _sections = sections;
+        _navItems = _sections
+            .SelectMany(s => s.Results.Select(r => (r.Url, r.Label, r.Kind)))
+            .ToList();
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -273,14 +293,14 @@
             try { _recents = JsonSerializer.Deserialize<List<RecentItem>>(json) ?? []; }
             catch { _recents = []; }
         }
-        RebuildNavItems();
+        BuildSections();
         StateHasChanged();
     }
 
-    private async Task SaveRecent(string label, string url, string type)
+    private async Task SaveRecent(string label, string url, string kind)
     {
         _recents.RemoveAll(r => r.Url == url);
-        _recents.Insert(0, new RecentItem(label, url, type));
+        _recents.Insert(0, new RecentItem(label, url, kind));
         if (_recents.Count > MaxRecents)
             _recents.RemoveRange(MaxRecents, _recents.Count - MaxRecents);
         await Preferences.SetAsync(RecentsKey, JsonSerializer.Serialize(_recents));
@@ -290,7 +310,7 @@
     {
         _recents.Remove(item);
         await Preferences.SetAsync(RecentsKey, JsonSerializer.Serialize(_recents));
-        RebuildNavItems();
+        BuildSections();
         StateHasChanged();
     }
 
@@ -298,48 +318,8 @@
     {
         _recents.Clear();
         await Preferences.SetAsync(RecentsKey, "[]");
-        RebuildNavItems();
+        BuildSections();
         StateHasChanged();
-    }
-
-    private void RebuildNavItems()
-    {
-        _navItems.Clear();
-        _focusedIndex = -1;
-
-        if (string.IsNullOrWhiteSpace(_query))
-        {
-            foreach (var r in _recents)
-                _navItems.Add((r.Url, r.Label, r.Type));
-            
-            if (_currentProjectId.HasValue && !_scopeAll)
-            {
-                foreach (var (name, path) in ProjectSettingsPages)
-                    _navItems.Add(($"/projects/{_currentProjectId.Value}/{path}", name, "page"));
-            }
-            
-            foreach (var gp in GlobalPages)
-                _navItems.Add((gp.Url, gp.Name, "page"));
-        }
-        else
-        {
-            if (_results != null)
-            {
-                foreach (var issue in _results.Issues)
-                {
-                    var label = string.IsNullOrEmpty(issue.ExceptionType)
-                        ? (issue.Title ?? "(no title)")
-                        : $"{issue.ExceptionType}: {issue.Title ?? "(no title)"}";
-                    _navItems.Add(($"/projects/{issue.ProjectId}/issues/{issue.Id}", label, "issue"));
-                }
-                foreach (var release in _results.Releases)
-                    _navItems.Add(($"/projects/{release.ProjectId}/releases/{release.Id}", release.RawName, "release"));
-                foreach (var tag in _results.Tags)
-                    _navItems.Add(($"/projects/{tag.ProjectId}/issues?q={Uri.EscapeDataString(tag.Key + ":" + tag.Value)}", $"{tag.Key}:{tag.Value}", "tag"));
-            }
-            foreach (var pg in _pageResults)
-                _navItems.Add((pg.Url, pg.Name, "page"));
-        }
     }
 
     [JSInvokable]
@@ -355,8 +335,8 @@
     {
         if (_focusedIndex >= 0 && _focusedIndex < _navItems.Count)
         {
-            var (url, label, type) = _navItems[_focusedIndex];
-            InvokeAsync(() => SaveRecent(label, url, type));
+            var (url, label, kind) = _navItems[_focusedIndex];
+            InvokeAsync(() => SaveRecent(label, url, kind));
         }
     }
 
@@ -414,9 +394,9 @@
     private void ResetState()
     {
         _query = string.Empty;
-        _results = null;
+        _apiResults = null;
         _pageResults = [];
-        RebuildNavItems();
+        BuildSections();
     }
 
     private async Task FocusInputAsync()
@@ -435,11 +415,9 @@
         _scopeAll = all;
         await FocusInputAsync();
         if (!string.IsNullOrWhiteSpace(_query))
-        {
             await DoSearchAsync();
-        }
-        
-        RebuildNavItems();
+
+        BuildSections();
         StateHasChanged();
     }
 
@@ -452,13 +430,15 @@
 
         if (string.IsNullOrWhiteSpace(_query))
         {
-            _results = null;
+            _apiResults = null;
             _pageResults = [];
-            RebuildNavItems();
+            BuildSections();
             return;
         }
 
+        _apiResults = null;
         _pageResults = MatchStaticPages(_query);
+        BuildSections();
 
         _debounce = new System.Timers.Timer(250);
         _debounce.AutoReset = false;
@@ -476,21 +456,14 @@
     private List<StaticPage> MatchStaticPages(string q)
     {
         var results = new List<StaticPage>();
-
         foreach (var pg in GlobalPages)
-        {
             if (pg.Name.Contains(q, StringComparison.OrdinalIgnoreCase))
                 results.Add(pg);
-        }
 
         if (_currentProjectId.HasValue)
-        {
             foreach (var (name, path) in ProjectSettingsPages)
-            {
                 if (name.Contains(q, StringComparison.OrdinalIgnoreCase))
                     results.Add(new StaticPage(name, $"/projects/{_currentProjectId.Value}/{path}"));
-            }
-        }
 
         return results;
     }
@@ -503,16 +476,16 @@
         try
         {
             int? projectId = (_scopeAll || !_currentProjectId.HasValue) ? null : _currentProjectId;
-            _results = await SearchService.SearchAsync(_query, projectId);
+            _apiResults = await SearchService.SearchAsync(_query, projectId);
         }
         catch
         {
-            _results = null;
+            _apiResults = null;
         }
         finally
         {
             _loading = false;
-            RebuildNavItems();
+            BuildSections();
         }
     }
 
