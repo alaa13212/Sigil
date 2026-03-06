@@ -51,7 +51,7 @@ internal class WebhookAlertSender(HttpClient http) : IAlertSender
         return response.IsSuccessStatusCode;
     }
 
-    private static string ComputeHmacSha256(string payload, string secret)
+    internal static string ComputeHmacSha256(string payload, string secret)
     {
         var key = Encoding.UTF8.GetBytes(secret);
         var data = Encoding.UTF8.GetBytes(payload);

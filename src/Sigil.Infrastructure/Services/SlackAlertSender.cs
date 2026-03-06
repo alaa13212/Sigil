@@ -72,7 +72,7 @@ internal class SlackAlertSender(HttpClient http) : IAlertSender
         return response.IsSuccessStatusCode;
     }
 
-    private static string EscapeSlack(string text) =>
+    internal static string EscapeSlack(string text) =>
         text
             .Replace("&", "&amp;")
             .Replace("<", "&lt;")

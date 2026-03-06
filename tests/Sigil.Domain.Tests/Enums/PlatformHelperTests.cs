@@ -30,13 +30,12 @@ public class PlatformHelperTests
     }
 
     [Theory]
-    [InlineData("CSHARP")]
-    [InlineData("JavaScript")]
-    [InlineData("PYTHON")]
-    public void Parse_KnownPlatformDifferentCase_ReturnsCorrectEnum(string input)
+    [InlineData("CSHARP", Platform.CSharp)]
+    [InlineData("JavaScript", Platform.JavaScript)]
+    [InlineData("PYTHON", Platform.Python)]
+    public void Parse_KnownPlatformDifferentCase_ReturnsCorrectEnum(string input, Platform expected)
     {
-        var result = PlatformHelper.Parse(input);
-        result.Should().NotBe(Platform.Other);
+        PlatformHelper.Parse(input).Should().Be(expected);
     }
 
     [Theory]

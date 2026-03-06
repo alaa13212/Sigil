@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Sigil.Infrastructure.Persistence;
 using Testcontainers.PostgreSql;
 
@@ -15,8 +16,11 @@ public class TestDatabaseFixture : IAsyncLifetime
             .Build();
         await _postgres.StartAsync();
 
+        var dataSourceBuilder = new NpgsqlDataSourceBuilder(ConnectionString);
+        dataSourceBuilder.EnableDynamicJson();
+        var dataSource = dataSourceBuilder.Build();
         var options = new DbContextOptionsBuilder<SigilDbContext>()
-            .UseNpgsql(ConnectionString)
+            .UseNpgsql(dataSource)
             .Options;
         await using var context = new SigilDbContext(options);
         await context.Database.MigrateAsync();
