@@ -116,6 +116,8 @@ public class DigestionService(
             issue.OccurrenceCount++;
             issue.FirstSeen = TimeMath.Earlier(issue.FirstSeen, parsedEvent.Timestamp);
             issue.LastSeen = TimeMath.Later(issue.LastSeen, parsedEvent.Timestamp);
+            if(parsedEvent.Level.IsAbove(issue.Level))
+                issue.Level = parsedEvent.Level;
         }
     }
 

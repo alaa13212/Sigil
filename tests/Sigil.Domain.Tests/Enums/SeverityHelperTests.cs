@@ -61,29 +61,58 @@ public class SeverityHelperTests
     }
 
     [Fact]
-    public void IsMoreSevereThan_FatalMoreSevereThanError_ReturnsTrue()
+    public void IsAbove_HigherSeverity_ReturnsTrue()
     {
-        Severity.Fatal.IsMoreSevereThan(Severity.Error).Should().BeTrue();
+        Severity.Fatal.IsAbove(Severity.Error).Should().BeTrue();
     }
 
     [Fact]
-    public void IsMoreSevereThan_DebugLessSevereThanFatal_ReturnsFalse()
+    public void IsAbove_LowerSeverity_ReturnsFalse()
     {
-        Severity.Debug.IsMoreSevereThan(Severity.Fatal).Should().BeFalse();
+        Severity.Debug.IsAbove(Severity.Fatal).Should().BeFalse();
     }
 
     [Fact]
-    public void IsMoreSevereThan_SameSeverity_ReturnsFalse()
+    public void IsAbove_SameSeverity_ReturnsFalse()
     {
-        Severity.Error.IsMoreSevereThan(Severity.Error).Should().BeFalse();
+        Severity.Error.IsAbove(Severity.Error).Should().BeFalse();
     }
 
     [Fact]
-    public void IsMoreSevereThan_FullOrderChain()
+    public void IsAbove_FullOrderChain()
     {
-        Severity.Fatal.IsMoreSevereThan(Severity.Error).Should().BeTrue();
-        Severity.Error.IsMoreSevereThan(Severity.Warning).Should().BeTrue();
-        Severity.Warning.IsMoreSevereThan(Severity.Info).Should().BeTrue();
-        Severity.Info.IsMoreSevereThan(Severity.Debug).Should().BeTrue();
+        Severity.Fatal.IsAbove(Severity.Error).Should().BeTrue();
+        Severity.Error.IsAbove(Severity.Warning).Should().BeTrue();
+        Severity.Warning.IsAbove(Severity.Info).Should().BeTrue();
+        Severity.Info.IsAbove(Severity.Debug).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsAtLeast_SameSeverity_ReturnsTrue()
+    {
+        Severity.Error.IsAtLeast(Severity.Error).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsAtLeast_HigherSeverity_ReturnsTrue()
+    {
+        Severity.Fatal.IsAtLeast(Severity.Warning).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsAtLeast_LowerSeverity_ReturnsFalse()
+    {
+        Severity.Debug.IsAtLeast(Severity.Error).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsAtLeast_FullOrderChain()
+    {
+        Severity.Fatal.IsAtLeast(Severity.Fatal).Should().BeTrue();
+        Severity.Error.IsAtLeast(Severity.Error).Should().BeTrue();
+        Severity.Warning.IsAtLeast(Severity.Warning).Should().BeTrue();
+        Severity.Info.IsAtLeast(Severity.Info).Should().BeTrue();
+        Severity.Debug.IsAtLeast(Severity.Debug).Should().BeTrue();
+        Severity.Debug.IsAtLeast(Severity.Fatal).Should().BeFalse();
     }
 }

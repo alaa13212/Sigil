@@ -128,17 +128,17 @@ internal class AlertService(
         var rules = await GetEnabledRulesAsync(issue.ProjectId, AlertTrigger.NewIssue);
         foreach (var rule in rules)
         {
-            if (rule.MinSeverity.HasValue && issue.Level < rule.MinSeverity.Value) continue;
+            if (rule.MinSeverity.HasValue && issue.Level.IsAtLeast(rule.MinSeverity.Value)) continue;
             await FireAsync(rule, issue);
         }
 
         // Also fire NewHighSeverity rules
-        if (issue.Level >= Severity.Error)
+        if (issue.Level.IsAtLeast(Severity.Error))
         {
             var highSevRules = await GetEnabledRulesAsync(issue.ProjectId, AlertTrigger.NewHighSeverity);
             foreach (var rule in highSevRules)
             {
-                if (rule.MinSeverity.HasValue && issue.Level < rule.MinSeverity.Value) continue;
+                if (rule.MinSeverity.HasValue && issue.Level.IsAtLeast(rule.MinSeverity.Value)) continue;
                 await FireAsync(rule, issue);
             }
         }
@@ -149,7 +149,7 @@ internal class AlertService(
         var rules = await GetEnabledRulesAsync(issue.ProjectId, AlertTrigger.IssueRegression);
         foreach (var rule in rules)
         {
-            if (rule.MinSeverity.HasValue && issue.Level < rule.MinSeverity.Value) continue;
+            if (rule.MinSeverity.HasValue && issue.Level.IsAtLeast(rule.MinSeverity.Value)) continue;
             await FireAsync(rule, issue);
         }
     }
@@ -160,7 +160,7 @@ internal class AlertService(
         foreach (var rule in rules)
         {
             if (!rule.ThresholdCount.HasValue || !rule.ThresholdWindow.HasValue) continue;
-            if (rule.MinSeverity.HasValue && issue.Level < rule.MinSeverity.Value) continue;
+            if (rule.MinSeverity.HasValue && issue.Level.IsAtLeast(rule.MinSeverity.Value)) continue;
 
             var windowStart = dateTime.UtcNow - rule.ThresholdWindow.Value;
             var recentCount = await dbContext.Events

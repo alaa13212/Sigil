@@ -62,7 +62,7 @@
             <span class="label">Severity</span>
             <select value="@severityFilter" @onchange="OnSeverityChanged">
                 <option value="">All</option>
-                @foreach (var sev in Enum.GetValues<Severity>())
+                @foreach (Severity sev in Enum.GetValues<Severity>())
                 {
                     <option value="@sev">@sev</option>
                 }
@@ -299,7 +299,7 @@
         try
         {
             Severity? level = null;
-            if (!string.IsNullOrEmpty(severityFilter) && Enum.TryParse<Severity>(severityFilter, out var parsed))
+            if (!string.IsNullOrEmpty(severityFilter) && Enum.TryParse(severityFilter, out Severity parsed))
                 level = parsed;
 
             var query = new IssueQueryParams

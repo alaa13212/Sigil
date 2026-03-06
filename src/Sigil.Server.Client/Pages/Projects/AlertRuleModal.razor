@@ -174,7 +174,7 @@
                         <legend class="fieldset-legend">Min Severity (optional)</legend>
                         <select class="select select-bordered w-full" @bind="form.MinSeverityStr">
                             <option value="">Any</option>
-                            @foreach (var s in Enum.GetValues<Severity>())
+                            @foreach (Severity s in Enum.GetValues<Severity>())
                             {
                                 <option value="@s">@s</option>
                             }

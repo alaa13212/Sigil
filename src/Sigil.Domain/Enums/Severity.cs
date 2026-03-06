@@ -2,11 +2,11 @@ namespace Sigil.Domain.Enums;
 
 public enum Severity
 {
-    Fatal,
-    Error,
-    Warning,
-    Info,
     Debug,
+    Info,
+    Warning,
+    Error,
+    Fatal,
 }
 
 public static class SeverityHelper
@@ -36,10 +36,13 @@ public static class SeverityHelper
         _ => throw new ArgumentOutOfRangeException(nameof(severity), severity, null)
     };
     
-    
-
-    public static bool IsMoreSevereThan(this Severity thisLevel, Severity otherLevel)
+    public static bool IsAbove(this Severity thisLevel, Severity otherLevel)
     {
-        return thisLevel < otherLevel;
+        return thisLevel > otherLevel;
+    }
+
+    public static bool IsAtLeast(this Severity thisLevel, Severity otherLevel)
+    {
+        return thisLevel >= otherLevel;
     }
 }
