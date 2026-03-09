@@ -29,12 +29,7 @@
                 </fieldset>
                 <fieldset class="fieldset">
                     <legend class="fieldset-legend">Role</legend>
-                    <select class="select" @bind="_selectedRole">
-                        @foreach (var role in Enum.GetValues<TeamRole>())
-                        {
-                            <option value="@role">@role</option>
-                        }
-                    </select>
+                    <EnumSelect TEnum="TeamRole" @bind-Value="_selectedRole" Class="select" />
                 </fieldset>
                 <button type="submit" class="btn btn-primary mb-1" disabled="@_adding">Add</button>
             </form>

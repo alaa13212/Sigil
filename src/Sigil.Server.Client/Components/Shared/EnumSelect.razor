@@ -1,0 +1,26 @@
+@typeparam TEnum where TEnum : struct, Enum
+
+<select class="@Class" value="@Value" @onchange="OnChange">
+    @if (NullLabel is not null)
+    {
+        <option value="">@NullLabel</option>
+    }
+    @foreach (TEnum item in Enum.GetValues<TEnum>())
+    {
+        <option value="@item">@(LabelSelector != null ? LabelSelector(item) : item.ToString())</option>
+    }
+</select>
+
+@code {
+    [Parameter, EditorRequired] public TEnum Value { get; set; }
+    [Parameter] public EventCallback<TEnum> ValueChanged { get; set; }
+    [Parameter] public string Class { get; set; } = "select select-sm w-full";
+    [Parameter] public string? NullLabel { get; set; }
+    [Parameter] public Func<TEnum, string>? LabelSelector { get; set; }
+
+    private async Task OnChange(ChangeEventArgs e)
+    {
+        if (Enum.TryParse(e.Value?.ToString(), out TEnum parsed))
+            await ValueChanged.InvokeAsync(parsed);
+    }
+}

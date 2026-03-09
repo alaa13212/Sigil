@@ -62,12 +62,7 @@
                 <div class="grid grid-cols-2 gap-3">
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Trigger</legend>
-                        <select class="select select-bordered w-full" @bind="form.Trigger">
-                            @foreach (var t in Enum.GetValues<AlertTrigger>())
-                            {
-                                <option value="@t">@FormatTrigger(t)</option>
-                            }
-                        </select>
+                        <EnumSelect TEnum="AlertTrigger" @bind-Value="form.Trigger" Class="select select-bordered w-full" LabelSelector="FormatTrigger" />
                     </fieldset>
 
                     <fieldset class="fieldset">
@@ -93,12 +88,7 @@
 
                         <fieldset class="fieldset">
                             <legend class="fieldset-legend">Type</legend>
-                            <select class="select select-bordered w-full" @bind="form.NewAlertChannelType">
-                                @foreach (var c in Enum.GetValues<AlertChannelType>())
-                                {
-                                    <option value="@c">@c</option>
-                                }
-                            </select>
+                            <EnumSelect TEnum="AlertChannelType" @bind-Value="form.NewAlertChannelType" Class="select select-bordered w-full" />
                         </fieldset>
 
                         @if (form.NewAlertChannelType == AlertChannelType.Slack)

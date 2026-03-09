@@ -200,12 +200,7 @@
 
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Platform</legend>
-                        <select class="select w-full" @bind="projectPlatform">
-                            @foreach (Platform p in Enum.GetValues<Platform>())
-                            {
-                                <option value="@p">@p</option>
-                            }
-                        </select>
+                        <EnumSelect TEnum="Platform" @bind-Value="projectPlatform" Class="select w-full" />
                     </fieldset>
 
                     @if (setupErrors.Count > 0)

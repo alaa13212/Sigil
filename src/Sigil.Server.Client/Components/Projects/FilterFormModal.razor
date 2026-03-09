@@ -18,12 +18,7 @@
 
             <fieldset class="fieldset">
                 <legend class="fieldset-legend">Operator</legend>
-                <select class="select select-sm w-full" @bind="_operator">
-                    @foreach (var op in Enum.GetValues<FilterOperator>())
-                    {
-                        <option value="@op">@op</option>
-                    }
-                </select>
+                <EnumSelect TEnum="FilterOperator" @bind-Value="_operator" />
             </fieldset>
 
             <fieldset class="fieldset">
@@ -35,12 +30,7 @@
 
             <fieldset class="fieldset">
                 <legend class="fieldset-legend">Action</legend>
-                <select class="select select-sm w-full" @bind="_action">
-                    @foreach (var action in Enum.GetValues<FilterAction>())
-                    {
-                        <option value="@action">@action</option>
-                    }
-                </select>
+                <EnumSelect TEnum="FilterAction" @bind-Value="_action" />
             </fieldset>
 
             <fieldset class="fieldset sm:col-span-2">
