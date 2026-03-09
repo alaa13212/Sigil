@@ -59,7 +59,7 @@
     <ModalBase IsOpen="true" OnClose="CloseModal"
                Title="@(editingChannel is null ? "New Channel" : "Edit Channel")"
                Size="ModalSize.Small">
-        <div class="space-y-4">
+        <form class="space-y-4" @onsubmit="SaveChannel" @onsubmit:preventDefault>
             <fieldset class="fieldset">
                 <legend class="fieldset-legend">Name</legend>
                 <input class="input input-bordered w-full" @bind="formName" placeholder="e.g. #alerts-prod" />
@@ -134,12 +134,12 @@
             }
 
             <div class="modal-action">
-                <button class="btn btn-ghost" @onclick="CloseModal">Cancel</button>
-                <button class="btn btn-primary" @onclick="SaveChannel" disabled="@formSaving">
+                <button type="button" class="btn btn-ghost" @onclick="CloseModal">Cancel</button>
+                <button type="submit" class="btn btn-primary" disabled="@formSaving">
                     @(formSaving ? "Saving…" : (editingChannel is null ? "Create" : "Save"))
                 </button>
             </div>
-        </div>
+        </form>
     </ModalBase>
 }
 

@@ -7,7 +7,7 @@
 <ModalBase IsOpen="IsOpen" OnClose="OnClosed"
            Title="@(EditingRule is null ? "New Normalization Rule" : "Edit Normalization Rule")"
            Size="ModalSize.Medium">
-    <div class="space-y-4">
+    <form class="space-y-4" @onsubmit="Save" @onsubmit:preventDefault>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <fieldset class="fieldset">
                 <legend class="fieldset-legend">Pattern <span class="opacity-50">(regex)</span></legend>
@@ -43,7 +43,7 @@
                 <input type="text" class="input input-sm flex-1 font-mono"
                        placeholder="Test message…"
                        @bind="_previewInput" />
-                <button class="btn btn-ghost btn-sm" @onclick="RunPreview">Preview</button>
+                <button type="button" class="btn btn-ghost btn-sm" @onclick="RunPreview">Preview</button>
             </div>
             @if (_previewResult is not null)
             {
@@ -57,12 +57,12 @@
         }
 
         <div class="modal-action">
-            <button class="btn btn-ghost" @onclick="() => OnClosed.InvokeAsync()">Cancel</button>
-            <button class="btn btn-primary" @onclick="Save" disabled="@_saving">
+            <button type="button" class="btn btn-ghost" @onclick="() => OnClosed.InvokeAsync()">Cancel</button>
+            <button type="submit" class="btn btn-primary" disabled="@_saving">
                 @(_saving ? "Saving…" : (EditingRule is null ? "Add Rule" : "Save"))
             </button>
         </div>
-    </div>
+    </form>
 </ModalBase>
 
 @code {

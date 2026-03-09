@@ -53,6 +53,7 @@
             }
             else
             {
+                <form @onsubmit="Save" @onsubmit:preventDefault>
                 <fieldset class="fieldset">
                     <legend class="fieldset-legend">Rule Name</legend>
                     <input class="input input-bordered w-full" @bind="form.Name" placeholder="e.g. Notify on new errors" />
@@ -197,11 +198,12 @@
                 }
 
                 <div class="modal-action">
-                    <button class="btn btn-ghost" @onclick="Close">Cancel</button>
-                    <button class="btn btn-primary" @onclick="Save" disabled="@saving">
+                    <button type="button" class="btn btn-ghost" @onclick="Close">Cancel</button>
+                    <button type="submit" class="btn btn-primary" disabled="@saving">
                         @(saving ? "Saving…" : (EditingRule is null ? "Create" : "Save"))
                     </button>
                 </div>
+                </form>
             }
         </div>
 </ModalBase>

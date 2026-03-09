@@ -27,11 +27,11 @@ else
             <div class="flex items-center gap-3">
                 @if (editingName)
                 {
-                    <div class="join">
+                    <form class="join" @onsubmit="SaveName" @onsubmit:preventDefault>
                         <input type="text" class="input join-item" @bind="editName" />
-                        <button class="btn join-item btn-primary" @onclick="SaveName" disabled="@saving">Save</button>
-                        <button class="btn join-item" @onclick="() => editingName = false">Cancel</button>
-                    </div>
+                        <button type="submit" class="btn join-item btn-primary" disabled="@saving">Save</button>
+                        <button type="button" class="btn join-item" @onclick="() => editingName = false">Cancel</button>
+                    </form>
                 }
                 else
                 {

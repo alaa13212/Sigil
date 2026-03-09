@@ -2,44 +2,46 @@
 @inject ISharedLinkService SharedLinkService
 
 <ModalBase IsOpen="IsOpen" Title="Share Issue" Size="ModalSize.Small" OnClose="OnClose">
-    @if (_shareLink is null)
-    {
-        <fieldset class="fieldset mb-4">
-            <legend class="fieldset-legend">Link expires after</legend>
-            <select class="select select-sm w-full" @bind="_durationHours">
-                <option value="1">1 hour</option>
-                <option value="24">24 hours</option>
-                <option value="168">7 days</option>
-            </select>
-        </fieldset>
-
-        @if (_error is not null)
-        {
-            <div class="alert alert-error alert-sm mb-3 text-sm">@_error</div>
-        }
-    }
-    else
-    {
-        <div class="mb-4">
-            <label class="fieldset-label text-sm mb-1">Shareable link</label>
-            <div class="flex gap-2">
-                <input class="input input-sm w-full font-mono text-xs" readonly value="@_shareLink.Url" />
-                <CopyButton Text="@_shareLink.Url" Label="Copy" Class="btn btn-sm btn-outline" />
-            </div>
-            <p class="text-xs opacity-50 mt-1">Expires @_shareLink.ExpiresAt.ToLocalTime().ToString("MMM d, yyyy 'at' h:mm tt")</p>
-        </div>
-    }
-
-    <div class="modal-action">
-        <button class="btn btn-ghost btn-sm" @onclick="OnClose">Close</button>
+    <form @onsubmit="CreateLink" @onsubmit:preventDefault>
         @if (_shareLink is null)
         {
-            <button class="btn btn-primary btn-sm" @onclick="CreateLink" disabled="@_loading">
-                @if (_loading) { <span class="loading loading-spinner loading-xs"></span> }
-                Create Link
-            </button>
+            <fieldset class="fieldset mb-4">
+                <legend class="fieldset-legend">Link expires after</legend>
+                <select class="select select-sm w-full" @bind="_durationHours">
+                    <option value="1">1 hour</option>
+                    <option value="24">24 hours</option>
+                    <option value="168">7 days</option>
+                </select>
+            </fieldset>
+
+            @if (_error is not null)
+            {
+                <div class="alert alert-error alert-sm mb-3 text-sm">@_error</div>
+            }
         }
-    </div>
+        else
+        {
+            <div class="mb-4">
+                <label class="fieldset-label text-sm mb-1">Shareable link</label>
+                <div class="flex gap-2">
+                    <input class="input input-sm w-full font-mono text-xs" readonly value="@_shareLink.Url" />
+                    <CopyButton Text="@_shareLink.Url" Label="Copy" Class="btn btn-sm btn-outline" />
+                </div>
+                <p class="text-xs opacity-50 mt-1">Expires @_shareLink.ExpiresAt.ToLocalTime().ToString("MMM d, yyyy 'at' h:mm tt")</p>
+            </div>
+        }
+
+        <div class="modal-action">
+            <button type="button" class="btn btn-ghost btn-sm" @onclick="OnClose">Close</button>
+            @if (_shareLink is null)
+            {
+                <button type="submit" class="btn btn-primary btn-sm" disabled="@_loading">
+                    @if (_loading) { <span class="loading loading-spinner loading-xs"></span> }
+                    Create Link
+                </button>
+            }
+        </div>
+    </form>
 </ModalBase>
 
 @code {

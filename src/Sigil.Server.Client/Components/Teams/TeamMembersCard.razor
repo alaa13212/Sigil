@@ -13,7 +13,7 @@
 
         @if (_showAdd)
         {
-            <div class="flex gap-2 items-end">
+            <form class="flex gap-2 items-end" @onsubmit="AddMember" @onsubmit:preventDefault>
                 <fieldset class="fieldset flex-1">
                     <legend class="fieldset-legend">User</legend>
                     <select class="select w-full" @bind="_selectedUserId">
@@ -36,8 +36,8 @@
                         }
                     </select>
                 </fieldset>
-                <button class="btn btn-primary mb-1" @onclick="AddMember" disabled="@_adding">Add</button>
-            </div>
+                <button type="submit" class="btn btn-primary mb-1" disabled="@_adding">Add</button>
+            </form>
         }
 
         @if (!string.IsNullOrEmpty(_message))

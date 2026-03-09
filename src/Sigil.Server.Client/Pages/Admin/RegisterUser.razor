@@ -32,7 +32,7 @@
     else
     {
         <div class="card bg-base-100">
-            <div class="card-body p-5 space-y-3">
+            <form class="card-body p-5 space-y-3" @onsubmit="Invite" @onsubmit:preventDefault>
                 <fieldset class="fieldset">
                     <legend class="fieldset-legend">Email</legend>
                     <input type="email" class="input w-full" @bind="email" placeholder="user@example.com" />
@@ -70,10 +70,10 @@
                 {
                     <div class="alert alert-error text-sm">@error</div>
                 }
-                <button class="btn btn-primary" @onclick="Invite" disabled="@submitting">
+                <button type="submit" class="btn btn-primary" disabled="@submitting">
                     @(submitting ? "Creating invite..." : "Create Invite")
                 </button>
-            </div>
+            </form>
         </div>
     }
 </div>

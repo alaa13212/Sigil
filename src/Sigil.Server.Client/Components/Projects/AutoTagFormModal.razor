@@ -2,7 +2,7 @@
 @inject IAutoTagService AutoTagService
 
 <ModalBase IsOpen="IsOpen" OnClose="OnClosed" Title="@(EditingRule is null ? "New Auto-Tag Rule" : "Edit Auto-Tag Rule")" Size="ModalSize.Medium">
-    <div class="space-y-4">
+    <form class="space-y-4" @onsubmit="Save" @onsubmit:preventDefault>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <fieldset class="fieldset">
                 <legend class="fieldset-legend">Field</legend>
@@ -67,12 +67,12 @@
         }
 
         <div class="modal-action">
-            <button class="btn btn-ghost" @onclick="() => OnClosed.InvokeAsync()">Cancel</button>
-            <button class="btn btn-primary" @onclick="Save" disabled="@_saving">
+            <button type="button" class="btn btn-ghost" @onclick="() => OnClosed.InvokeAsync()">Cancel</button>
+            <button type="submit" class="btn btn-primary" disabled="@_saving">
                 @(_saving ? "Saving…" : (EditingRule is null ? "Add Rule" : "Save"))
             </button>
         </div>
-    </div>
+    </form>
 </ModalBase>
 
 <datalist id="autotag-modal-fields">
