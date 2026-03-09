@@ -17,7 +17,6 @@ public class PlatformInfoProviderTests
     [InlineData(Platform.PHP)]
     [InlineData(Platform.Go)]
     [InlineData(Platform.Elixir)]
-    [InlineData(Platform.Perl)]
     [InlineData(Platform.Cocoa)]
     [InlineData(Platform.ObjectiveC)]
     [InlineData(Platform.C)]

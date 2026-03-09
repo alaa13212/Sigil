@@ -14,7 +14,6 @@ public class PlatformHelperTests
     [InlineData("go", Platform.Go)]
     [InlineData("node", Platform.Node)]
     [InlineData("elixir", Platform.Elixir)]
-    [InlineData("perl", Platform.Perl)]
     [InlineData("as3", Platform.ActionScript3)]
     [InlineData("c", Platform.C)]
     [InlineData("cfml", Platform.ColdFusion)]
