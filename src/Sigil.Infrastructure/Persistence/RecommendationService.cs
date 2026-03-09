@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Recommendations;
+using Sigil.Application.Services;
 using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Persistence;
@@ -8,6 +9,7 @@ namespace Sigil.Infrastructure.Persistence;
 internal class RecommendationService(
     SigilDbContext dbContext,
     IEnumerable<IProjectAnalyzer> analyzers,
+    PlatformInfoProvider platformInfoProvider,
     IDateTime dateTime) : IRecommendationService
 {
     public Task<int> GetRecommendationCountAsync(int projectId) =>
@@ -42,7 +44,7 @@ internal class RecommendationService(
 
         foreach (var analyzer in analyzers)
         {
-            ProjectRecommendation? result = await analyzer.AnalyzeAsync(project);
+            ProjectRecommendation? result = await analyzer.AnalyzeAsync(project, platformInfoProvider.GetInfo(project.Platform));
             existingByAnalyzer.TryGetValue(analyzer.AnalyzerId, out var current);
 
             if (result is not null)

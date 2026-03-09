@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 
@@ -12,7 +13,7 @@ internal class HighCardinalityTagAnalyzer(SigilDbContext dbContext) : IProjectAn
     public string AnalyzerId => "high-cardinality-tags";
     public bool IsRepeatable => true;
 
-    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project)
+    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project, PlatformInfo info)
     {
         var highCardinalityKeys = await dbContext.TagKeys
             .Where(tk => tk.Values.Any(tv => tv.Events.Any(e => e.ProjectId == project.Id)))
@@ -37,7 +38,7 @@ internal class HighCardinalityTagAnalyzer(SigilDbContext dbContext) : IProjectAn
             Severity = RecommendationSeverity.Warning,
             Title = "High-cardinality tags detected",
             Description = $"Some tag keys have an excessive number of unique values: {keyList}. High-cardinality tags (e.g., request IDs, session IDs) degrade query performance and should be stored in `context` instead.",
-            ActionUrl = $"https://docs.sentry.io/platforms/{PlatformHelper.ToStringValue(project.Platform)}/enriching-events/context"
+            ActionUrl = $"{info.DocumentationUrl}/enriching-events/context"
         };
     }
 }

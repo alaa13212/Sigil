@@ -21,7 +21,7 @@ public class PlatformInfoProvider
                 });
                 """,
             Language = "csharp",
-            DocumentationUrl = "https://docs.sentry.io/platforms/dotnet/",
+            DocumentationUrl = "https://docs.sentry.io/platforms/dotnet",
             SdkGitHubUrl = "https://github.com/getsentry/sentry-dotnet",
         },
         [Platform.JavaScript] = new PlatformInfo
@@ -35,7 +35,7 @@ public class PlatformInfoProvider
                 Sentry.init({ dsn: "{dsn}" });
                 """,
             Language = "javascript",
-            DocumentationUrl = "https://docs.sentry.io/platforms/javascript/",
+            DocumentationUrl = "https://docs.sentry.io/platforms/javascript",
             SdkGitHubUrl = "https://github.com/getsentry/sentry-javascript",
         },
         [Platform.Node] = new PlatformInfo
@@ -49,7 +49,7 @@ public class PlatformInfoProvider
                 Sentry.init({ dsn: "{dsn}" });
                 """,
             Language = "javascript",
-            DocumentationUrl = "https://docs.sentry.io/platforms/node/",
+            DocumentationUrl = "https://docs.sentry.io/platforms/javascript/guides/node",
             SdkGitHubUrl = "https://github.com/getsentry/sentry-javascript",
         },
         [Platform.Python] = new PlatformInfo
@@ -63,7 +63,7 @@ public class PlatformInfoProvider
                 sentry_sdk.init(dsn="{dsn}")
                 """,
             Language = "python",
-            DocumentationUrl = "https://docs.sentry.io/platforms/python/",
+            DocumentationUrl = "https://docs.sentry.io/platforms/python",
             SdkGitHubUrl = "https://github.com/getsentry/sentry-python",
         },
         [Platform.Java] = new PlatformInfo
@@ -78,7 +78,7 @@ public class PlatformInfoProvider
                 });
                 """,
             Language = "java",
-            DocumentationUrl = "https://docs.sentry.io/platforms/java/",
+            DocumentationUrl = "https://docs.sentry.io/platforms/java",
             SdkGitHubUrl = "https://github.com/getsentry/sentry-java",
         },
         [Platform.Ruby] = new PlatformInfo
@@ -93,7 +93,7 @@ public class PlatformInfoProvider
                 end
                 """,
             Language = "ruby",
-            DocumentationUrl = "https://docs.sentry.io/platforms/ruby/",
+            DocumentationUrl = "https://docs.sentry.io/platforms/ruby",
             SdkGitHubUrl = "https://github.com/getsentry/sentry-ruby",
         },
         [Platform.PHP] = new PlatformInfo
@@ -106,7 +106,7 @@ public class PlatformInfoProvider
                 \Sentry\init(['dsn' => '{dsn}']);
                 """,
             Language = "php",
-            DocumentationUrl = "https://docs.sentry.io/platforms/php/",
+            DocumentationUrl = "https://docs.sentry.io/platforms/php",
             SdkGitHubUrl = "https://github.com/getsentry/sentry-php",
         },
         [Platform.Go] = new PlatformInfo
@@ -121,7 +121,7 @@ public class PlatformInfoProvider
                 })
                 """,
             Language = "go",
-            DocumentationUrl = "https://docs.sentry.io/platforms/go/",
+            DocumentationUrl = "https://docs.sentry.io/platforms/go",
             SdkGitHubUrl = "https://github.com/getsentry/sentry-go",
         },
         [Platform.Elixir] = new PlatformInfo
@@ -135,20 +135,7 @@ public class PlatformInfoProvider
                   dsn: "{dsn}"
                 """,
             Language = "elixir",
-            DocumentationUrl = "https://docs.sentry.io/platforms/elixir/",
-        },
-        [Platform.Perl] = new PlatformInfo
-        {
-            Platform = Platform.Perl,
-            DisplayName = "Perl",
-            SdkPackage = "Sentry::SDK",
-            InstallCommand = "cpan Sentry::SDK",
-            InitSnippet = """
-                use Sentry::SDK;
-                Sentry::SDK->init({ dsn => "{dsn}" });
-                """,
-            Language = "perl",
-            DocumentationUrl = "https://docs.sentry.io/platforms/perl/",
+            DocumentationUrl = "https://docs.sentry.io/platforms/elixir",
         },
         [Platform.Cocoa] = new PlatformInfo
         {
@@ -163,7 +150,7 @@ public class PlatformInfoProvider
                 }
                 """,
             Language = "swift",
-            DocumentationUrl = "https://docs.sentry.io/platforms/apple/",
+            DocumentationUrl = "https://docs.sentry.io/platforms/apple",
             SdkGitHubUrl = "https://github.com/getsentry/sentry-cocoa",
         },
         [Platform.ObjectiveC] = new PlatformInfo
@@ -179,7 +166,7 @@ public class PlatformInfoProvider
                 }];
                 """,
             Language = "objc",
-            DocumentationUrl = "https://docs.sentry.io/platforms/apple/",
+            DocumentationUrl = "https://docs.sentry.io/platforms/apple",
             SdkGitHubUrl = "https://github.com/getsentry/sentry-cocoa",
         },
         [Platform.C] = new PlatformInfo
@@ -194,7 +181,7 @@ public class PlatformInfoProvider
                 sentry_init(options);
                 """,
             Language = "c",
-            DocumentationUrl = "https://docs.sentry.io/platforms/native/",
+            DocumentationUrl = "https://docs.sentry.io/platforms/native",
             SdkGitHubUrl = "https://github.com/getsentry/sentry-native",
         },
         [Platform.Native] = new PlatformInfo
@@ -209,7 +196,7 @@ public class PlatformInfoProvider
                 sentry_init(options);
                 """,
             Language = "c",
-            DocumentationUrl = "https://docs.sentry.io/platforms/native/",
+            DocumentationUrl = "https://docs.sentry.io/platforms/native",
             SdkGitHubUrl = "https://github.com/getsentry/sentry-native",
         },
         [Platform.Groovy] = new PlatformInfo
@@ -219,55 +206,13 @@ public class PlatformInfoProvider
             SdkPackage = "io.sentry:sentry",
             InstallCommand = "implementation 'io.sentry:sentry:7.0.0'",
             InitSnippet = """
-                Sentry.init { options ->
-                    options.dsn = "{dsn}"
-                }
+                Sentry.init({ options ->
+                    options.setDsn("{dsn}")
+                })
                 """,
             Language = "groovy",
-            DocumentationUrl = "https://docs.sentry.io/platforms/java/",
+            DocumentationUrl = "https://docs.sentry.io/platforms/java",
             SdkGitHubUrl = "https://github.com/getsentry/sentry-java",
-        },
-        [Platform.Haskell] = new PlatformInfo
-        {
-            Platform = Platform.Haskell,
-            DisplayName = "Haskell",
-            SdkPackage = "sentry-haskell",
-            InstallCommand = "cabal install sentry-haskell",
-            InitSnippet = """
-                import Sentry
-                main :: IO ()
-                main = withSentry defaultSettings { sentry_dsn = "{dsn}" } $ do
-                    -- your app code
-                """,
-            Language = "haskell",
-            DocumentationUrl = "https://docs.sentry.io/platforms/",
-        },
-        [Platform.ColdFusion] = new PlatformInfo
-        {
-            Platform = Platform.ColdFusion,
-            DisplayName = "ColdFusion",
-            SdkPackage = "sentry-coldfusion",
-            InstallCommand = "# Add sentry-coldfusion to your application",
-            InitSnippet = """
-                <cfset application.sentry = createObject("component", "sentry").init(
-                    dsn="{dsn}"
-                )>
-                """,
-            Language = "markup",
-            DocumentationUrl = "https://docs.sentry.io/platforms/",
-        },
-        [Platform.ActionScript3] = new PlatformInfo
-        {
-            Platform = Platform.ActionScript3,
-            DisplayName = "ActionScript 3",
-            SdkPackage = "sentry-as3",
-            InstallCommand = "# Add sentry-as3.swc to your project",
-            InitSnippet = """
-                import io.sentry.Sentry;
-                Sentry.init("{dsn}");
-                """,
-            Language = "actionscript",
-            DocumentationUrl = "https://docs.sentry.io/platforms/",
         },
         [Platform.Other] = new PlatformInfo
         {
@@ -280,12 +225,12 @@ public class PlatformInfoProvider
                 // See https://docs.sentry.io/platforms/ for setup instructions.
                 """,
             Language = "plaintext",
-            DocumentationUrl = "https://docs.sentry.io/platforms/",
+            DocumentationUrl = "https://docs.sentry.io/platforms/android",
         },
     };
 
-    public PlatformInfo? GetInfo(Platform platform)
-        => _platforms.GetValueOrDefault(platform);
+    public PlatformInfo GetInfo(Platform platform)
+        => _platforms.GetValueOrDefault(platform) ?? _platforms[Platform.Other];
 
     public IReadOnlyList<PlatformInfo> GetAll()
         => _platforms.Values.ToList();
@@ -293,6 +238,6 @@ public class PlatformInfoProvider
     public string FormatSnippet(Platform platform, string dsn)
     {
         var info = GetInfo(platform);
-        return info?.InitSnippet.Replace("{dsn}", dsn) ?? $"// Configure your SDK with DSN: {dsn}";
+        return info.InitSnippet.Replace("{dsn}", dsn);
     }
 }

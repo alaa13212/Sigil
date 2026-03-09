@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Sigil.Application.Models;
+using Sigil.Application.Services;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 using Sigil.Infrastructure.Persistence;
@@ -175,5 +177,10 @@ internal static class TestHelper
         context.AlertRules.Add(rule);
         await context.SaveChangesAsync();
         return rule;
+    }
+
+    public static PlatformInfo GetPlatformInfo(Platform platform = Platform.CSharp)
+    {
+        return new PlatformInfoProvider().GetInfo(platform);
     }
 }

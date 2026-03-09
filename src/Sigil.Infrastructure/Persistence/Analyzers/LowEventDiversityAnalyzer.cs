@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 
@@ -10,7 +11,7 @@ internal class LowEventDiversityAnalyzer(SigilDbContext dbContext) : IProjectAna
     public string AnalyzerId => "low-event-diversity";
     public bool IsRepeatable => false;
 
-    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project)
+    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project, PlatformInfo info)
     {
         var totalIssues = await dbContext.Issues.CountAsync(i => i.ProjectId == project.Id);
         if (totalIssues < 2) return null;
@@ -27,7 +28,7 @@ internal class LowEventDiversityAnalyzer(SigilDbContext dbContext) : IProjectAna
             Severity = RecommendationSeverity.Info,
             Title = "Too many events per issue — possible over-grouping",
             Description = $"An average of {eventsPerIssue:N0} events per issue suggests aggressive fingerprinting is collapsing many distinct errors into a few issues. Review your fingerprint overrides to ensure distinct errors are tracked separately.",
-            ActionUrl = $"https://docs.sentry.io/platforms/{PlatformHelper.ToStringValue(project.Platform)}/usage/sdk-fingerprinting/"
+            ActionUrl = $"{info.DocumentationUrl}/usage/sdk-fingerprinting/"
         };
     }
 }

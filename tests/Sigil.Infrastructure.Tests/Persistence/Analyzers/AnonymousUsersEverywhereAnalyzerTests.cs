@@ -18,8 +18,9 @@ public class AnonymousUsersEverywhereAnalyzerTests(TestDatabaseFixture fixture)
         var user = await TestHelper.CreateEventUserAsync(ctx, "anonymous");
         await AnalyzerTestHelper.CreateEventsAsync(ctx, project.Id, issue.Id, 10, userId: user.UniqueIdentifier);
         var analyzer = new AnonymousUsersEverywhereAnalyzer(ctx, AnalyzerTestHelper.StubDateTime());
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().BeNull();
     }
@@ -34,8 +35,9 @@ public class AnonymousUsersEverywhereAnalyzerTests(TestDatabaseFixture fixture)
         // 25 events with anonymous user
         await AnalyzerTestHelper.CreateEventsAsync(ctx, project.Id, issue.Id, 25, userId: anonUser.UniqueIdentifier);
         var analyzer = new AnonymousUsersEverywhereAnalyzer(ctx, AnalyzerTestHelper.StubDateTime());
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().NotBeNull();
         result.AnalyzerId.Should().Be("anonymous-users-everywhere");
@@ -53,8 +55,9 @@ public class AnonymousUsersEverywhereAnalyzerTests(TestDatabaseFixture fixture)
         await AnalyzerTestHelper.CreateEventsAsync(ctx, project.Id, issue.Id, 20, userId: realUser.UniqueIdentifier);
         await AnalyzerTestHelper.CreateEventsAsync(ctx, project.Id, issue.Id, 5, userId: anonUser.UniqueIdentifier);
         var analyzer = new AnonymousUsersEverywhereAnalyzer(ctx, AnalyzerTestHelper.StubDateTime());
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().BeNull();
     }

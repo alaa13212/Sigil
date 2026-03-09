@@ -17,6 +17,7 @@ public class HighCardinalityTagAnalyzerTests(TestDatabaseFixture fixture)
         await using var ctx = Ctx();
         var project = await TestHelper.CreateProjectAsync(ctx);
         var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
         var evt = await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id);
         var tagKey = await TestHelper.CreateTagKeyAsync(ctx, $"env-{Guid.NewGuid():N}");
         var tagValue = new TagValue { TagKeyId = tagKey.Id, Value = "prod" };
@@ -26,7 +27,7 @@ public class HighCardinalityTagAnalyzerTests(TestDatabaseFixture fixture)
         await ctx.SaveChangesAsync();
         var analyzer = new HighCardinalityTagAnalyzer(ctx);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().BeNull();
     }
@@ -37,6 +38,7 @@ public class HighCardinalityTagAnalyzerTests(TestDatabaseFixture fixture)
         await using var ctx = Ctx();
         var project = await TestHelper.CreateProjectAsync(ctx);
         var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
         var tagKey = await TestHelper.CreateTagKeyAsync(ctx, $"request_id-{Guid.NewGuid():N}");
 
         // Create 201 unique tag values (above 200 threshold) each linked to an event
@@ -78,7 +80,7 @@ public class HighCardinalityTagAnalyzerTests(TestDatabaseFixture fixture)
 
         var analyzer = new HighCardinalityTagAnalyzer(ctx);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().NotBeNull();
         result.AnalyzerId.Should().Be("high-cardinality-tags");

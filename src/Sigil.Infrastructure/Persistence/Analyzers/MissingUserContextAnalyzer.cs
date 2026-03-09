@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 
@@ -10,7 +11,7 @@ internal class MissingUserContextAnalyzer(SigilDbContext dbContext, IDateTime da
     public string AnalyzerId => "missing-user-context";
     public bool IsRepeatable => false;
 
-    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project)
+    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project, PlatformInfo info)
     {
         var cutoff = dateTime.UtcNow.AddDays(-7);
         var totalCount = await dbContext.Events
@@ -33,7 +34,7 @@ internal class MissingUserContextAnalyzer(SigilDbContext dbContext, IDateTime da
             Severity = RecommendationSeverity.Info,
             Title = "Missing user context",
             Description = "Most events have no user information attached. Set user context in your SDK (ID, email, username) to enable user impact tracking and better issue prioritization.",
-            ActionUrl = $"https://docs.sentry.io/platforms/{PlatformHelper.ToStringValue(project.Platform)}/enriching-events/identify-user/"
+            ActionUrl = $"{info.DocumentationUrl}/enriching-events/identify-user/"
         };
     }
 }

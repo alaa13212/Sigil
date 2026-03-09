@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 
@@ -10,7 +11,7 @@ internal class MissingEnvironmentAnalyzer(SigilDbContext dbContext) : IProjectAn
     public string AnalyzerId => "missing-environment";
     public bool IsRepeatable => false;
 
-    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project)
+    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project, PlatformInfo info)
     {
         var hasEvents = await dbContext.Events.AnyAsync(e => e.ProjectId == project.Id);
         if (!hasEvents) return null;
@@ -27,7 +28,7 @@ internal class MissingEnvironmentAnalyzer(SigilDbContext dbContext) : IProjectAn
             Severity = RecommendationSeverity.Info,
             Title = "No environment set",
             Description = "Events don't have an environment tag (e.g., `production`, `staging`). Set the `environment` option in your SDK initialization to enable environment-specific filtering.",
-            ActionUrl = $"https://docs.sentry.io/platforms/{PlatformHelper.ToStringValue(project.Platform)}/configuration/environments/"
+            ActionUrl = $"{info.DocumentationUrl}/configuration/environments/"
         };
     }
 }

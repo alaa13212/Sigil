@@ -17,7 +17,6 @@ public enum Platform
     Native,
     Node,
     ObjectiveC,
-    Perl,
     PHP,
     Python,
     Ruby
@@ -41,7 +40,6 @@ public static class PlatformHelper
         "native" => Platform.Native,
         "node" => Platform.Node,
         "objc" => Platform.ObjectiveC,
-        "perl" => Platform.Perl,
         "php" => Platform.PHP,
         "python" => Platform.Python,
         "ruby" => Platform.Ruby,
@@ -65,7 +63,6 @@ public static class PlatformHelper
         Platform.Native => "native",
         Platform.Node => "node",
         Platform.ObjectiveC => "objc",
-        Platform.Perl => "perl",
         Platform.PHP => "php",
         Platform.Python => "python",
         Platform.Ruby => "ruby",

@@ -17,12 +17,13 @@ public class ReleaseNeverChangesAnalyzerTests(TestDatabaseFixture fixture)
         await using var ctx = Ctx();
         var project = await TestHelper.CreateProjectAsync(ctx);
         var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
         // Event from 5 days ago (not enough history)
         await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id, timestamp: Now.AddDays(-5));
         await TestHelper.CreateReleaseAsync(ctx, project.Id, $"v1-{Guid.NewGuid():N}", firstSeen: Now.AddDays(-5));
         var analyzer = new ReleaseNeverChangesAnalyzer(ctx, AnalyzerTestHelper.StubDateTime(Now));
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().BeNull();
     }
@@ -38,8 +39,9 @@ public class ReleaseNeverChangesAnalyzerTests(TestDatabaseFixture fixture)
         // One release in last 30 days
         await TestHelper.CreateReleaseAsync(ctx, project.Id, $"v1-{Guid.NewGuid():N}", firstSeen: Now.AddDays(-15));
         var analyzer = new ReleaseNeverChangesAnalyzer(ctx, AnalyzerTestHelper.StubDateTime(Now));
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().NotBeNull();
         result.AnalyzerId.Should().Be("release-never-changes");
@@ -55,8 +57,9 @@ public class ReleaseNeverChangesAnalyzerTests(TestDatabaseFixture fixture)
         await TestHelper.CreateReleaseAsync(ctx, project.Id, $"v1-{Guid.NewGuid():N}", firstSeen: Now.AddDays(-10));
         await TestHelper.CreateReleaseAsync(ctx, project.Id, $"v2-{Guid.NewGuid():N}", firstSeen: Now.AddDays(-5));
         var analyzer = new ReleaseNeverChangesAnalyzer(ctx, AnalyzerTestHelper.StubDateTime(Now));
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().BeNull();
     }

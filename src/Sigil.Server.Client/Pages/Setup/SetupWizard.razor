@@ -246,39 +246,33 @@
                         <fieldset class="fieldset">
                             <legend class="fieldset-legend">Your DSN</legend>
                             <div class="join w-full">
-                                <input type="text" class="input join-item flex-1 font-mono text-sm" value="@dsn" readonly />
-                                <CopyButton Text="@dsn" Class="btn join-item" />
+                                <input type="text" class="input join-item flex-1 font-mono text-sm" value="@dsn" readonly/>
+                                <CopyButton Text="@dsn" Class="btn join-item"/>
                             </div>
                             <p class="label">Use this in your Sentry SDK configuration</p>
                         </fieldset>
 
-                        @if (PlatformInfoProvider.GetInfo(projectPlatform) is { } setupPlatformInfo)
-                        {
-                            <div class="collapse collapse-arrow bg-base-200">
-                                <input type="checkbox" />
-                                <div class="collapse-title font-medium text-sm">@setupPlatformInfo.DisplayName SDK Setup</div>
-                                <div class="collapse-content space-y-3 text-sm">
-                                    <div>
-                                        <div class="font-semibold opacity-70">1. Install</div>
-                                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>@setupPlatformInfo.InstallCommand</code></pre>
-                                    </div>
-                                    <div>
-                                        <div class="font-semibold opacity-70">2. Initialize</div>
-                                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>@PlatformInfoProvider.FormatSnippet(projectPlatform, dsn ?? "")</code></pre>
-                                    </div>
-                                    @if (setupPlatformInfo.DocumentationUrl is not null)
-                                    {
-                                        <a href="@setupPlatformInfo.DocumentationUrl" target="_blank" class="link link-hover">
-                                            Full documentation →
-                                        </a>
-                                    }
+                        var setupPlatformInfo = PlatformInfoProvider.GetInfo(projectPlatform);
+                        <div class="collapse collapse-arrow bg-base-200">
+                            <input type="checkbox"/>
+                            <div class="collapse-title font-medium text-sm">@setupPlatformInfo.DisplayName SDK Setup</div>
+                            <div class="collapse-content space-y-3 text-sm">
+                                <div>
+                                    <div class="font-semibold opacity-70">1. Install</div>
+                                    <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>@setupPlatformInfo.InstallCommand</code></pre>
                                 </div>
+                                <div>
+                                    <div class="font-semibold opacity-70">2. Initialize</div>
+                                    <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>@PlatformInfoProvider.FormatSnippet(projectPlatform, dsn ?? "")</code></pre>
+                                </div>
+                                @if (setupPlatformInfo.DocumentationUrl is not null)
+                                {
+                                    <a href="@setupPlatformInfo.DocumentationUrl" target="_blank" class="link link-hover">
+                                        Full documentation →
+                                    </a>
+                                }
                             </div>
-                        }
-                        else
-                        {
-                            <p class="text-sm opacity-70">Use the DSN above in your Sentry-compatible SDK configuration.</p>
-                        }
+                        </div>
                     }
 
                     <div class="flex justify-center">

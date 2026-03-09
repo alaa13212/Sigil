@@ -94,29 +94,22 @@ else
         <div class="card bg-base-100">
             <div class="card-body p-5 space-y-3">
                 <h2 class="font-semibold">SDK Integration</h2>
-                @if (platformInfo is not null)
-                {
-                    <div class="space-y-3 text-sm">
-                        <div>
-                            <div class="font-semibold opacity-70">Install (@platformInfo.SdkPackage)</div>
-                            <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>@platformInfo.InstallCommand</code></pre>
-                        </div>
-                        <div>
-                            <div class="font-semibold opacity-70">Initialize (@platformInfo.DisplayName)</div>
-                            <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>@PlatformInfoProvider.FormatSnippet(Project.Platform, Project.Dsn ?? "")</code></pre>
-                        </div>
-                        @if (platformInfo.DocumentationUrl is not null)
-                        {
-                            <a href="@platformInfo.DocumentationUrl" target="_blank" class="link link-hover text-sm">
-                                Full documentation →
-                            </a>
-                        }
+                <div class="space-y-3 text-sm">
+                    <div>
+                        <div class="font-semibold opacity-70">Install (@platformInfo.SdkPackage)</div>
+                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>@platformInfo.InstallCommand</code></pre>
                     </div>
-                }
-                else
-                {
-                    <p class="text-sm opacity-70">Use the DSN above in your Sentry-compatible SDK configuration.</p>
-                }
+                    <div>
+                        <div class="font-semibold opacity-70">Initialize (@platformInfo.DisplayName)</div>
+                        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>@PlatformInfoProvider.FormatSnippet(Project.Platform, Project.Dsn ?? "")</code></pre>
+                    </div>
+                    @if (platformInfo.DocumentationUrl is not null)
+                    {
+                        <a href="@platformInfo.DocumentationUrl" target="_blank" class="link link-hover text-sm">
+                            Full documentation →
+                        </a>
+                    }
+                </div>
             </div>
         </div>
     </div>

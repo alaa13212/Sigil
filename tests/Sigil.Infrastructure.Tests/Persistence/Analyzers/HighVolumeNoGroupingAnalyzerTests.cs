@@ -14,12 +14,13 @@ public class HighVolumeNoGroupingAnalyzerTests(TestDatabaseFixture fixture)
     {
         await using var ctx = Ctx();
         var project = await TestHelper.CreateProjectAsync(ctx);
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
         // only 5 issues
         for (int i = 0; i < 5; i++)
             await TestHelper.CreateIssueAsync(ctx, project.Id);
         var analyzer = new HighVolumeNoGroupingAnalyzer(ctx);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().BeNull();
     }
@@ -29,12 +30,13 @@ public class HighVolumeNoGroupingAnalyzerTests(TestDatabaseFixture fixture)
     {
         await using var ctx = Ctx();
         var project = await TestHelper.CreateProjectAsync(ctx);
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
         // 25 issues, all with OccurrenceCount=1 (default from CreateIssueAsync)
         for (int i = 0; i < 25; i++)
             await TestHelper.CreateIssueAsync(ctx, project.Id);
         var analyzer = new HighVolumeNoGroupingAnalyzer(ctx);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().NotBeNull();
         result.AnalyzerId.Should().Be("high-volume-no-grouping");
@@ -45,6 +47,7 @@ public class HighVolumeNoGroupingAnalyzerTests(TestDatabaseFixture fixture)
     {
         await using var ctx = Ctx();
         var project = await TestHelper.CreateProjectAsync(ctx);
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
         // 25 issues, most with multiple events
         for (int i = 0; i < 25; i++)
         {
@@ -55,7 +58,7 @@ public class HighVolumeNoGroupingAnalyzerTests(TestDatabaseFixture fixture)
         }
         var analyzer = new HighVolumeNoGroupingAnalyzer(ctx);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().BeNull();
     }

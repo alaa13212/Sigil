@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 
@@ -10,7 +11,7 @@ internal class ReleaseNeverChangesAnalyzer(SigilDbContext dbContext, IDateTime d
     public string AnalyzerId => "release-never-changes";
     public bool IsRepeatable => false;
 
-    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project)
+    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project, PlatformInfo info)
     {
         var cutoff = dateTime.UtcNow.AddDays(-30);
 
@@ -32,7 +33,7 @@ internal class ReleaseNeverChangesAnalyzer(SigilDbContext dbContext, IDateTime d
             Severity = RecommendationSeverity.Info,
             Title = "Release tag never changes",
             Description = "The same release version has been used for over 30 days. Use CI to inject a Git SHA or semantic version during build so you can track which releases introduce regressions.",
-            ActionUrl = $"https://docs.sentry.io/platforms/{PlatformHelper.ToStringValue(project.Platform)}/configuration/releases/"
+            ActionUrl = $"{info.DocumentationUrl}/configuration/releases/"
         };
     }
 }

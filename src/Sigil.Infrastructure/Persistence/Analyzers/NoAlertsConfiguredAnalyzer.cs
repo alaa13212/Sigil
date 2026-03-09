@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 
@@ -10,7 +11,7 @@ internal class NoAlertsConfiguredAnalyzer(SigilDbContext dbContext) : IProjectAn
     public string AnalyzerId => "no-alerts-configured";
     public bool IsRepeatable => false;
 
-    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project)
+    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project, PlatformInfo info)
     {
         var hasEvents = await dbContext.Events.AnyAsync(e => e.ProjectId == project.Id);
         if (!hasEvents) return null;

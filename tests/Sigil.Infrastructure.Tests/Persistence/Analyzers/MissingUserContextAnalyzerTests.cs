@@ -15,10 +15,11 @@ public class MissingUserContextAnalyzerTests(TestDatabaseFixture fixture)
         await using var ctx = Ctx();
         var project = await TestHelper.CreateProjectAsync(ctx);
         var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
         await AnalyzerTestHelper.CreateEventsAsync(ctx, project.Id, issue.Id, 10);
         var analyzer = new MissingUserContextAnalyzer(ctx, AnalyzerTestHelper.StubDateTime());
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().BeNull();
     }
@@ -29,11 +30,12 @@ public class MissingUserContextAnalyzerTests(TestDatabaseFixture fixture)
         await using var ctx = Ctx();
         var project = await TestHelper.CreateProjectAsync(ctx);
         var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
         // 25 events without user context
         await AnalyzerTestHelper.CreateEventsAsync(ctx, project.Id, issue.Id, 25);
         var analyzer = new MissingUserContextAnalyzer(ctx, AnalyzerTestHelper.StubDateTime());
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().NotBeNull();
         result.AnalyzerId.Should().Be("missing-user-context");
@@ -45,6 +47,7 @@ public class MissingUserContextAnalyzerTests(TestDatabaseFixture fixture)
         await using var ctx = Ctx();
         var project = await TestHelper.CreateProjectAsync(ctx);
         var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
         var eventUser = await TestHelper.CreateEventUserAsync(ctx, "user1");
         // 20 events without user
         await AnalyzerTestHelper.CreateEventsAsync(ctx, project.Id, issue.Id, 18);
@@ -52,7 +55,7 @@ public class MissingUserContextAnalyzerTests(TestDatabaseFixture fixture)
         await AnalyzerTestHelper.CreateEventsAsync(ctx, project.Id, issue.Id, 5, userId: eventUser.UniqueIdentifier);
         var analyzer = new MissingUserContextAnalyzer(ctx, AnalyzerTestHelper.StubDateTime());
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().BeNull();
     }

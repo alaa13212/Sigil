@@ -15,11 +15,12 @@ public class LogLevelOnlyEventsAnalyzerTests(TestDatabaseFixture fixture)
     {
         await using var ctx = Ctx();
         var project = await TestHelper.CreateProjectAsync(ctx);
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
         var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
         await AnalyzerTestHelper.CreateEventsAsync(ctx, project.Id, issue.Id, 5, Severity.Warning);
         var analyzer = new LogLevelOnlyEventsAnalyzer(ctx, AnalyzerTestHelper.StubDateTime());
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().BeNull();
     }
@@ -32,8 +33,9 @@ public class LogLevelOnlyEventsAnalyzerTests(TestDatabaseFixture fixture)
         var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
         await AnalyzerTestHelper.CreateEventsAsync(ctx, project.Id, issue.Id, 25, Severity.Warning);
         var analyzer = new LogLevelOnlyEventsAnalyzer(ctx, AnalyzerTestHelper.StubDateTime());
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().NotBeNull();
         result.AnalyzerId.Should().Be("log-level-only-events");
@@ -48,8 +50,9 @@ public class LogLevelOnlyEventsAnalyzerTests(TestDatabaseFixture fixture)
         await AnalyzerTestHelper.CreateEventsAsync(ctx, project.Id, issue.Id, 20, Severity.Warning);
         await AnalyzerTestHelper.CreateEventsAsync(ctx, project.Id, issue.Id, 5, Severity.Error);
         var analyzer = new LogLevelOnlyEventsAnalyzer(ctx, AnalyzerTestHelper.StubDateTime());
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().BeNull();
     }

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 
@@ -10,7 +11,7 @@ internal class NoInAppFramesAnalyzer(SigilDbContext dbContext, IDateTime dateTim
     public string AnalyzerId => "no-in-app-frames";
     public bool IsRepeatable => false;
 
-    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project)
+    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project, PlatformInfo info)
     {
         var cutoff = dateTime.UtcNow.AddDays(-7);
 
@@ -29,7 +30,7 @@ internal class NoInAppFramesAnalyzer(SigilDbContext dbContext, IDateTime dateTim
             Severity = RecommendationSeverity.Warning,
             Title = "No in-app stack frames detected",
             Description = "All stack frames are marked as framework or library code. Configure `in app` frame filtering in your SDK to highlight your own application code in stack traces.",
-            ActionUrl = $"https://docs.sentry.io/platforms/{PlatformHelper.ToStringValue(project.Platform)}/configuration/options/"
+            ActionUrl = $"{info.DocumentationUrl}/configuration/options/"
         };
     }
 }

@@ -16,8 +16,9 @@ public class MissingEnvironmentAnalyzerTests(TestDatabaseFixture fixture)
         await using var ctx = Ctx();
         var project = await TestHelper.CreateProjectAsync(ctx);
         var analyzer = new MissingEnvironmentAnalyzer(ctx);
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().BeNull();
     }
@@ -36,8 +37,9 @@ public class MissingEnvironmentAnalyzerTests(TestDatabaseFixture fixture)
         ctx.EventTags.Add(new EventTag { EventId = evt.Id, TagValueId = tagValue.Id });
         await ctx.SaveChangesAsync();
         var analyzer = new MissingEnvironmentAnalyzer(ctx);
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().BeNull();
     }
@@ -50,8 +52,9 @@ public class MissingEnvironmentAnalyzerTests(TestDatabaseFixture fixture)
         var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
         await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id);
         var analyzer = new MissingEnvironmentAnalyzer(ctx);
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().NotBeNull();
         result.AnalyzerId.Should().Be("missing-environment");

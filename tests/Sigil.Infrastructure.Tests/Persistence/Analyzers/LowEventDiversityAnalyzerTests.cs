@@ -16,8 +16,9 @@ public class LowEventDiversityAnalyzerTests(TestDatabaseFixture fixture)
         var project = await TestHelper.CreateProjectAsync(ctx);
         await TestHelper.CreateIssueAsync(ctx, project.Id);
         var analyzer = new LowEventDiversityAnalyzer(ctx);
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().BeNull();
     }
@@ -33,8 +34,9 @@ public class LowEventDiversityAnalyzerTests(TestDatabaseFixture fixture)
         await AnalyzerTestHelper.CreateEventsAsync(ctx, project.Id, issue1.Id, 5);
         await AnalyzerTestHelper.CreateEventsAsync(ctx, project.Id, issue2.Id, 5);
         var analyzer = new LowEventDiversityAnalyzer(ctx);
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().BeNull();
     }
@@ -50,8 +52,9 @@ public class LowEventDiversityAnalyzerTests(TestDatabaseFixture fixture)
         await AnalyzerTestHelper.CreateEventsAsync(ctx, project.Id, issue1.Id, 5001);
         await AnalyzerTestHelper.CreateEventsAsync(ctx, project.Id, issue2.Id, 5001);
         var analyzer = new LowEventDiversityAnalyzer(ctx);
+        var platformInfo = TestHelper.GetPlatformInfo(project.Platform);
 
-        var result = await analyzer.AnalyzeAsync(project);
+        var result = await analyzer.AnalyzeAsync(project, platformInfo);
 
         result.Should().NotBeNull();
         result.AnalyzerId.Should().Be("low-event-diversity");

@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models;
+using Sigil.Application.Services;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 using Sigil.Infrastructure.Persistence;
@@ -30,7 +32,7 @@ public class RecommendationServiceTests(TestDatabaseFixture fixture)
         a.IsRepeatable.Returns(repeatable);
         if (shouldTrigger)
         {
-            a.AnalyzeAsync(Arg.Any<Project>()).Returns(callInfo =>
+            a.AnalyzeAsync(Arg.Any<Project>(), Arg.Any<PlatformInfo>()).Returns(callInfo =>
             {
                 var project = callInfo.Arg<Project>();
                 return Task.FromResult<ProjectRecommendation?>(new ProjectRecommendation
@@ -45,13 +47,13 @@ public class RecommendationServiceTests(TestDatabaseFixture fixture)
         }
         else
         {
-            a.AnalyzeAsync(Arg.Any<Project>()).Returns(Task.FromResult<ProjectRecommendation?>(null));
+            a.AnalyzeAsync(Arg.Any<Project>(), Arg.Any<PlatformInfo>()).Returns(Task.FromResult<ProjectRecommendation?>(null));
         }
         return a;
     }
 
     private RecommendationService Create(SigilDbContext ctx, IEnumerable<IProjectAnalyzer> analyzers, IDateTime? dt = null)
-        => new(ctx, analyzers, dt ?? StubDateTime());
+        => new(ctx, analyzers, new PlatformInfoProvider(), dt ?? StubDateTime());
 
     // ── RunAnalyzersAsync ──────────────────────────────────────────────────────
 

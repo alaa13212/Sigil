@@ -1,3 +1,4 @@
+using Sigil.Application.Models;
 using Sigil.Domain.Entities;
 
 namespace Sigil.Application.Interfaces;
@@ -8,5 +9,5 @@ public interface IProjectAnalyzer
 
     bool IsRepeatable { get; }
 
-    Task<ProjectRecommendation?> AnalyzeAsync(Project project);
+    Task<ProjectRecommendation?> AnalyzeAsync(Project project, PlatformInfo info);
 }

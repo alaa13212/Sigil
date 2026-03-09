@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 
@@ -10,7 +11,7 @@ internal class AnonymousUsersEverywhereAnalyzer(SigilDbContext dbContext, IDateT
     public string AnalyzerId => "anonymous-users-everywhere";
     public bool IsRepeatable => false;
 
-    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project)
+    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project, PlatformInfo info)
     {
         var cutoff = dateTime.UtcNow.AddDays(-7);
 
@@ -32,7 +33,7 @@ internal class AnonymousUsersEverywhereAnalyzer(SigilDbContext dbContext, IDateT
             Severity = RecommendationSeverity.Info,
             Title = "Users are mostly anonymous",
             Description = "Most events with user context have no user ID or username set. Set a unique user ID after login so Sigil can track how many real users are affected by each issue.",
-            ActionUrl = $"https://docs.sentry.io/platforms/{PlatformHelper.ToStringValue(project.Platform)}/enriching-events/identify-user/"
+            ActionUrl = $"{info.DocumentationUrl}/enriching-events/identify-user/"
         };
     }
 }

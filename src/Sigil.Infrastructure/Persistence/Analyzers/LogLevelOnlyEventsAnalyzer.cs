@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 
@@ -10,7 +11,7 @@ internal class LogLevelOnlyEventsAnalyzer(SigilDbContext dbContext, IDateTime da
     public string AnalyzerId => "log-level-only-events";
     public bool IsRepeatable => false;
 
-    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project)
+    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project, PlatformInfo info)
     {
         var cutoff = dateTime.UtcNow.AddDays(-7);
         var totalCount = await dbContext.Events

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 
@@ -10,7 +11,7 @@ internal class HighVolumeNoGroupingAnalyzer(SigilDbContext dbContext) : IProject
     public string AnalyzerId => "high-volume-no-grouping";
     public bool IsRepeatable => false;
 
-    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project)
+    public async Task<ProjectRecommendation?> AnalyzeAsync(Project project, PlatformInfo info)
     {
         var totalIssues = await dbContext.Issues.CountAsync(i => i.ProjectId == project.Id);
         if (totalIssues < 20)
@@ -29,7 +30,7 @@ internal class HighVolumeNoGroupingAnalyzer(SigilDbContext dbContext) : IProject
             Severity = RecommendationSeverity.Warning,
             Title = "Many single-event issues suggest poor grouping",
             Description = $"{singleEventIssues:N0} out of {totalIssues:N0} issues have only one event. This often means fingerprinting is too granular. Review your SDK's fingerprinting configuration or use custom message normalizers to group related errors.",
-            ActionUrl = $"https://docs.sentry.io/platforms/{PlatformHelper.ToStringValue(project.Platform)}/usage/sdk-fingerprinting/"
+            ActionUrl = $"{info.DocumentationUrl}/usage/sdk-fingerprinting/"
         };
     }
 }
