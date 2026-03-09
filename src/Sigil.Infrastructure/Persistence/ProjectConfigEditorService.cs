@@ -4,7 +4,7 @@ using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class ProjectConfigEditorService(SigilDbContext dbContext, IProjectConfigService projectConfigService) : IProjectConfigEditorService
+internal class ProjectConfigEditorService(SigilDbContext dbContext, IProjectConfigService projectConfigService, IDateTime dateTime) : IProjectConfigEditorService
 {
     public async Task<Dictionary<string, string?>> GetAllAsync(int projectId)
     {
@@ -22,7 +22,7 @@ internal class ProjectConfigEditorService(SigilDbContext dbContext, IProjectConf
         if (existing is not null)
         {
             existing.Value = value;
-            existing.UpdatedAt = DateTime.UtcNow;
+            existing.UpdatedAt = dateTime.UtcNow;
         }
         else
         {
@@ -31,7 +31,7 @@ internal class ProjectConfigEditorService(SigilDbContext dbContext, IProjectConf
                 ProjectId = projectId,
                 Key = key,
                 Value = value,
-                UpdatedAt = DateTime.UtcNow
+                UpdatedAt = dateTime.UtcNow
             });
         }
 

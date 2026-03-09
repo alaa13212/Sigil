@@ -11,7 +11,8 @@ internal class AuthService(
     UserManager<User> userManager,
     RoleManager<IdentityRole<Guid>> roleManager,
     SignInManager<User> signInManager,
-    IAppConfigService configService) : IAuthService
+    IAppConfigService configService,
+    IDateTime dateTime) : IAuthService
 {
     public async Task<AuthResult> LoginAsync(LoginRequest request)
     {
@@ -29,7 +30,7 @@ internal class AuthService(
         if (!result.Succeeded)
             return AuthResult.Failure("Invalid email or password.");
 
-        user.LastLogin = DateTime.UtcNow;
+        user.LastLogin = dateTime.UtcNow;
         await userManager.UpdateAsync(user);
 
         var roles = await userManager.GetRolesAsync(user);
@@ -85,7 +86,7 @@ internal class AuthService(
             UserName = request.Email,
             Email = request.Email,
             DisplayName = request.DisplayName,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = dateTime.UtcNow,
             EmailConfirmed = false
         };
 

@@ -10,6 +10,13 @@ public class ProjectConfigEditorServiceTests(TestDatabaseFixture fixture)
 {
     private SigilDbContext Ctx() => TestHelper.CreateContext(fixture.ConnectionString);
 
+    private static IDateTime StubDateTime()
+    {
+        var dt = Substitute.For<IDateTime>();
+        dt.UtcNow.Returns(new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+        return dt;
+    }
+
     private static IProjectConfigService StubProjectConfig()
     {
         var svc = Substitute.For<IProjectConfigService>();
@@ -22,7 +29,7 @@ public class ProjectConfigEditorServiceTests(TestDatabaseFixture fixture)
     {
         await using var ctx = Ctx();
         var project = await TestHelper.CreateProjectAsync(ctx);
-        var service = new ProjectConfigEditorService(ctx, StubProjectConfig());
+        var service = new ProjectConfigEditorService(ctx, StubProjectConfig(), StubDateTime());
 
         await service.SetAsync(project.Id, "my_key", "my_value");
 
@@ -38,7 +45,7 @@ public class ProjectConfigEditorServiceTests(TestDatabaseFixture fixture)
     {
         await using var ctx = Ctx();
         var project = await TestHelper.CreateProjectAsync(ctx);
-        var service = new ProjectConfigEditorService(ctx, StubProjectConfig());
+        var service = new ProjectConfigEditorService(ctx, StubProjectConfig(), StubDateTime());
 
         await service.SetAsync(project.Id, "key", "original");
         await service.SetAsync(project.Id, "key", "updated");
@@ -55,7 +62,7 @@ public class ProjectConfigEditorServiceTests(TestDatabaseFixture fixture)
         await using var ctx = Ctx();
         var project = await TestHelper.CreateProjectAsync(ctx);
         var configService = StubProjectConfig();
-        var service = new ProjectConfigEditorService(ctx, configService);
+        var service = new ProjectConfigEditorService(ctx, configService, StubDateTime());
 
         await service.SetAsync(project.Id, "key", "val");
 
@@ -67,7 +74,7 @@ public class ProjectConfigEditorServiceTests(TestDatabaseFixture fixture)
     {
         await using var ctx = Ctx();
         var project = await TestHelper.CreateProjectAsync(ctx);
-        var service = new ProjectConfigEditorService(ctx, StubProjectConfig());
+        var service = new ProjectConfigEditorService(ctx, StubProjectConfig(), StubDateTime());
         await service.SetAsync(project.Id, "k1", "v1");
         await service.SetAsync(project.Id, "k2", "v2");
 
@@ -83,7 +90,7 @@ public class ProjectConfigEditorServiceTests(TestDatabaseFixture fixture)
         await using var ctx = Ctx();
         var project1 = await TestHelper.CreateProjectAsync(ctx);
         var project2 = await TestHelper.CreateProjectAsync(ctx);
-        var service = new ProjectConfigEditorService(ctx, StubProjectConfig());
+        var service = new ProjectConfigEditorService(ctx, StubProjectConfig(), StubDateTime());
         await service.SetAsync(project1.Id, "shared_key", "val1");
         await service.SetAsync(project2.Id, "shared_key", "val2");
 

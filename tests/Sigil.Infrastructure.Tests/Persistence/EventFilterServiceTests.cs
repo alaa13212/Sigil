@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Application.Models.Filters;

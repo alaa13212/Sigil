@@ -1,6 +1,4 @@
-using Microsoft.EntityFrameworkCore;
 using Sigil.Domain.Entities;
-using Sigil.Domain.Enums;
 using Sigil.Infrastructure.Persistence;
 using Sigil.Infrastructure.Persistence.Analyzers;
 using Sigil.Infrastructure.Tests.Fixtures;

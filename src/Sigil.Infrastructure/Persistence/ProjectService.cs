@@ -8,7 +8,7 @@ using Sigil.Domain.Enums;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class ProjectService(SigilDbContext dbContext, IAppConfigService appConfigService, INormalizationRuleEngine normalizationRuleEngine, IProjectCache projectCache) : IProjectService, IProjectEntityAccess
+internal class ProjectService(SigilDbContext dbContext, IAppConfigService appConfigService, INormalizationRuleEngine normalizationRuleEngine, IProjectCache projectCache, IDateTime dateTime) : IProjectService, IProjectEntityAccess
 {
     public async Task<Project> CreateProjectAsync(string name, Platform platform, int? teamId = null)
     {
@@ -31,7 +31,7 @@ internal class ProjectService(SigilDbContext dbContext, IAppConfigService appCon
             ProjectId = project.Id,
             Key = ProjectConfigKeys.HighVolumeThreshold,
             Value = "1000",
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = dateTime.UtcNow
         });
         await dbContext.SaveChangesAsync();
 

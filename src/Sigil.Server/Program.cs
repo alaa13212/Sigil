@@ -15,6 +15,7 @@ using Sigil.Server.Authorization;
 using Sigil.Server.Components;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseDefaultServiceProvider(options => options.ValidateOnBuild = true);
 
 // Add services to the container.
 builder.Services.AddControllers()

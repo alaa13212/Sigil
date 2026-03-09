@@ -463,7 +463,7 @@ internal class IssueService(
 
     public async Task<List<int>> GetHistogramAsync(int issueId, int days = 14)
     {
-        var since = DateTime.UtcNow.Date.AddDays(-days + 1);
+        var since = dateTime.UtcNow.Date.AddDays(-days + 1);
         var buckets = await dbContext.EventBuckets
             .Where(b => b.IssueId == issueId && b.BucketStart >= since)
             .GroupBy(b => b.BucketStart.Date)
@@ -482,7 +482,7 @@ internal class IssueService(
     public async Task<Dictionary<int, List<int>>> GetBulkHistogramsAsync(List<int> issueIds, int days = 14)
     {
         if (issueIds.Count == 0) return [];
-        var since = DateTime.UtcNow.Date.AddDays(-days + 1);
+        var since = dateTime.UtcNow.Date.AddDays(-days + 1);
 
         var buckets = await dbContext.EventBuckets
             .Where(b => issueIds.Contains(b.IssueId) && b.BucketStart >= since)

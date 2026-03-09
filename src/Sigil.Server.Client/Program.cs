@@ -6,6 +6,7 @@ using Sigil.Server.Client.Auth;
 using Sigil.Server.Client.DependencyInjection;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
+builder.UseDefaultServiceProvider(options => options.ValidateOnBuild = true);
 
 builder.Services.AddAuthorizationCore();
 builder.Services.AddCascadingAuthenticationState();

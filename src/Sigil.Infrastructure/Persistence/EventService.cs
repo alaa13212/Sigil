@@ -12,7 +12,7 @@ using Sigil.Infrastructure.Parsing.Models;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class EventService(SigilDbContext dbContext, ICompressionService compressionService) : IEventService, IEventIngestionService
+internal class EventService(SigilDbContext dbContext, ICompressionService compressionService, IDateTime dateTime) : IEventService, IEventIngestionService
 {
     private static readonly JsonSerializerOptions SnakeCaseOptions = new()
     {
@@ -43,7 +43,7 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
                 EventId = parsedEvent.EventId,
                 Timestamp = parsedEvent.Timestamp,
                 ReceivedAt = parsedEvent.ReceivedAt,
-                ProcessedAt = DateTime.UtcNow,
+                ProcessedAt = dateTime.UtcNow,
                 Message = parsedEvent.Message?.Truncate(8192),
                 ExceptionType = parsedEvent.ExceptionType,
                 Culprit = parsedEvent.Culprit?.Truncate(8192),

@@ -10,6 +10,13 @@ public class AppConfigEditorServiceTests(TestDatabaseFixture fixture)
 {
     private SigilDbContext Ctx() => TestHelper.CreateContext(fixture.ConnectionString);
 
+    private static IDateTime StubDateTime()
+    {
+        var dt = Substitute.For<IDateTime>();
+        dt.UtcNow.Returns(new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+        return dt;
+    }
+
     private static IAppConfigService StubAppConfig()
     {
         var svc = Substitute.For<IAppConfigService>();
@@ -23,7 +30,7 @@ public class AppConfigEditorServiceTests(TestDatabaseFixture fixture)
         var key = $"test_key_{Guid.NewGuid():N}";
         await using var ctx = Ctx();
         var appConfig = StubAppConfig();
-        var service = new AppConfigEditorService(ctx, appConfig);
+        var service = new AppConfigEditorService(ctx, appConfig, StubDateTime());
 
         await service.SetAsync(key, "my-value");
 
@@ -39,7 +46,7 @@ public class AppConfigEditorServiceTests(TestDatabaseFixture fixture)
         var key = $"test_key_{Guid.NewGuid():N}";
         await using var ctx = Ctx();
         var appConfig = StubAppConfig();
-        var service = new AppConfigEditorService(ctx, appConfig);
+        var service = new AppConfigEditorService(ctx, appConfig, StubDateTime());
 
         await service.SetAsync(key, "original");
         await service.SetAsync(key, "updated");
@@ -55,7 +62,7 @@ public class AppConfigEditorServiceTests(TestDatabaseFixture fixture)
         var key = $"test_key_{Guid.NewGuid():N}";
         await using var ctx = Ctx();
         var appConfig = StubAppConfig();
-        var service = new AppConfigEditorService(ctx, appConfig);
+        var service = new AppConfigEditorService(ctx, appConfig, StubDateTime());
 
         await service.SetAsync(key, "value");
 
@@ -67,7 +74,7 @@ public class AppConfigEditorServiceTests(TestDatabaseFixture fixture)
     {
         var key = $"test_key_{Guid.NewGuid():N}";
         await using var ctx = Ctx();
-        var service = new AppConfigEditorService(ctx, StubAppConfig());
+        var service = new AppConfigEditorService(ctx, StubAppConfig(), StubDateTime());
         await service.SetAsync(key, "value");
 
         var all = await service.GetAllAsync();
@@ -81,7 +88,7 @@ public class AppConfigEditorServiceTests(TestDatabaseFixture fixture)
     {
         var key = $"test_key_{Guid.NewGuid():N}";
         await using var ctx = Ctx();
-        var service = new AppConfigEditorService(ctx, StubAppConfig());
+        var service = new AppConfigEditorService(ctx, StubAppConfig(), StubDateTime());
 
         await service.SetAsync(key, null);
 

@@ -34,6 +34,13 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
         return config;
     }
 
+    private static IDateTime StubDateTime()
+    {
+        var dt = Substitute.For<IDateTime>();
+        dt.UtcNow.Returns(new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+        return dt;
+    }
+
     private static INormalizationRuleEngine StubNormEngine()
     {
         var engine = Substitute.For<INormalizationRuleEngine>();
@@ -45,7 +52,7 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task CreateProject_PersistsWithApiKey()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache());
+        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
 
         var project = await service.CreateProjectAsync("IntegrationTest Project", Platform.CSharp);
 
@@ -60,11 +67,11 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task GetProjectById_ExistingProject_ReturnsProject()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache());
+        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
         var created = await service.CreateProjectAsync("GetById Test", Platform.Python);
 
         await using var context2 = CreateContext();
-        var service2 = new ProjectService(context2, StubAppConfig(), StubNormEngine(), StubProjectCache());
+        var service2 = new ProjectService(context2, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
         var found = await service2.GetProjectByIdAsync(created.Id);
 
         found.Should().NotBeNull();
@@ -75,7 +82,7 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task GetProjectById_NonExistent_ReturnsNull()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache());
+        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
 
         var found = await service.GetProjectByIdAsync(999999);
 
@@ -86,7 +93,7 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task UpdateProject_ChangesName()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache());
+        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
         var created = await service.CreateProjectAsync("Before Rename", Platform.JavaScript);
 
         var updated = await service.UpdateProjectAsync(created.Id, "After Rename");
@@ -103,7 +110,7 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task DeleteProject_RemovesFromDatabase()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache());
+        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
         var created = await service.CreateProjectAsync("ToDelete", Platform.Go);
 
         var deleted = await service.DeleteProjectAsync(created.Id);
@@ -119,7 +126,7 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task DeleteProject_NonExistentId_ReturnsFalse()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache());
+        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
 
         var deleted = await service.DeleteProjectAsync(999999);
 
@@ -130,7 +137,7 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task RotateApiKey_ReturnsNewKey()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache());
+        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
         var created = await service.CreateProjectAsync("RotateKey Test", Platform.CSharp);
         var originalKey = created.ApiKey;
 
@@ -145,7 +152,7 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task GetAllProjects_ReturnsAll()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache());
+        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
         await service.CreateProjectAsync("All-Test-1", Platform.CSharp);
         await service.CreateProjectAsync("All-Test-2", Platform.Python);
 
@@ -158,7 +165,7 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task GetProjectDetail_ReturnsDsn()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache());
+        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
         var created = await service.CreateProjectAsync("DSN Test", Platform.CSharp);
 
         var detail = await service.GetProjectDetailAsync(created.Id);
@@ -173,7 +180,7 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task CreateProject_SeedsDefaultProjectConfig()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache());
+        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
         var created = await service.CreateProjectAsync("ConfigSeed Test", Platform.CSharp);
 
         await using var verifyCtx = CreateContext();

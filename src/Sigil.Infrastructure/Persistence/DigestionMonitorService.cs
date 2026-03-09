@@ -10,7 +10,8 @@ internal class DigestionMonitorService(
     SigilDbContext context,
     IOptions<BatchWorkersConfig> options,
     IRawEnvelopeService rawEnvelopeService,
-    IDigestionSignal digestionSignal
+    IDigestionSignal digestionSignal,
+    IDateTime dateTime
     ) : IDigestionMonitorService
 {
     public async Task<DigestionStats> GetStatsAsync()
@@ -44,7 +45,7 @@ internal class DigestionMonitorService(
             .ToList();
 
         // Rolling 60-minute throughput metrics
-        var since = DateTime.UtcNow.AddMinutes(-60);
+        var since = dateTime.UtcNow.AddMinutes(-60);
         var recentBatches = await context.DigestBatchMetrics
             .Where(m => m.RecordedAt >= since)
             .ToListAsync();

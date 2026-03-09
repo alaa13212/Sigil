@@ -15,6 +15,7 @@ internal class DigestionWorker(
     IServiceProvider services,
     IDigestionSignal signal,
     IOptions<BatchWorkersConfig> options,
+    IDateTime dateTime,
     ILogger<DigestionWorker> logger) : IWorker
 {
     private readonly int _batchSize = options.Value.GetOptions(nameof(DigestionWorker)).BatchSize;
@@ -109,7 +110,7 @@ internal class DigestionWorker(
 
                     dbContext.DigestBatchMetrics.Add(new DigestBatchMetric
                     {
-                        RecordedAt = DateTime.UtcNow,
+                        RecordedAt = dateTime.UtcNow,
                         ProjectId = group.Key,
                         EventCount = parsedEvents.Count,
                         QueueDepthAtStart = queueDepthAtStart,

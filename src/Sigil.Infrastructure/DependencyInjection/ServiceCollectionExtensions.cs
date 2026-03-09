@@ -43,7 +43,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEventRanker, EventRanker>();
         services.AddSingleton<IHashGenerator, DefaultHashGenerator>();
         services.AddScoped<ICompressionService, GzipCompressionService>();
-        services.AddScoped<IDateTime, DateTimeProvider>();
+        services.AddSingleton<IDateTime, DateTimeProvider>();
         services.AddScoped<EventService>();
         services.AddScoped<IEventService>(UseExisting<EventService>);
         services.AddScoped<IEventIngestionService>(UseExisting<EventService>);

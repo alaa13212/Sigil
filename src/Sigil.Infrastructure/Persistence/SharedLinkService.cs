@@ -7,7 +7,7 @@ using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class SharedLinkService(SigilDbContext dbContext, IIssueService issueService, IEventService eventService) : ISharedLinkService
+internal class SharedLinkService(SigilDbContext dbContext, IIssueService issueService, IEventService eventService, IDateTime dateTime) : ISharedLinkService
 {
     private static readonly TimeSpan DefaultDuration = TimeSpan.FromHours(24);
     private static readonly TimeSpan MaxDuration = TimeSpan.FromDays(7);
@@ -23,8 +23,8 @@ internal class SharedLinkService(SigilDbContext dbContext, IIssueService issueSe
             Token = Guid.NewGuid(),
             IssueId = issueId,
             CreatedByUserId = userId,
-            CreatedAt = DateTime.UtcNow,
-            ExpiresAt = DateTime.UtcNow + ttl
+            CreatedAt = dateTime.UtcNow,
+            ExpiresAt = dateTime.UtcNow + ttl
         };
 
         dbContext.SharedIssueLinks.Add(link);
@@ -74,6 +74,6 @@ internal class SharedLinkService(SigilDbContext dbContext, IIssueService issueSe
     {
         var link = await dbContext.SharedIssueLinks
             .FirstOrDefaultAsync(l => l.Token == token);
-        return link is null || link.ExpiresAt < DateTime.UtcNow ? null : link;
+        return link is null || link.ExpiresAt < dateTime.UtcNow ? null : link;
     }
 }

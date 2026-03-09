@@ -16,7 +16,8 @@ internal class PasskeyService(
     SigilDbContext db,
     UserManager<User> userManager,
     SignInManager<User> signInManager,
-    PasskeyChallengeStore challengeStore) : IPasskeyService
+    PasskeyChallengeStore challengeStore,
+    IDateTime dateTime) : IPasskeyService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -119,7 +120,7 @@ internal class PasskeyService(
             CredentialType = credential.Type.ToString(),
             AaGuid = credential.AaGuid,
             DisplayName = response.DisplayName,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = dateTime.UtcNow,
             IsDiscoverable = true
         };
 
@@ -128,7 +129,7 @@ internal class PasskeyService(
 
         var user = await userManager.FindByIdAsync(userId.ToString());
         var roles = user is not null ? await userManager.GetRolesAsync(user) : (IList<string>)[];
-        return AuthResult.Success(new UserInfo(userId, user?.Email ?? "", user?.DisplayName, user?.CreatedAt ?? DateTime.UtcNow, user?.LastLogin, roles.ToList(), user?.EmailConfirmed ?? false));
+        return AuthResult.Success(new UserInfo(userId, user?.Email ?? "", user?.DisplayName, user?.CreatedAt ?? dateTime.UtcNow, user?.LastLogin, roles.ToList(), user?.EmailConfirmed ?? false));
     }
 
     public async Task<PasskeyAssertionOptions> GetAssertionOptionsAsync()
@@ -203,7 +204,7 @@ internal class PasskeyService(
         }
 
         passkey.SignatureCounter = result.SignCount;
-        passkey.LastUsedAt = DateTime.UtcNow;
+        passkey.LastUsedAt = dateTime.UtcNow;
         db.Passkeys.Update(passkey);
         await db.SaveChangesAsync();
 
@@ -211,7 +212,7 @@ internal class PasskeyService(
         if (user is null)
             return AuthResult.Failure("User account not found.");
 
-        user.LastLogin = DateTime.UtcNow;
+        user.LastLogin = dateTime.UtcNow;
         await userManager.UpdateAsync(user);
 
         await signInManager.SignInAsync(user, isPersistent: false);

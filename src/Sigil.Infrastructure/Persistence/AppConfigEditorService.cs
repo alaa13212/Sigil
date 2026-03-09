@@ -4,7 +4,7 @@ using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class AppConfigEditorService(SigilDbContext dbContext, IAppConfigService appConfigService) : IAppConfigEditorService
+internal class AppConfigEditorService(SigilDbContext dbContext, IAppConfigService appConfigService, IDateTime dateTime) : IAppConfigEditorService
 {
     public async Task<Dictionary<string, string?>> GetAllAsync()
     {
@@ -17,7 +17,7 @@ internal class AppConfigEditorService(SigilDbContext dbContext, IAppConfigServic
         if (existing is not null)
         {
             existing.Value = value;
-            existing.UpdatedAt = DateTime.UtcNow;
+            existing.UpdatedAt = dateTime.UtcNow;
         }
         else
         {
@@ -25,7 +25,7 @@ internal class AppConfigEditorService(SigilDbContext dbContext, IAppConfigServic
             {
                 Key = key,
                 Value = value,
-                UpdatedAt = DateTime.UtcNow
+                UpdatedAt = dateTime.UtcNow
             });
         }
 

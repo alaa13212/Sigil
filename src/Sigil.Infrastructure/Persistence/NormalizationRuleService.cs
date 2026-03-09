@@ -50,7 +50,7 @@ internal class NormalizationRuleService(
             Priority = 1000 + (DefaultNormalizationRules.Count - index) * 10,
             Enabled = true,
             Description = preset.Description,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = dateTime.UtcNow
         }).ToList();
     }
 

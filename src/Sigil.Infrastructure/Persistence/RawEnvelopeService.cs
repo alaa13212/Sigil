@@ -4,7 +4,7 @@ using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class RawEnvelopeService(SigilDbContext context) : IRawEnvelopeService
+internal class RawEnvelopeService(SigilDbContext context, IDateTime dateTime) : IRawEnvelopeService
 {
     public async Task StoreAsync(int projectId, string rawData, DateTime receivedAt)
     {
@@ -67,7 +67,7 @@ internal class RawEnvelopeService(SigilDbContext context) : IRawEnvelopeService
             .AsTracking()
             .ToListAsync();
 
-        var now = DateTime.UtcNow;
+        var now = dateTime.UtcNow;
         foreach (var entity in entities)
         {
             entity.ProcessedAt = now;

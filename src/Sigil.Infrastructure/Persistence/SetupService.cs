@@ -16,7 +16,8 @@ internal class SetupService(
     IAppConfigService appConfigService,
     IAppConfigEditorService appConfigEditorService,
     INormalizationRuleEngine normalizationRuleEngine,
-    IDatabaseMigrator databaseMigrator) : ISetupService
+    IDatabaseMigrator databaseMigrator,
+    IDateTime dateTime) : ISetupService
 {
     // Cached per process lifetime; null = unchecked, false = up to date, true = pending
     private static bool? _hasPendingMigrationsCache;
@@ -92,7 +93,7 @@ internal class SetupService(
             UserName = request.AdminEmail,
             Email = request.AdminEmail,
             DisplayName = request.AdminDisplayName,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = dateTime.UtcNow,
             EmailConfirmed = true
         };
 
@@ -139,7 +140,7 @@ internal class SetupService(
             ProjectId = project.Id,
             Key = ProjectConfigKeys.HighVolumeThreshold,
             Value = "1000",
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = dateTime.UtcNow
         });
 
         // Save host URL config if provided

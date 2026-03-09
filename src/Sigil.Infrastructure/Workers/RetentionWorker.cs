@@ -7,7 +7,7 @@ using Sigil.Infrastructure.Persistence;
 
 namespace Sigil.Infrastructure.Workers;
 
-internal class RetentionWorker(IServiceProvider services, IAppConfigService appConfig, IProjectConfigService projectConfig, ILogger<RetentionWorker> logger) : BackgroundService
+internal class RetentionWorker(IServiceProvider services, IAppConfigService appConfig, IProjectConfigService projectConfig, IDateTime dateTime, ILogger<RetentionWorker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -55,7 +55,7 @@ internal class RetentionWorker(IServiceProvider services, IAppConfigService appC
     private async Task CleanExpiredSharedLinksAsync(SigilDbContext dbContext, CancellationToken ct)
     {
         var deleted = await dbContext.SharedIssueLinks
-            .Where(l => l.ExpiresAt < DateTime.UtcNow)
+            .Where(l => l.ExpiresAt < dateTime.UtcNow)
             .ExecuteDeleteAsync(ct);
 
         if (deleted > 0)
@@ -65,7 +65,7 @@ internal class RetentionWorker(IServiceProvider services, IAppConfigService appC
     private async Task CleanFailedEnvelopesAsync(SigilDbContext dbContext, CancellationToken ct)
     {
         var failedMaxAgeDays = appConfig.RetentionFailedEnvelopeMaxAgeDays;
-        var cutoff = DateTime.UtcNow.AddDays(-failedMaxAgeDays);
+        var cutoff = dateTime.UtcNow.AddDays(-failedMaxAgeDays);
 
         var deleted = await dbContext.RawEnvelopes
             .Where(r => r.Error != null && r.ReceivedAt < cutoff)
@@ -78,7 +78,7 @@ internal class RetentionWorker(IServiceProvider services, IAppConfigService appC
     private async Task EnforceAgeRetentionAsync(SigilDbContext dbContext, int projectId, CancellationToken ct)
     {
         var maxAgeDays = projectConfig.RetentionMaxAgeDays(projectId) ?? appConfig.RetentionDefaultMaxAgeDays;
-        var cutoff = DateTime.UtcNow.AddDays(-maxAgeDays);
+        var cutoff = dateTime.UtcNow.AddDays(-maxAgeDays);
 
         var deleted = await dbContext.Events
             .Where(e => e.ProjectId == projectId && e.Timestamp < cutoff)

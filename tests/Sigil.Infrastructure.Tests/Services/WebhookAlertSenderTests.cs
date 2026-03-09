@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using Sigil.Infrastructure.Services;
 
 namespace Sigil.Infrastructure.Tests.Services;

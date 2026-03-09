@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Infrastructure.Persistence;
 using Sigil.Infrastructure.Tests.Fixtures;
@@ -165,5 +164,124 @@ public class MergeSetServiceTests(TestDatabaseFixture fixture)
         await using var verifyCtx = Ctx();
         var set = await verifyCtx.MergeSets.FindAsync(created.Id);
         set!.PrimaryIssueId.Should().Be(issue2.Id);
+    }
+
+    // ── BulkAddIssuesAsync ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task BulkAdd_AddsIssuesToExistingSet()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var user = await TestHelper.CreateUserAsync(ctx);
+        var issue1 = await TestHelper.CreateIssueAsync(ctx, project.Id, "I1");
+        var issue2 = await TestHelper.CreateIssueAsync(ctx, project.Id, "I2");
+        var issue3 = await TestHelper.CreateIssueAsync(ctx, project.Id, "I3");
+        var service = new MergeSetService(ctx, StubActivityLogger(), StubIssueCache(), StubDateTime());
+        var created = await service.CreateAsync(project.Id, [issue1.Id, issue2.Id], user.Id);
+
+        await using var ctx2 = Ctx();
+        var service2 = new MergeSetService(ctx2, StubActivityLogger(), StubIssueCache(), StubDateTime());
+        var result = await service2.BulkAddIssuesAsync(created.Id, [issue3.Id], user.Id);
+
+        result.Members.Should().HaveCount(3);
+        result.Members.Should().Contain(m => m.IssueId == issue3.Id);
+    }
+
+    [Fact]
+    public async Task BulkAdd_EmptyList_Throws()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var user = await TestHelper.CreateUserAsync(ctx);
+        var issue1 = await TestHelper.CreateIssueAsync(ctx, project.Id, "I1");
+        var issue2 = await TestHelper.CreateIssueAsync(ctx, project.Id, "I2");
+        var service = new MergeSetService(ctx, StubActivityLogger(), StubIssueCache(), StubDateTime());
+        var created = await service.CreateAsync(project.Id, [issue1.Id, issue2.Id], user.Id);
+
+        await using var ctx2 = Ctx();
+        var service2 = new MergeSetService(ctx2, StubActivityLogger(), StubIssueCache(), StubDateTime());
+        var act = () => service2.BulkAddIssuesAsync(created.Id, [], user.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*No issue IDs*");
+    }
+
+    [Fact]
+    public async Task BulkAdd_IssueFromDifferentProject_Throws()
+    {
+        await using var ctx = Ctx();
+        var project1 = await TestHelper.CreateProjectAsync(ctx);
+        var project2 = await TestHelper.CreateProjectAsync(ctx);
+        var user = await TestHelper.CreateUserAsync(ctx);
+        var issue1 = await TestHelper.CreateIssueAsync(ctx, project1.Id, "I1");
+        var issue2 = await TestHelper.CreateIssueAsync(ctx, project1.Id, "I2");
+        var issueOther = await TestHelper.CreateIssueAsync(ctx, project2.Id, "Other");
+        var service = new MergeSetService(ctx, StubActivityLogger(), StubIssueCache(), StubDateTime());
+        var created = await service.CreateAsync(project1.Id, [issue1.Id, issue2.Id], user.Id);
+
+        await using var ctx2 = Ctx();
+        var service2 = new MergeSetService(ctx2, StubActivityLogger(), StubIssueCache(), StubDateTime());
+        var act = () => service2.BulkAddIssuesAsync(created.Id, [issueOther.Id], user.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*not found*");
+    }
+
+    // ── RefreshAggregatesAsync ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task RefreshAggregates_RecalculatesOccurrenceCount()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var user = await TestHelper.CreateUserAsync(ctx);
+        var issue1 = await TestHelper.CreateIssueAsync(ctx, project.Id, "I1");
+        var issue2 = await TestHelper.CreateIssueAsync(ctx, project.Id, "I2");
+        issue1.OccurrenceCount = 10;
+        issue2.OccurrenceCount = 5;
+        await ctx.SaveChangesAsync();
+
+        var service = new MergeSetService(ctx, StubActivityLogger(), StubIssueCache(), StubDateTime());
+        var created = await service.CreateAsync(project.Id, [issue1.Id, issue2.Id], user.Id);
+
+        // Simulate changing occurrence counts and refreshing
+        await using var ctx2 = Ctx();
+        var trackedIssue1 = await ctx2.Issues.FindAsync(issue1.Id);
+        trackedIssue1!.OccurrenceCount = 20;
+        await ctx2.SaveChangesAsync();
+
+        var service2 = new MergeSetService(ctx2, StubActivityLogger(), StubIssueCache(), StubDateTime());
+        await service2.RefreshAggregatesAsync([created.Id]);
+
+        await using var verify = Ctx();
+        var mergeSet = await verify.MergeSets.FindAsync(created.Id);
+        mergeSet!.OccurrenceCount.Should().Be(25, "20 + 5");
+    }
+
+    [Fact]
+    public async Task RefreshAggregates_RecalculatesFirstAndLastSeen()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var user = await TestHelper.CreateUserAsync(ctx);
+        var now = DateTime.UtcNow;
+        var issue1 = await TestHelper.CreateIssueAsync(ctx, project.Id, "I1");
+        var issue2 = await TestHelper.CreateIssueAsync(ctx, project.Id, "I2");
+        issue1.FirstSeen = now.AddDays(-10);
+        issue1.LastSeen = now.AddDays(-5);
+        issue2.FirstSeen = now.AddDays(-3);
+        issue2.LastSeen = now;
+        await ctx.SaveChangesAsync();
+
+        var service = new MergeSetService(ctx, StubActivityLogger(), StubIssueCache(), StubDateTime());
+        var created = await service.CreateAsync(project.Id, [issue1.Id, issue2.Id], user.Id);
+
+        await using var ctx2 = Ctx();
+        var service2 = new MergeSetService(ctx2, StubActivityLogger(), StubIssueCache(), StubDateTime());
+        await service2.RefreshAggregatesAsync([created.Id]);
+
+        await using var verify = Ctx();
+        var mergeSet = await verify.MergeSets.FindAsync(created.Id);
+        mergeSet!.FirstSeen.Should().BeCloseTo(now.AddDays(-10), TimeSpan.FromSeconds(1));
+        mergeSet.LastSeen.Should().BeCloseTo(now, TimeSpan.FromSeconds(5));
     }
 }
