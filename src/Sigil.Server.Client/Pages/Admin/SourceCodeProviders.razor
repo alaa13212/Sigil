@@ -1,0 +1,276 @@
+@page "/admin/settings/source-code"
+@attribute [Authorize]
+@layout AdminSettingsLayout
+@using Sigil.Application.Models.SourceCode
+@using Sigil.Domain.Entities
+@inject ISourceCodeService SourceCodeService
+
+<PageTitle>Source Code Providers — Sigil</PageTitle>
+
+<div class="max-w-3xl space-y-6">
+    <div class="flex items-center justify-between">
+        <h2 class="text-lg font-bold">Source Code Providers</h2>
+        <button class="btn btn-primary btn-sm" @onclick="OpenCreate">+ New Provider</button>
+    </div>
+
+    <div class="alert alert-info text-sm">
+        <div>
+            <p class="font-semibold mb-1">Personal Access Tokens (PAT) only</p>
+            <p>All integrations use PATs — not OAuth. Generate a token from your provider's settings and paste it here. Tokens are encrypted at rest.</p>
+        </div>
+    </div>
+
+    @if (loading)
+    {
+        <div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>
+    }
+    else if (providers.Count == 0)
+    {
+        <EmptyState Title="No providers configured" Description="Add a source code provider to enable source context in stack traces and commit info on releases." />
+    }
+    else
+    {
+        <div class="space-y-3">
+            @foreach (var provider in providers)
+            {
+                <div class="card bg-base-100">
+                    <div class="card-body p-4">
+                        <div class="flex items-center justify-between gap-4">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="font-semibold">@provider.Name</span>
+                                    <span class="badge badge-sm badge-info">@provider.Type</span>
+                                    <span class="text-xs opacity-50 font-mono">@provider.BaseUrl</span>
+                                </div>
+                                <div class="text-xs opacity-60 mt-1">
+                                    Added @provider.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC
+                                </div>
+                            </div>
+                            <div class="flex gap-1 shrink-0">
+                                <button class="btn btn-ghost btn-xs" @onclick="() => OpenTest(provider)">Test</button>
+                                <button class="btn btn-ghost btn-xs text-error" @onclick="() => DeleteProvider(provider.Id)">Delete</button>
+                            </div>
+                        </div>
+                        @if (deleteError == provider.Id)
+                        {
+                            <div class="text-xs text-error mt-1">Cannot delete — provider is linked to one or more repositories.</div>
+                        }
+                        @if (testResult.ContainsKey(provider.Id))
+                        {
+                            <div class="text-xs mt-1 @(testResult[provider.Id] ? "text-success" : "text-error")">
+                                @(testResult[provider.Id] ? "Connection successful." : "Connection failed. Check token and permissions.")
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (showModal)
+{
+    <ModalBase IsOpen="true" OnClose="CloseModal"
+               Title="@(isTestModal ? "Test Connection" : "New Source Code Provider")"
+               Size="ModalSize.Medium">
+        @if (isTestModal)
+        {
+            <form class="space-y-4" @onsubmit="RunTest" @onsubmit:preventDefault>
+                <p class="text-sm opacity-70">Enter a repository you have access to for testing the connection.</p>
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Repository Owner</legend>
+                    <input class="input input-sm w-full font-mono" @bind="testOwner" placeholder="e.g. myorg" />
+                </fieldset>
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Repository Name</legend>
+                    <input class="input input-sm w-full font-mono" @bind="testRepo" placeholder="e.g. myrepo" />
+                </fieldset>
+                @if (!string.IsNullOrEmpty(formError))
+                {
+                    <div class="alert alert-error text-sm">@formError</div>
+                }
+                <div class="modal-action">
+                    <button type="button" class="btn btn-ghost btn-sm" @onclick="CloseModal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm" disabled="@formSaving">
+                        @(formSaving ? "Testing…" : "Test Connection")
+                    </button>
+                </div>
+            </form>
+        }
+        else
+        {
+            <form class="space-y-4" @onsubmit="SaveProvider" @onsubmit:preventDefault>
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Name</legend>
+                    <input class="input input-sm w-full" @bind="formName" placeholder="e.g. My GitHub Org" />
+                </fieldset>
+
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Provider Type</legend>
+                    <EnumSelect TEnum="ProviderType" @bind-Value="formType" Class="select select-sm w-full" />
+                </fieldset>
+
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Base URL</legend>
+                    <input class="input input-sm w-full font-mono" @bind="formBaseUrl"
+                           placeholder="@GetBaseUrlPlaceholder(formType)" />
+                    <label class="fieldset-label">Use the default for cloud or your self-hosted instance URL.</label>
+                </fieldset>
+
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Personal Access Token</legend>
+                    <input type="password" class="input input-sm w-full font-mono" @bind="formToken" placeholder="ghp_..." />
+                </fieldset>
+
+                <details class="collapse collapse-arrow bg-base-200 rounded-box">
+                    <summary class="collapse-title text-sm font-medium">How to generate a token</summary>
+                    <div class="collapse-content text-sm opacity-80 space-y-2">
+                        @if (formType == ProviderType.GitHub)
+                        {
+                            <p><strong>GitHub:</strong> Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token. Required scope: <code>repo</code> (for private repos) or <code>public_repo</code> (public only).</p>
+                        }
+                        else if (formType == ProviderType.GitLab)
+                        {
+                            <p><strong>GitLab:</strong> User Settings → Access Tokens → Add new token. Required scopes: <code>read_repository</code>.</p>
+                        }
+                        else
+                        {
+                            <p><strong>Bitbucket:</strong> Account settings → App passwords → Create app password. Enter as <code>username:app_password</code>. Required permission: <code>Repositories: Read</code>.</p>
+                        }
+                    </div>
+                </details>
+
+                @if (!string.IsNullOrEmpty(formError))
+                {
+                    <div class="alert alert-error text-sm">@formError</div>
+                }
+
+                <div class="modal-action">
+                    <button type="button" class="btn btn-ghost btn-sm" @onclick="CloseModal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm" disabled="@formSaving">
+                        @(formSaving ? "Saving…" : "Add Provider")
+                    </button>
+                </div>
+            </form>
+        }
+    </ModalBase>
+}
+
+@code {
+    private List<SourceCodeProviderResponse> providers = [];
+    private bool loading = true;
+    private int? deleteError;
+    private Dictionary<int, bool> testResult = [];
+
+    private bool showModal;
+    private bool isTestModal;
+    private int? testingProviderId;
+    private string testOwner = "";
+    private string testRepo = "";
+    private string formName = "";
+    private ProviderType formType = ProviderType.GitHub;
+    private string formBaseUrl = "https://github.com";
+    private string formToken = "";
+    private string formError = "";
+    private bool formSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        providers = await SourceCodeService.GetProvidersAsync();
+        loading = false;
+    }
+
+    private void OpenCreate()
+    {
+        isTestModal = false;
+        formName = "";
+        formType = ProviderType.GitHub;
+        formBaseUrl = "https://github.com";
+        formToken = "";
+        formError = "";
+        showModal = true;
+    }
+
+    private void OpenTest(SourceCodeProviderResponse provider)
+    {
+        isTestModal = true;
+        testingProviderId = provider.Id;
+        testOwner = "";
+        testRepo = "";
+        formError = "";
+        showModal = true;
+    }
+
+    private void CloseModal() => showModal = false;
+
+    private async Task SaveProvider()
+    {
+        if (string.IsNullOrWhiteSpace(formName) || string.IsNullOrWhiteSpace(formToken))
+        {
+            formError = "Name and token are required.";
+            return;
+        }
+
+        formSaving = true;
+        formError = "";
+        try
+        {
+            var created = await SourceCodeService.AddProviderAsync(
+                new CreateProviderRequest(formName, formType, formBaseUrl, formToken), Guid.Empty);
+            providers.Add(created);
+            showModal = false;
+        }
+        catch (Exception ex)
+        {
+            formError = ex.Message;
+        }
+        finally
+        {
+            formSaving = false;
+        }
+    }
+
+    private async Task RunTest()
+    {
+        if (string.IsNullOrWhiteSpace(testOwner) || string.IsNullOrWhiteSpace(testRepo))
+        {
+            formError = "Owner and repository name are required.";
+            return;
+        }
+
+        formSaving = true;
+        formError = "";
+        try
+        {
+            var ok = await SourceCodeService.TestConnectionAsync(testingProviderId!.Value, testOwner, testRepo);
+            testResult[testingProviderId!.Value] = ok;
+            showModal = false;
+        }
+        catch (Exception ex)
+        {
+            formError = ex.Message;
+        }
+        finally
+        {
+            formSaving = false;
+        }
+    }
+
+    private async Task DeleteProvider(int id)
+    {
+        deleteError = null;
+        testResult.Remove(id);
+        var deleted = await SourceCodeService.DeleteProviderAsync(id);
+        if (deleted)
+            providers.RemoveAll(p => p.Id == id);
+        else
+            deleteError = id;
+    }
+
+    private static string GetBaseUrlPlaceholder(ProviderType type) => type switch
+    {
+        ProviderType.GitLab => "https://gitlab.com",
+        ProviderType.Bitbucket => "https://bitbucket.org",
+        _ => "https://github.com"
+    };
+}

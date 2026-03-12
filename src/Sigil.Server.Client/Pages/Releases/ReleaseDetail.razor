@@ -1,8 +1,10 @@
 @page "/projects/{ProjectId:int}/releases/{ReleaseId:int}"
 @attribute [Authorize]
 @using Sigil.Application.Models.Releases
+@using Sigil.Application.Models.SourceCode
 @inject IReleaseHealthService ReleaseHealthService
 @inject IIssueService IssueService
+@inject ISourceCodeService SourceCodeSvc
 
 <PageTitle>Release — Sigil</PageTitle>
 
@@ -34,7 +36,35 @@ else
 
             @if (!string.IsNullOrEmpty(release.CommitSha))
             {
-                <div class="badge badge-outline font-mono text-xs">@release.CommitSha[..Math.Min(7, release.CommitSha.Length)]</div>
+                @if (commitInfo != null)
+                {
+                    <div class="text-right space-y-1">
+                        @if (commitInfo.Url != null)
+                        {
+                            <a href="@commitInfo.Url" target="_blank" class="badge badge-outline font-mono text-xs hover:badge-primary">
+                                @release.CommitSha[..Math.Min(7, release.CommitSha.Length)] ↗
+                            </a>
+                        }
+                        else
+                        {
+                            <div class="badge badge-outline font-mono text-xs">@release.CommitSha[..Math.Min(7, release.CommitSha.Length)]</div>
+                        }
+                        @if (!string.IsNullOrEmpty(commitInfo.Message))
+                        {
+                            <div class="text-xs opacity-60 max-w-xs truncate" title="@commitInfo.Message">
+                                @commitInfo.Message.Split('\n')[0]
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(commitInfo.AuthorName))
+                        {
+                            <div class="text-xs opacity-50">by @commitInfo.AuthorName</div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="badge badge-outline font-mono text-xs">@release.CommitSha[..Math.Min(7, release.CommitSha.Length)]</div>
+                }
             }
         </div>
 
@@ -119,6 +149,7 @@ else
     [Inject] private NavigationManager Navigation { get; set; } = default!;
 
     private ReleaseDetailResponse? release;
+    private CommitInfo? commitInfo;
     private bool loading = true;
     private List<int> _releaseHistogram = [];
 
@@ -126,12 +157,26 @@ else
     {
         loading = true;
         _releaseHistogram = [];
+        commitInfo = null;
         try { release = await ReleaseHealthService.GetReleaseDetailAsync(ReleaseId); }
         catch { release = null; }
         loading = false;
 
+        if (release?.CommitSha != null)
+           await LoadCommitInfoAsync(release.CommitSha);
+
         if (release?.TopIssues.Count > 0)
-            _ = LoadHistogramAsync(release.TopIssues.Select(i => i.IssueId).ToList());
+            await LoadHistogramAsync(release.TopIssues.Select(i => i.IssueId).ToList());
+    }
+
+    private async Task LoadCommitInfoAsync(string commitSha)
+    {
+        try
+        {
+            commitInfo = await SourceCodeSvc.GetCommitInfoAsync(ProjectId, commitSha);
+            StateHasChanged();
+        }
+        catch { /* ignore — commit info is best-effort */ }
     }
 
     private async Task LoadHistogramAsync(List<int> issueIds)

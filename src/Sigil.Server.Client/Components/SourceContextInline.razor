@@ -1,0 +1,175 @@
+@using Sigil.Application.Interfaces
+@using Sigil.Application.Models.Events
+@using Sigil.Application.Models.SourceCode
+@inject ISourceCodeService SourceCodeSvc
+@inject IJSRuntime Js
+
+@if (HasSdkContext)
+{
+    <div class="mt-1 bg-base-300 rounded px-3 py-2 text-xs font-mono overflow-x-auto">
+        @{ var sdkLines = BuildSdkLines().ToList(); }
+        @for (var i = 0; i < sdkLines.Count; i++)
+        {
+            var line = sdkLines[i];
+            var isTarget = line.LineNumber == Frame.LineNumber;
+            var highlighted = _highlightedLines != null && i < _highlightedLines.Length
+                ? _highlightedLines[i] : null;
+            <div class="@(isTarget ? "bg-warning/20 font-bold" : "")">
+                <span class="opacity-50 select-none mr-2 inline-block w-8 text-right">@line.LineNumber</span>@if (highlighted != null)
+                {<span>@((MarkupString)highlighted)</span>}else{@line.Content}
+            </div>
+        }
+    </div>
+}
+else if (CanLoadFromVcs)
+{
+    @if (_loading)
+    {
+        <span class="mt-1 text-xs opacity-50">Loading…</span>
+    }
+    else if (_failed)
+    {
+        <span class="mt-1 text-xs text-error">Could not load source.</span>
+    }
+    else if (_context != null)
+    {
+        <div class="mt-1 bg-base-300 rounded whitespace-pre px-3 py-2 text-xs font-mono overflow-x-auto relative">
+            @if(_context.FileUrl != null)
+            {
+                <a class="stretched-link" href="@_context.FileUrl" target="_blank"></a>
+            }
+            @for (var i = 0; i < _context.Lines.Count; i++)
+            {
+                var line = _context.Lines[i];
+                var isTarget = line.LineNumber == Frame.LineNumber;
+                var highlighted = _highlightedLines != null && i < _highlightedLines.Length
+                    ? _highlightedLines[i]
+                    : null;
+                <div class="@(isTarget ? "bg-warning/20 font-bold" : "")">
+                    <span class="opacity-50 select-none mr-2 inline-block w-8 text-right">@line.LineNumber</span>
+                    @if (highlighted != null)
+                    {
+                        <span>@((MarkupString)highlighted)</span>
+                    }
+                    else
+                    {
+                        @line.Content
+                    }
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public StackFrameResponse Frame { get; set; } = default!;
+    [Parameter] public long? EventId { get; set; }
+    [Parameter] public bool HasLinkedRepository { get; set; }
+
+    private SourceContextResponse? _context;
+    private bool _loading;
+    private bool _failed;
+    private string[]? _highlightedLines;
+    private string _lastHighlightedCode = "";
+
+    private bool HasSdkContext =>
+        Frame.ContextLine != null || Frame.PreContext?.Length > 0 || Frame.PostContext?.Length > 0;
+
+    private bool CanLoadFromVcs =>
+        HasLinkedRepository && EventId.HasValue && !string.IsNullOrEmpty(Frame.Filename) && Frame.LineNumber.HasValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!HasSdkContext && CanLoadFromVcs)
+        {
+            _loading = true;
+            try
+            {
+                _context = await SourceCodeSvc.GetSourceContextForEventAsync(
+                    EventId!.Value, Frame.Filename!, Frame.LineNumber!.Value);
+                _failed = _context == null;
+            }
+            catch
+            {
+                _failed = true;
+            }
+            finally
+            {
+                _loading = false;
+            }
+        }
+    }
+
+    private IEnumerable<SourceLine> BuildSdkLines()
+    {
+        var result = new List<SourceLine>();
+        var targetLine = Frame.LineNumber ?? 0;
+
+        if (Frame.PreContext != null)
+            for (int i = 0; i < Frame.PreContext.Length; i++)
+                result.Add(new SourceLine(targetLine - Frame.PreContext.Length + i, Frame.PreContext[i]));
+
+        if (Frame.ContextLine != null)
+            result.Add(new SourceLine(targetLine, Frame.ContextLine));
+
+        if (Frame.PostContext != null)
+            for (int i = 0; i < Frame.PostContext.Length; i++)
+                result.Add(new SourceLine(targetLine + 1 + i, Frame.PostContext[i]));
+
+        return result;
+    }
+
+    private string GetCurrentCode()
+    {
+        if (HasSdkContext)
+            return string.Join("\n", BuildSdkLines().Select(l => l.Content));
+        if (_context != null)
+            return string.Join("\n", _context.Lines.Select(l => l.Content));
+        return "";
+    }
+
+    private static string? LanguageFromFilename(string? filename)
+    {
+        if (filename == null) return null;
+        return Path.GetExtension(filename).ToLowerInvariant() switch
+        {
+            ".cs"                           => "csharp",
+            ".js" or ".jsx" or ".mjs"       => "javascript",
+            ".ts" or ".tsx"                 => "typescript",
+            ".py"                           => "python",
+            ".java"                         => "java",
+            ".rb"                           => "ruby",
+            ".go"                           => "go",
+            ".rs"                           => "rust",
+            ".php"                          => "php",
+            ".swift"                        => "swift",
+            ".kt" or ".kts"                 => "kotlin",
+            ".cpp" or ".cc" or ".cxx"       => "cpp",
+            ".c" or ".h"                    => "c",
+            ".html" or ".htm"               => "html",
+            ".css"                          => "css",
+            ".sql"                          => "sql",
+            ".sh" or ".bash"                => "bash",
+            ".xml"                          => "xml",
+            ".json"                         => "json",
+            ".yaml" or ".yml"               => "yaml",
+            _                               => null
+        };
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var code = GetCurrentCode();
+        if (string.IsNullOrEmpty(code) || code == _lastHighlightedCode) return;
+
+        _lastHighlightedCode = code;
+        try
+        {
+            var language = LanguageFromFilename(Frame.Filename);
+            var html = await Js.InvokeAsync<string>("sigilHighlightCode", code, language);
+            _highlightedLines = html.Split('\n');
+            StateHasChanged();
+        }
+        catch { /* hljs not available */ }
+    }
+}

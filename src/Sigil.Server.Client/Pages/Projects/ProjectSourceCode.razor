@@ -1,0 +1,183 @@
+@page "/projects/{ProjectId:int}/settings/source-code"
+@attribute [Authorize]
+@using Sigil.Application.Models.SourceCode
+@using Sigil.Domain.Entities
+@inject ISourceCodeService SourceCodeService
+@layout ProjectSettingsLayout
+
+<PageTitle>Source Code — Sigil</PageTitle>
+
+<div class="max-w-2xl space-y-6">
+    <div class="flex items-center justify-between">
+        <h2 class="text-lg font-bold">Linked Repositories</h2>
+        <button class="btn btn-primary btn-sm" @onclick="OpenLink">+ Link Repository</button>
+    </div>
+
+    <div class="alert alert-info text-sm">
+        <div>
+            <p>Link a repository to enable source context in stack traces and commit information on releases. A source code provider must be configured in <a href="/admin/settings/source-code" class="link">Admin → Settings → Source Code</a> first.</p>
+        </div>
+    </div>
+
+    @if (loading)
+    {
+        <div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>
+    }
+    else if (repos.Count == 0)
+    {
+        <EmptyState Title="No repositories linked" Description="Link a repository to show source code context alongside stack frames." />
+    }
+    else
+    {
+        <div class="space-y-3">
+            @foreach (var repo in repos)
+            {
+                <div class="card bg-base-100">
+                    <div class="card-body p-4">
+                        <div class="flex items-center justify-between gap-4">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="font-semibold font-mono">@repo.RepositoryOwner/@repo.RepositoryName</span>
+                                    <span class="badge badge-sm badge-info">@repo.ProviderType</span>
+                                    <span class="text-xs opacity-60">via @repo.ProviderName</span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(repo.DefaultBranch))
+                                {
+                                    <div class="text-xs opacity-50 mt-1">Default branch: @repo.DefaultBranch</div>
+                                }
+                            </div>
+                            <button class="btn btn-ghost btn-xs text-error shrink-0"
+                                    @onclick="() => UnlinkRepo(repo.Id)">
+                                Unlink
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (showModal)
+{
+    <ModalBase IsOpen="true" OnClose="CloseModal" Title="Link Repository" Size="ModalSize.Small">
+        <form class="space-y-4" @onsubmit="SaveLink" @onsubmit:preventDefault>
+            @if (providers.Count == 0)
+            {
+                <div class="alert alert-warning text-sm">
+                    No source code providers configured. <a href="/admin/source-code-providers" class="link">Add one in Admin settings.</a>
+                </div>
+            }
+            else
+            {
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Provider</legend>
+                    <select class="select select-sm w-full" @bind="formProviderId">
+                        @foreach (var p in providers)
+                        {
+                            <option value="@p.Id">@p.Name (@p.Type)</option>
+                        }
+                    </select>
+                </fieldset>
+
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Repository Owner</legend>
+                    <input class="input input-sm w-full font-mono" @bind="formOwner" placeholder="e.g. myorg" />
+                </fieldset>
+
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Repository Name</legend>
+                    <input class="input input-sm w-full font-mono" @bind="formName" placeholder="e.g. myrepo" />
+                </fieldset>
+
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Default Branch (optional)</legend>
+                    <input class="input input-sm w-full font-mono" @bind="formBranch" placeholder="master" />
+                </fieldset>
+            }
+
+            @if (!string.IsNullOrEmpty(formError))
+            {
+                <div class="alert alert-error text-sm">@formError</div>
+            }
+
+            <div class="modal-action">
+                <button type="button" class="btn btn-ghost btn-sm" @onclick="CloseModal">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-sm"
+                        disabled="@(formSaving || providers.Count == 0)">
+                    @(formSaving ? "Linking…" : "Link Repository")
+                </button>
+            </div>
+        </form>
+    </ModalBase>
+}
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+
+    private List<ProjectRepositoryResponse> repos = [];
+    private List<SourceCodeProviderResponse> providers = [];
+    private bool loading = true;
+
+    private bool showModal;
+    private int formProviderId;
+    private string formOwner = "";
+    private string formName = "";
+    private string formBranch = "";
+    private string formError = "";
+    private bool formSaving;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        repos = await SourceCodeService.GetRepositoriesAsync(ProjectId);
+        providers = await SourceCodeService.GetProvidersAsync();
+        loading = false;
+    }
+
+    private void OpenLink()
+    {
+        formProviderId = providers.Count > 0 ? providers[0].Id : 0;
+        formOwner = "";
+        formName = "";
+        formBranch = "";
+        formError = "";
+        showModal = true;
+    }
+
+    private void CloseModal() => showModal = false;
+
+    private async Task SaveLink()
+    {
+        if (string.IsNullOrWhiteSpace(formOwner) || string.IsNullOrWhiteSpace(formName))
+        {
+            formError = "Owner and repository name are required.";
+            return;
+        }
+
+        formSaving = true;
+        formError = "";
+        try
+        {
+            var repo = await SourceCodeService.LinkRepositoryAsync(ProjectId,
+                new LinkRepositoryRequest(formProviderId, formOwner, formName,
+                    string.IsNullOrWhiteSpace(formBranch) ? null : formBranch));
+            repos.Add(repo);
+            showModal = false;
+        }
+        catch (Exception ex)
+        {
+            formError = ex.Message;
+        }
+        finally
+        {
+            formSaving = false;
+        }
+    }
+
+    private async Task UnlinkRepo(int repositoryId)
+    {
+        await SourceCodeService.UnlinkRepositoryAsync(ProjectId, repositoryId);
+        repos.RemoveAll(r => r.Id == repositoryId);
+    }
+}

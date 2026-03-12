@@ -18,4 +18,13 @@ internal class SentryStackFrame
     
     public bool? InApp { get; set; }
     public bool? Native { get; set; }
+
+    [JsonPropertyName("context_line")]
+    public string? ContextLine { get; set; }
+
+    [JsonPropertyName("pre_context")]
+    public List<string>? PreContext { get; set; }
+
+    [JsonPropertyName("post_context")]
+    public List<string>? PostContext { get; set; }
 }

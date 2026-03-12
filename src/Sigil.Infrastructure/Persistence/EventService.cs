@@ -269,6 +269,9 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
             LineNumber = frame.LineNumber,
             ColumnNumber = frame.ColumnNumber,
             InApp = frame.InApp,
+            ContextLine = frame.ContextLine?.Truncate(2000),
+            PreContext = frame.PreContext,
+            PostContext = frame.PostContext,
         }).ToList();
     }
 
@@ -306,7 +309,8 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
             .ToList();
 
         var stackFrames = e.StackFrames
-            .Select(f => new StackFrameResponse(f.Function, f.Filename, f.LineNumber, f.ColumnNumber, f.Module, f.InApp))
+            .Select(f => new StackFrameResponse(f.Function, f.Filename, f.LineNumber, f.ColumnNumber, f.Module, f.InApp,
+                f.ContextLine, f.PreContext, f.PostContext))
             .ToList();
 
         EventUserResponse? user = e.User is not null

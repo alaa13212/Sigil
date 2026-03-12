@@ -1,5 +1,6 @@
-@page "/admin/alert-channels"
+@page "/admin/settings/alert-channels"
 @attribute [Authorize]
+@layout AdminSettingsLayout
 @using Sigil.Application.Models.Alerts
 @inject IAlertChannelService ChannelService
 
@@ -7,7 +8,7 @@
 
 <div class="max-w-3xl space-y-6">
     <div class="flex items-center justify-between">
-        <h1 class="text-2xl font-bold">Alert Channels</h1>
+        <h2 class="text-lg font-bold">Alert Channels</h2>
         <button class="btn btn-primary btn-sm" @onclick="OpenCreate">+ New Channel</button>
     </div>
 

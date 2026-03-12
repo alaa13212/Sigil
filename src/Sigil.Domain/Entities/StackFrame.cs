@@ -22,6 +22,12 @@ public class StackFrame
 
     public bool InApp { get; set; }
 
+    // SDK-provided source context (available for some platforms like Python/Ruby)
+    [MaxLength(2000)]
+    public string? ContextLine { get; set; }
+    public string[]? PreContext { get; set; }
+    public string[]? PostContext { get; set; }
+
     [ForeignKey(nameof(Event))]
     public long EventId { get; set; }
     public CapturedEvent? Event { get; set; }

@@ -1,0 +1,17 @@
+@inherits LayoutComponentBase
+@layout MainLayout
+
+<div class="space-y-6">
+    <h1 class="text-2xl font-bold">Settings</h1>
+
+    <div class="flex flex-wrap gap-2 bg-base-100 p-2 rounded-lg">
+        <NavLink href="/admin/settings" class="btn btn-sm btn-ghost" ActiveClass="btn-active" Match="NavLinkMatch.All">General</NavLink>
+        <NavLink href="/admin/settings/alert-channels" class="btn btn-sm btn-ghost" ActiveClass="btn-active">Alert Channels</NavLink>
+        <NavLink href="/admin/settings/source-code" class="btn btn-sm btn-ghost" ActiveClass="btn-active">Source Code</NavLink>
+        <NavLink href="/admin/settings/migrations" class="btn btn-sm btn-ghost" ActiveClass="btn-active">Migrations</NavLink>
+    </div>
+
+    <div>
+        @Body
+    </div>
+</div>

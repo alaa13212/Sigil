@@ -40,7 +40,10 @@ public record StackFrameResponse(
     int? LineNumber,
     int? ColumnNumber,
     string? Module,
-    bool InApp);
+    bool InApp,
+    string? ContextLine = null,
+    string[]? PreContext = null,
+    string[]? PostContext = null);
 
 public record EventUserResponse(
     string? Username,

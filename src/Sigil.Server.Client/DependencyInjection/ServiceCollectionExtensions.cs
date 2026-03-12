@@ -35,5 +35,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAppConfigEditorService, ApiAppConfigEditorService>();
         services.AddScoped<IProjectConfigEditorService, ApiProjectConfigEditorService>();
         services.AddScoped<ISharedLinkService, ApiSharedLinkService>();
+        services.AddScoped<ISourceCodeService, ApiSourceCodeService>();
     }
 }

@@ -23,7 +23,7 @@ else
             @if (_interactive)
             {
                 <label class="flex items-center gap-1.5 text-xs cursor-pointer select-none">
-                    <input type="checkbox" class="checkbox checkbox-xs" @bind="_hideExternal" />
+                    <input type="checkbox" class="checkbox checkbox-xs" @bind="_hideExternal" @bind:after="OnParametersSet"  />
                     Hide external
                 </label>
             }
@@ -37,10 +37,7 @@ else
     {
         <!-- Interactive view: collapse consecutive external frames -->
         <div class="space-y-1">
-            @{
-                var groups = GroupFrames(Frames, _hideExternal);
-            }
-            @foreach (var group in groups)
+            @foreach (var group in _groups)
             {
                 @if (group.IsCollapsed)
                 {
@@ -70,17 +67,31 @@ else
                 {
                     @foreach (var frame in group.Frames)
                     {
+                        var canExpand = FrameCanExpand(frame);
+                        var isExpanded = _expandedFrames.Contains(frame);
                         <div class="px-3 py-1 text-sm font-mono">
-                            <div class="font-semibold">@MethodName(frame)</div>
+                            <div class="@(canExpand ? "cursor-pointer hover:opacity-80 select-none" : "") font-semibold flex items-center gap-1"
+                                 @onclick="() => { if (canExpand) ToggleFrame(frame); }">
+                                @if (canExpand)
+                                {
+                                    <span class="text-xs opacity-40 w-3 shrink-0">@(isExpanded ? "▼" : "▶")</span>
+                                }
+                                @MethodName(frame)
+                                
+                                @if (!string.IsNullOrEmpty(frame.Module))
+                                {
+                                    <span class="ml-2 opacity-50">in @frame.Module</span>
+                                }
+                            </div>
                             @if (!string.IsNullOrEmpty(frame.Filename))
                             {
                                 <div class="text-xs opacity-70">
-                                    @frame.Filename@(frame.LineNumber.HasValue ? $":{frame.LineNumber}" : "")@(frame.ColumnNumber.HasValue ? $":{frame.ColumnNumber}" : "")
-                                    @if (!string.IsNullOrEmpty(frame.Module))
-                                    {
-                                        <span class="ml-2 opacity-50">in @frame.Module</span>
-                                    }
+                                    @FileLocationText(frame)
                                 </div>
+                                @if (isExpanded)
+                                {
+                                    <SourceContextInline Frame="frame" EventId="EventId" HasLinkedRepository="HasLinkedRepository" />
+                                }
                             }
                         </div>
                     }
@@ -94,18 +105,31 @@ else
         <div class="space-y-1">
             @foreach (var frame in Frames)
             {
+                var canExpand = FrameCanExpand(frame);
+                var isExpanded = _expandedFrames.Contains(frame);
                 var bgClass = frame.InApp ? "" : "opacity-50";
                 <div class="@bgClass rounded px-3 py-1 text-sm font-mono">
-                    <div class="font-semibold">@MethodName(frame)</div>
+                    <div class="@(canExpand ? "cursor-pointer hover:opacity-80 select-none" : "") font-semibold flex items-center gap-1"
+                         @onclick="() => { if (canExpand) ToggleFrame(frame); }">
+                        @if (canExpand)
+                        {
+                            <span class="text-xs opacity-40 w-3 shrink-0">@(isExpanded ? "▼" : "▶")</span>
+                        }
+                        @MethodName(frame)
+                        @if (!string.IsNullOrEmpty(frame.Module))
+                        {
+                            <span class="ml-2 opacity-50">in @frame.Module</span>
+                        }
+                    </div>
                     @if (!string.IsNullOrEmpty(frame.Filename))
                     {
                         <div class="text-xs opacity-70">
-                            @frame.Filename@(frame.LineNumber.HasValue ? $":{frame.LineNumber}" : "")@(frame.ColumnNumber.HasValue ? $":{frame.ColumnNumber}" : "")
-                            @if (!string.IsNullOrEmpty(frame.Module))
-                            {
-                                <span class="ml-2 opacity-50">in @frame.Module</span>
-                            }
+                            @FileLocationText(frame)
                         </div>
+                        @if (isExpanded)
+                        {
+                            <SourceContextInline Frame="frame" EventId="EventId" HasLinkedRepository="HasLinkedRepository" />
+                        }
                     }
                 </div>
             }
@@ -116,28 +140,61 @@ else
 @code {
     [Parameter, EditorRequired] public List<StackFrameResponse> Frames { get; set; } = [];
     [Parameter] public Platform Platform { get; set; } = Platform.Other;
+    [Parameter] public long? EventId { get; set; }
+    [Parameter] public bool HasLinkedRepository { get; set; }
 
     private bool _interactive;
     private bool _hideExternal = true;
     private bool _cleanTrace = true;
+    private List<FrameGroup> _groups = [];
+    private readonly HashSet<StackFrameResponse> _expandedFrames = [];
 
     protected override async Task OnInitializedAsync()
     {
-        var modeTask  = Preferences.GetAsync(UserPreferenceKeys.StackTraceMode);
-        var cleanTask = Preferences.GetAsync(UserPreferenceKeys.StackTraceClean);
-        await Task.WhenAll(modeTask, cleanTask);
-        _interactive = modeTask.Result == "interactive";
-        _cleanTrace  = cleanTask.Result != "false";
+        _interactive = await Preferences.GetAsync(UserPreferenceKeys.StackTraceMode) == "interactive";
+        _cleanTrace  = await Preferences.GetAsync(UserPreferenceKeys.StackTraceClean) != "false";
+
+        _groups = GroupFrames(Frames, _hideExternal);
+    }
+
+    protected override void OnParametersSet()
+    {
+        _expandedFrames.Clear();
+        _groups = GroupFrames(Frames, _hideExternal);
     }
 
     private async Task ToggleMode()
     {
         _interactive = !_interactive;
         await Preferences.SetAsync(UserPreferenceKeys.StackTraceMode, _interactive ? "interactive" : "simple");
+        _groups = GroupFrames(Frames, _hideExternal);
     }
 
     private async Task SaveCleanPreference()
-        => await Preferences.SetAsync(UserPreferenceKeys.StackTraceClean, _cleanTrace ? "true" : "false");
+    {
+        await Preferences.SetAsync(UserPreferenceKeys.StackTraceClean, _cleanTrace ? "true" : "false");
+        _groups = GroupFrames(Frames, _hideExternal);
+    }
+
+    private void ToggleFrame(StackFrameResponse frame)
+    {
+        if (!_expandedFrames.Remove(frame))
+            _expandedFrames.Add(frame);
+    }
+
+    private string? FileLocationText(StackFrameResponse frame) =>
+        frame.Filename +
+        (frame.LineNumber.HasValue ? $":{frame.LineNumber}" : "") +
+        (frame.ColumnNumber.HasValue ? $":{frame.ColumnNumber}" : "");
+
+    private bool FrameCanExpand(StackFrameResponse frame) =>
+        frame.InApp &&
+        !string.IsNullOrEmpty(frame.Filename) &&
+        frame.LineNumber.HasValue &&
+        (HasSdkContext(frame) || HasLinkedRepository);
+
+    private static bool HasSdkContext(StackFrameResponse frame) =>
+        frame.ContextLine != null || frame.PreContext?.Length > 0 || frame.PostContext?.Length > 0;
 
     private string MethodName(StackFrameResponse frame)
         => _cleanTrace

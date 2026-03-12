@@ -10,6 +10,7 @@ using Sigil.Application.Services;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Interfaces;
 using Sigil.Infrastructure.Cache;
+using Sigil.Infrastructure.Integrations;
 using Sigil.Infrastructure.Parsing;
 using Sigil.Infrastructure.Persistence;
 using Sigil.Infrastructure.Services;
@@ -106,10 +107,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISharedLinkService, SharedLinkService>();
         services.AddSingleton<IRateLimiter, SlidingWindowRateLimiter>();
         
-        services.AddSingleton<IStackFrameCleaner, CSharpStackFrameCleaner>();
-        services.AddSingleton<IStackFrameCleaner, JavaStackFrameCleaner>();
-        services.AddSingleton<IStackFrameCleaner, JavaScriptStackFrameCleaner>();
-        services.AddSingleton<IStackFrameCleaner, PythonStackFrameCleaner>();
+        services.AddScoped<TokenEncryptionService>();
+        services.AddScoped<ISourceCodeService, SourceCodeService>();
+        services.AddAllImplementations<ISourceCodeClient>(lifetime: ServiceLifetime.Singleton);
+        services.AddMemoryCache();
+        
+        services.AddAllImplementations<IStackFrameCleaner>(lifetime: ServiceLifetime.Singleton);
         services.AddSingleton<StackFrameCleanerService>();
         
         services.AddAllImplementations<IProjectAnalyzer>();

@@ -1,4 +1,6 @@
 @using Sigil.Application.Models.Events
+@using Sigil.Application.Interfaces
+@inject ISourceCodeService SourceCodeSvc
 
 <!-- Navigation bar -->
 <div class="space-y-4">
@@ -55,7 +57,7 @@
             <div class="card bg-base-300">
                 <div class="card-body p-4 overflow-auto">
                     <h2 class="card-title text-base">Stack Trace</h2>
-                    <StackTraceViewer Frames="EventDetail.StackFrames" Platform="EventDetail.Platform"/>
+                    <StackTraceViewer Frames="EventDetail.StackFrames" Platform="EventDetail.Platform" EventId="EventDetail.Id" HasLinkedRepository="_hasLinkedRepository"/>
                 </div>
             </div>
         }
@@ -81,7 +83,7 @@
                                         @if (ex.StackFrames.Count > 0)
                                         {
                                             <div class="mt-2">
-                                                <StackTraceViewer Frames="ex.StackFrames" Platform="EventDetail.Platform"/>
+                                                <StackTraceViewer Frames="ex.StackFrames" Platform="EventDetail.Platform" EventId="EventDetail.Id" HasLinkedRepository="_hasLinkedRepository"/>
                                             </div>
                                         }
                                     </div>
@@ -125,6 +127,17 @@
     [Parameter] public bool Navigating { get; set; }
     [Parameter] public EventCallback<long> OnNavigateEvent { get; set; }
     [SupplyParameterFromQuery(Name = "etab")] public string? EventTabParam { get; set; }
+
+    private bool _hasLinkedRepository;
+    private int _linkedRepositoryProjectId = -1;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ProjectId == _linkedRepositoryProjectId) return;
+        var repos = await SourceCodeSvc.GetRepositoriesAsync(ProjectId);
+        _hasLinkedRepository = repos.Count > 0;
+        _linkedRepositoryProjectId = ProjectId;
+    }
     
     private enum EventTab { Details, Breadcrumbs, Raw }
     private static readonly EventTab[] _eventTabs = [EventTab.Details, EventTab.Breadcrumbs, EventTab.Raw];
