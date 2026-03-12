@@ -16,7 +16,7 @@ internal class NormalizationRuleService(
         // Specific typed values first (so they're not caught by generic patterns)
         new (@"\b(?:\d{1,3}\.){3}\d{1,3}(:\d{4,6})?\b", "{ip}", "IP Addresses"),
         new (@"\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b", "{uuid}", "UUIDs"),
-        new (@"\b\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)?\b", "{datetime}", "Dates"),
+        new (@"\b\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,6}Z?)?)?\b", "{datetime}", "Dates"),
         new (@"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,}", "{email}", "Emails"),
         new (@"https?:\/\/[^\s/$.?#].[^\s]*", "{url}", "URLs"),
         new (@"/[A-Za-z0-9\-_]+(?:/[A-Za-z0-9\-_]+)*", "{urlpath}", "URL Paths"),
