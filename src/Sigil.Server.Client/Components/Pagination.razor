@@ -7,7 +7,7 @@
         @for (int i = StartPage; i <= EndPage; i++)
         {
             var pageNum = i;
-            <a class="join-item btn btn-sm @(pageNum == Page ? "btn-active" : "")" href="@NavigationManager.GetUriWithQueryParameter("page", pageNum)">@pageNum</a>
+            <a class="join-item btn btn-sm @(pageNum == Page ? "btn-primary" : "")" href="@NavigationManager.GetUriWithQueryParameter("page", pageNum)">@pageNum</a>
         }
         <a class="join-item btn btn-sm" disabled="@(!HasNext)" href="@NavigationManager.GetUriWithQueryParameter("page", Page + 1)">»</a>
     </div>
