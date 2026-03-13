@@ -18,6 +18,22 @@ internal class GitLabSourceCodeClient : ISourceCodeClient
         string? commitSha,
         int contextLines = 5)
     {
+        var result = await GetSourceContextCoreAsync(repo, filePath, lineNumber, commitSha, contextLines);
+
+        // If search failed with a specific commit SHA, retry with default branch
+        if (result == null && commitSha != null)
+            result = await GetSourceContextCoreAsync(repo, filePath, lineNumber, null, contextLines);
+
+        return result;
+    }
+
+    private async Task<SourceContextLines?> GetSourceContextCoreAsync(
+        ResolvedRepository repo,
+        string filePath,
+        int lineNumber,
+        string? commitSha,
+        int contextLines)
+    {
         var baseApi = $"{repo.BaseUrl.TrimEnd('/')}/api/v4";
         var projectPath = HttpUtility.UrlEncode($"{repo.RepositoryOwner}/{repo.RepositoryName}");
         var @ref = commitSha ?? repo.DefaultBranch ?? "master";
