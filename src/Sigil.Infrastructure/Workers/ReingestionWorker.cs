@@ -1,4 +1,3 @@
-using System.Text;
 using System.Threading.Channels;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,6 +54,7 @@ internal class ReingestionWorker(
         var contextBuilder = sp.GetRequiredService<IEventParsingContextBuilder>();
         var eventFilterEngine = sp.GetRequiredService<IEventFilterEngine>();
         var issueIngestion = sp.GetRequiredService<IIssueIngestionService>();
+        var projectAccess = sp.GetRequiredService<IProjectEntityAccess>();
         var eventRanker = sp.GetRequiredService<IEventRanker>();
         var mergeSetAggregator = sp.GetRequiredService<IMergeSetAggregator>();
         var issueCache = sp.GetRequiredService<IIssueCache>();
@@ -72,10 +72,23 @@ internal class ReingestionWorker(
             job.StartedAt = dateTime.UtcNow;
             await dbContext.SaveChangesAsync(ct);
 
+            var project = await projectAccess.GetProjectByIdAsync(job.ProjectId);
+            if (project is null)
+            {
+                job.Status = ReingestionJobStatus.Failed;
+                job.Error = "Project not found";
+                job.CompletedAt = dateTime.UtcNow;
+                await dbContext.SaveChangesAsync(ct);
+                return;
+            }
+
+            // Resolve target issue IDs (expand merge set if applicable)
+            var targetIssueIds = await ResolveTargetIssueIdsAsync(dbContext, job, ct);
+
             var context = await contextBuilder.BuildAsync(job.ProjectId);
 
             // Snapshot max event ID to avoid processing events added during re-ingestion
-            long maxEventId = await GetMaxEventIdAsync(dbContext, job, ct);
+            long maxEventId = await GetMaxEventIdAsync(dbContext, job.ProjectId, targetIssueIds, ct);
             if (maxEventId == 0)
             {
                 job.Status = ReingestionJobStatus.Completed;
@@ -83,6 +96,21 @@ internal class ReingestionWorker(
                 await dbContext.SaveChangesAsync(ct);
                 return;
             }
+
+            // Pre-load all issue fingerprints for this project into a lookup
+            var fingerprintByIssueId = await dbContext.Issues
+                .AsNoTracking()
+                .Where(i => i.ProjectId == job.ProjectId)
+                .ToDictionaryAsync(i => i.Id, i => i.Fingerprint, ct);
+
+            // Reverse lookup: fingerprint → issueId
+            var issueIdByFingerprint = fingerprintByIssueId.ToDictionary(kv => kv.Value, kv => kv.Key);
+
+            // Pre-load SuggestedEventIds to avoid per-event queries during deletion
+            var suggestedEventIds = await dbContext.Issues
+                .AsNoTracking()
+                .Where(i => i.ProjectId == job.ProjectId && i.SuggestedEventId != null)
+                .ToDictionaryAsync(i => i.SuggestedEventId!.Value, i => i.Id, ct);
 
             var affectedIssueIds = new HashSet<int>();
             var affectedMergeSetIds = new HashSet<int>();
@@ -103,14 +131,16 @@ internal class ReingestionWorker(
                     return;
                 }
 
-                var batch = await LoadBatchAsync(dbContext, job, lastId, maxEventId, ct);
+                var batch = await LoadBatchAsync(dbContext, job.ProjectId, targetIssueIds, lastId, maxEventId, ct);
                 if (batch.Count == 0) break;
 
                 lastId = batch[^1].Id;
 
                 await ProcessBatchAsync(
                     dbContext, compressionService, parser, eventFilterEngine,
-                    context, job, batch, affectedIssueIds, affectedMergeSetIds, ct);
+                    issueIngestion, project, context, job, batch,
+                    fingerprintByIssueId, issueIdByFingerprint, suggestedEventIds,
+                    affectedIssueIds, affectedMergeSetIds, ct);
 
                 await dbContext.SaveChangesAsync(ct);
             }
@@ -138,27 +168,54 @@ internal class ReingestionWorker(
         }
     }
 
-    private static async Task<long> GetMaxEventIdAsync(SigilDbContext dbContext, ReingestionJob job, CancellationToken ct)
+    /// <summary>
+    /// Resolves which issue IDs to process. If the job targets a single issue that belongs
+    /// to a merge set, expands to include all issues in that merge set.
+    /// Returns null for project-wide reingestion (all issues).
+    /// </summary>
+    private static async Task<List<int>?> ResolveTargetIssueIdsAsync(
+        SigilDbContext dbContext, ReingestionJob job, CancellationToken ct)
+    {
+        if (!job.IssueId.HasValue)
+            return null; // project-wide
+
+        var issue = await dbContext.Issues.AsNoTracking()
+            .FirstOrDefaultAsync(i => i.Id == job.IssueId.Value, ct);
+        if (issue is null)
+            return [job.IssueId.Value];
+
+        if (!issue.MergeSetId.HasValue)
+            return [job.IssueId.Value];
+
+        // Expand to all issues in the merge set
+        return await dbContext.Issues.AsNoTracking()
+            .Where(i => i.MergeSetId == issue.MergeSetId.Value)
+            .Select(i => i.Id)
+            .ToListAsync(ct);
+    }
+
+    private static async Task<long> GetMaxEventIdAsync(
+        SigilDbContext dbContext, int projectId, List<int>? targetIssueIds, CancellationToken ct)
     {
         var query = dbContext.Events.AsNoTracking();
-        query = job.IssueId.HasValue
-            ? query.Where(e => e.IssueId == job.IssueId.Value)
-            : query.Where(e => e.ProjectId == job.ProjectId);
+        query = targetIssueIds is not null
+            ? query.Where(e => targetIssueIds.Contains(e.IssueId))
+            : query.Where(e => e.ProjectId == projectId);
 
         return await query.MaxAsync(e => (long?)e.Id, ct) ?? 0;
     }
 
     private static async Task<List<CapturedEvent>> LoadBatchAsync(
-        SigilDbContext dbContext, ReingestionJob job, long lastId, long maxEventId, CancellationToken ct)
+        SigilDbContext dbContext, int projectId, List<int>? targetIssueIds,
+        long lastId, long maxEventId, CancellationToken ct)
     {
         var query = dbContext.Events.AsTracking()
             .Include(e => e.StackFrames)
-            .Include(e => e.Tags)
             .Where(e => e.Id > lastId && e.Id <= maxEventId);
 
-        query = job.IssueId.HasValue
-            ? query.Where(e => e.IssueId == job.IssueId.Value)
-            : query.Where(e => e.ProjectId == job.ProjectId);
+        query = targetIssueIds is not null
+            ? query.Where(e => targetIssueIds.Contains(e.IssueId))
+            : query.Where(e => e.ProjectId == projectId);
 
         return await query.OrderBy(e => e.Id).Take(BatchSize).ToListAsync(ct);
     }
@@ -168,13 +225,23 @@ internal class ReingestionWorker(
         ICompressionService compressionService,
         IEventParser parser,
         IEventFilterEngine eventFilterEngine,
+        IIssueIngestionService issueIngestion,
+        Project project,
         EventParsingContext context,
         ReingestionJob job,
         List<CapturedEvent> batch,
+        Dictionary<int, string> fingerprintByIssueId,
+        Dictionary<string, int> issueIdByFingerprint,
+        Dictionary<long, int> suggestedEventIds,
         HashSet<int> affectedIssueIds,
         HashSet<int> affectedMergeSetIds,
         CancellationToken ct)
     {
+        // Phase 1: Parse all events, determine actions
+        var parsedBatch = new List<(CapturedEvent Evt, ParsedEvent Parsed)>();
+        var toDelete = new List<CapturedEvent>();
+        var newFingerprints = new Dictionary<string, List<ParsedEvent>>(); // fingerprint → parsed events needing new issues
+
         foreach (var evt in batch)
         {
             job.ProcessedEvents++;
@@ -196,7 +263,6 @@ internal class ReingestionWorker(
                 continue;
             }
 
-            // Wrap in Sentry envelope format
             var envelope = $"{{}}\n{{\"type\":\"event\"}}\n{rawJson}";
 
             List<ParsedEvent> parsedEvents;
@@ -215,25 +281,55 @@ internal class ReingestionWorker(
 
             affectedIssueIds.Add(evt.IssueId);
 
-            // Check inbound filters — should this event now be rejected?
+            // Check inbound filters
             if (context.InboundFilters.Count > 0 && eventFilterEngine.ShouldRejectEvent(parsed, context.InboundFilters))
             {
-                await DeleteEventAsync(dbContext, evt, ct);
+                toDelete.Add(evt);
                 job.DeletedEvents++;
                 continue;
             }
 
-            // Check fingerprint change
-            if (!string.IsNullOrEmpty(parsed.Fingerprint) && parsed.Fingerprint != GetIssueFingerprint(dbContext, evt.IssueId))
+            // Track fingerprints that don't exist yet (for bulk creation)
+            if (!string.IsNullOrEmpty(parsed.Fingerprint) && !issueIdByFingerprint.ContainsKey(parsed.Fingerprint))
             {
-                // Find or create target issue
-                var targetIssue = await FindOrCreateIssueByFingerprintAsync(dbContext, evt.ProjectId, parsed, ct);
-                if (targetIssue is not null && targetIssue.Id != evt.IssueId)
+                if (!newFingerprints.ContainsKey(parsed.Fingerprint))
+                    newFingerprints[parsed.Fingerprint] = [];
+                newFingerprints[parsed.Fingerprint].Add(parsed);
+            }
+
+            parsedBatch.Add((evt, parsed));
+        }
+
+        // Phase 2: Bulk-create any new issues via the cached ingestion service
+        if (newFingerprints.Count > 0)
+        {
+            var groupings = newFingerprints
+                .Select(kv => kv.Value.GroupBy(_ => kv.Key).First())
+                .ToList();
+
+            var createdIssues = await issueIngestion.BulkGetOrCreateIssuesAsync(project, groupings);
+            foreach (var issue in createdIssues)
+            {
+                fingerprintByIssueId[issue.Id] = issue.Fingerprint;
+                issueIdByFingerprint[issue.Fingerprint] = issue.Id;
+            }
+        }
+
+        // Phase 3: Delete filtered events
+        foreach (var evt in toDelete)
+            DeleteEvent(dbContext, evt, suggestedEventIds);
+
+        // Phase 4: Apply moves and updates
+        foreach (var (evt, parsed) in parsedBatch)
+        {
+            // Check fingerprint change
+            var currentFingerprint = fingerprintByIssueId.GetValueOrDefault(evt.IssueId);
+            if (!string.IsNullOrEmpty(parsed.Fingerprint) && parsed.Fingerprint != currentFingerprint)
+            {
+                if (issueIdByFingerprint.TryGetValue(parsed.Fingerprint, out var targetId) && targetId != evt.IssueId)
                 {
-                    evt.IssueId = targetIssue.Id;
-                    affectedIssueIds.Add(targetIssue.Id);
-                    if (targetIssue.MergeSetId.HasValue)
-                        affectedMergeSetIds.Add(targetIssue.MergeSetId.Value);
+                    evt.IssueId = targetId;
+                    affectedIssueIds.Add(targetId);
                     job.MovedEvents++;
                 }
             }
@@ -242,66 +338,32 @@ internal class ReingestionWorker(
             if (parsed.Culprit != evt.Culprit)
                 evt.Culprit = parsed.Culprit;
 
-            // Update stack frames if InApp flags changed
+            // Update stack frames if changed
             UpdateStackFramesIfChanged(dbContext, evt, parsed);
-
-            // Update event tags if auto-tag rules produced different tags
-            UpdateEventTagsIfChanged(dbContext, evt, parsed);
         }
     }
 
-    private static string? GetIssueFingerprint(SigilDbContext dbContext, int issueId)
+    private static void DeleteEvent(
+        SigilDbContext dbContext, CapturedEvent evt, Dictionary<long, int> suggestedEventIds)
     {
-        var issue = dbContext.Issues.Local.FirstOrDefault(i => i.Id == issueId);
-        if (issue is not null) return issue.Fingerprint;
-
-        issue = dbContext.Issues.AsNoTracking().FirstOrDefault(i => i.Id == issueId);
-        return issue?.Fingerprint;
-    }
-
-    private static async Task<Issue?> FindOrCreateIssueByFingerprintAsync(
-        SigilDbContext dbContext, int projectId, ParsedEvent parsed, CancellationToken ct)
-    {
-        if (string.IsNullOrEmpty(parsed.Fingerprint)) return null;
-
-        var existing = await dbContext.Issues.AsTracking()
-            .FirstOrDefaultAsync(i => i.ProjectId == projectId && i.Fingerprint == parsed.Fingerprint, ct);
-
-        if (existing is not null) return existing;
-
-        var newIssue = new Issue
+        // Null out SuggestedEventId if this event is the suggested one (using pre-loaded map)
+        if (suggestedEventIds.TryGetValue(evt.Id, out var referencingIssueId))
         {
-            ProjectId = projectId,
-            Fingerprint = parsed.Fingerprint,
-            Title = parsed.Message?.Truncate(8192),
-            ExceptionType = parsed.ExceptionType,
-            Culprit = parsed.Culprit,
-            Level = parsed.Level,
-            FirstSeen = parsed.Timestamp,
-            LastSeen = parsed.Timestamp,
-            LastChangedAt = parsed.Timestamp,
-            Status = IssueStatus.Open,
-            Priority = Priority.Low,
-        };
-
-        dbContext.Issues.Add(newIssue);
-        await dbContext.SaveChangesAsync(ct);
-        return newIssue;
-    }
-
-    private static async Task DeleteEventAsync(SigilDbContext dbContext, CapturedEvent evt, CancellationToken ct)
-    {
-        // Null out SuggestedEventId if this event is the suggested one
-        var issuesReferencing = await dbContext.Issues.AsTracking()
-            .Where(i => i.SuggestedEventId == evt.Id)
-            .ToListAsync(ct);
-        foreach (var issue in issuesReferencing)
-            issue.SuggestedEventId = null;
+            var issue = dbContext.Issues.Local.FirstOrDefault(i => i.Id == referencingIssueId);
+            if (issue is not null)
+                issue.SuggestedEventId = null;
+            else
+                dbContext.Database.ExecuteSql(
+                    $"""UPDATE "Issues" SET "SuggestedEventId" = NULL WHERE "Id" = {referencingIssueId}""");
+            suggestedEventIds.Remove(evt.Id);
+        }
 
         dbContext.StackFrames.RemoveRange(evt.StackFrames);
-        dbContext.EventTags.RemoveRange(
-            dbContext.EventTags.Local.Where(et => et.EventId == evt.Id)
-                .Union(dbContext.EventTags.Where(et => et.EventId == evt.Id)));
+
+        // Delete EventTags via raw SQL to avoid loading them
+        dbContext.Database.ExecuteSql(
+            $"""DELETE FROM "EventTags" WHERE "EventId" = {evt.Id}""");
+
         dbContext.Events.Remove(evt);
     }
 
@@ -350,14 +412,6 @@ internal class ReingestionWorker(
         }
     }
 
-    private static void UpdateEventTagsIfChanged(SigilDbContext dbContext, CapturedEvent evt, ParsedEvent parsed)
-    {
-        // We can't easily resolve tag value IDs here without the tag service,
-        // so we skip tag updates during re-ingestion. The fingerprint/filter/stackframe
-        // changes are the primary concern.
-        // Tag reconciliation happens via stat recalculation at the end.
-    }
-
     private static async Task RecalculateAffectedIssuesAsync(
         SigilDbContext dbContext,
         IEventRanker eventRanker,
@@ -369,102 +423,117 @@ internal class ReingestionWorker(
     {
         if (affectedIssueIds.Count == 0) return;
 
+        // Batch-load all affected issues in one query
+        var issues = await dbContext.Issues.AsTracking()
+            .Where(i => affectedIssueIds.Contains(i.Id))
+            .ToDictionaryAsync(i => i.Id, ct);
+
+        // Batch-load event counts + min/max timestamps + max severity per issue in one query
+        var issueStats = await dbContext.Events
+            .Where(e => affectedIssueIds.Contains(e.IssueId))
+            .GroupBy(e => e.IssueId)
+            .Select(g => new
+            {
+                IssueId = g.Key,
+                Count = g.Count(),
+                MinTimestamp = g.Min(e => e.Timestamp),
+                MaxTimestamp = g.Max(e => e.Timestamp),
+                MaxLevel = g.Max(e => e.Level),
+            })
+            .ToDictionaryAsync(s => s.IssueId, ct);
+
         var issuesToDelete = new List<int>();
 
         foreach (var issueId in affectedIssueIds)
         {
-            var issue = await dbContext.Issues.AsTracking()
-                .FirstOrDefaultAsync(i => i.Id == issueId, ct);
-            if (issue is null) continue;
+            if (!issues.TryGetValue(issueId, out var issue)) continue;
 
-            var eventCount = await dbContext.Events.CountAsync(e => e.IssueId == issueId, ct);
-
-            if (eventCount == 0)
+            if (!issueStats.TryGetValue(issueId, out var stats))
             {
                 issuesToDelete.Add(issueId);
                 continue;
             }
 
-            // Recalculate occurrence count
-            issue.OccurrenceCount = eventCount;
+            issue.OccurrenceCount = stats.Count;
+            issue.FirstSeen = stats.MinTimestamp;
+            issue.LastSeen = stats.MaxTimestamp;
+            issue.Level = stats.MaxLevel;
 
-            // Recalculate first/last seen
-            var timestamps = await dbContext.Events
-                .Where(e => e.IssueId == issueId)
-                .GroupBy(_ => 1)
-                .Select(g => new { Min = g.Min(e => e.Timestamp), Max = g.Max(e => e.Timestamp) })
-                .FirstAsync(ct);
-            issue.FirstSeen = timestamps.Min;
-            issue.LastSeen = timestamps.Max;
+            if (issue.MergeSetId.HasValue)
+                affectedMergeSetIds.Add(issue.MergeSetId.Value);
+        }
 
-            // Recalculate max severity
-            issue.Level = await dbContext.Events
-                .Where(e => e.IssueId == issueId)
-                .MaxAsync(e => e.Level, ct);
+        // Batch rebuild IssueTags: delete all then bulk insert
+        var existingIssueTags = await dbContext.IssueTags.AsTracking()
+            .Where(it => affectedIssueIds.Contains(it.IssueId))
+            .ToListAsync(ct);
+        dbContext.IssueTags.RemoveRange(existingIssueTags);
 
-            // Rebuild IssueTags from EventTags
-            var existingIssueTags = await dbContext.IssueTags.AsTracking()
-                .Where(it => it.IssueId == issueId)
-                .ToListAsync(ct);
-            dbContext.IssueTags.RemoveRange(existingIssueTags);
-
-            var tagAggregates = await dbContext.EventTags
-                .Where(et => dbContext.Events.Any(e => e.Id == et.EventId && e.IssueId == issueId))
-                .GroupBy(et => et.TagValueId)
-                .Select(g => new
-                {
-                    TagValueId = g.Key,
-                    Count = g.Count(),
-                    FirstSeen = g.Min(et => dbContext.Events.Where(e => e.Id == et.EventId).Select(e => e.Timestamp).First()),
-                    LastSeen = g.Max(et => dbContext.Events.Where(e => e.Id == et.EventId).Select(e => e.Timestamp).First()),
-                })
-                .ToListAsync(ct);
-
-            foreach (var agg in tagAggregates)
+        var tagAggregates = await dbContext.EventTags
+            .Where(et => dbContext.Events.Any(e => e.Id == et.EventId && affectedIssueIds.Contains(e.IssueId)))
+            .GroupBy(et => new { et.TagValueId, dbContext.Events.First(e => e.Id == et.EventId).IssueId })
+            .Select(g => new
             {
-                dbContext.IssueTags.Add(new IssueTag
-                {
-                    IssueId = issueId,
-                    TagValueId = agg.TagValueId,
-                    OccurrenceCount = agg.Count,
-                    FirstSeen = agg.FirstSeen,
-                    LastSeen = agg.LastSeen,
-                });
-            }
+                g.Key.IssueId,
+                g.Key.TagValueId,
+                Count = g.Count(),
+                FirstSeen = g.Min(et => dbContext.Events.Where(e => e.Id == et.EventId).Select(e => e.Timestamp).First()),
+                LastSeen = g.Max(et => dbContext.Events.Where(e => e.Id == et.EventId).Select(e => e.Timestamp).First()),
+            })
+            .ToListAsync(ct);
 
-            // Rebuild EventBuckets
-            var existingBuckets = await dbContext.EventBuckets.AsTracking()
-                .Where(eb => eb.IssueId == issueId)
-                .ToListAsync(ct);
-            dbContext.EventBuckets.RemoveRange(existingBuckets);
-
-            var bucketAggregates = await dbContext.Events
-                .Where(e => e.IssueId == issueId)
-                .GroupBy(e => new DateTime(e.Timestamp.Year, e.Timestamp.Month, e.Timestamp.Day, e.Timestamp.Hour, 0, 0, DateTimeKind.Utc))
-                .Select(g => new { BucketStart = g.Key, Count = g.Count() })
-                .ToListAsync(ct);
-
-            foreach (var bucket in bucketAggregates)
+        foreach (var agg in tagAggregates)
+        {
+            dbContext.IssueTags.Add(new IssueTag
             {
-                dbContext.EventBuckets.Add(new EventBucket
-                {
-                    IssueId = issueId,
-                    BucketStart = bucket.BucketStart,
-                    Count = bucket.Count,
-                });
-            }
+                IssueId = agg.IssueId,
+                TagValueId = agg.TagValueId,
+                OccurrenceCount = agg.Count,
+                FirstSeen = agg.FirstSeen,
+                LastSeen = agg.LastSeen,
+            });
+        }
 
-            // Update SuggestedEvent
-            var events = await dbContext.Events
-                .Where(e => e.IssueId == issueId)
+        // Batch rebuild EventBuckets
+        var existingBuckets = await dbContext.EventBuckets.AsTracking()
+            .Where(eb => affectedIssueIds.Contains(eb.IssueId))
+            .ToListAsync(ct);
+        dbContext.EventBuckets.RemoveRange(existingBuckets);
+
+        var bucketAggregates = await dbContext.Events
+            .Where(e => affectedIssueIds.Contains(e.IssueId))
+            .GroupBy(e => new
+            {
+                e.IssueId,
+                BucketStart = new DateTime(e.Timestamp.Year, e.Timestamp.Month, e.Timestamp.Day, e.Timestamp.Hour, 0, 0, DateTimeKind.Utc)
+            })
+            .Select(g => new { g.Key.IssueId, g.Key.BucketStart, Count = g.Count() })
+            .ToListAsync(ct);
+
+        foreach (var bucket in bucketAggregates)
+        {
+            dbContext.EventBuckets.Add(new EventBucket
+            {
+                IssueId = bucket.IssueId,
+                BucketStart = bucket.BucketStart,
+                Count = bucket.Count,
+            });
+        }
+
+        // Batch update SuggestedEvent + search columns for non-empty issues
+        var liveIssueIds = affectedIssueIds.Except(issuesToDelete).ToList();
+        if (liveIssueIds.Count > 0)
+        {
+            var allEvents = await dbContext.Events
+                .Where(e => liveIssueIds.Contains(e.IssueId))
                 .Include(e => e.StackFrames)
                 .ToListAsync(ct);
-            if (events.Count > 0)
-            {
-                var best = eventRanker.GetMostRelevantEvent(events);
-                issue.SuggestedEventId = best.Id;
 
-                // Update search columns
+            foreach (var group in allEvents.GroupBy(e => e.IssueId))
+            {
+                if (!issues.TryGetValue(group.Key, out var issue)) continue;
+                var best = eventRanker.GetMostRelevantEvent(group);
+                issue.SuggestedEventId = best.Id;
                 issue.SuggestedEventMessage = best.Message?.Truncate(8192);
                 issue.SuggestedFramesSummary = string.Join(" ",
                     best.StackFrames
@@ -472,75 +541,43 @@ internal class ReingestionWorker(
                         .Select(f => $"{f.Module}.{f.Function} {f.Filename} {(f.Module + " " + f.Function + " " + f.Filename).SplitPascal()}"))
                     .Truncate(8192);
             }
-
-            if (issue.MergeSetId.HasValue)
-                affectedMergeSetIds.Add(issue.MergeSetId.Value);
         }
 
         // Delete empty issues
         foreach (var issueId in issuesToDelete)
         {
-            var issue = await dbContext.Issues.AsTracking()
-                .FirstOrDefaultAsync(i => i.Id == issueId, ct);
-            if (issue is null) continue;
+            if (!issues.TryGetValue(issueId, out var issue)) continue;
 
-            // Remove from merge set first
             if (issue.MergeSetId.HasValue)
             {
                 affectedMergeSetIds.Add(issue.MergeSetId.Value);
                 issue.MergeSetId = null;
             }
 
-            // Null out SuggestedEventId
             issue.SuggestedEventId = null;
-
-            // Remove IssueTags
-            var tags = await dbContext.IssueTags.AsTracking()
-                .Where(it => it.IssueId == issueId)
-                .ToListAsync(ct);
-            dbContext.IssueTags.RemoveRange(tags);
-
-            // Remove EventBuckets
-            var buckets = await dbContext.EventBuckets.AsTracking()
-                .Where(eb => eb.IssueId == issueId)
-                .ToListAsync(ct);
-            dbContext.EventBuckets.RemoveRange(buckets);
-
-            // Remove activities
-            var activities = await dbContext.IssueActivities.AsTracking()
-                .Where(a => a.IssueId == issueId)
-                .ToListAsync(ct);
-            dbContext.IssueActivities.RemoveRange(activities);
-
-            // Remove user states
-            var userStates = await dbContext.UserIssueStates.AsTracking()
-                .Where(s => s.IssueId == issueId)
-                .ToListAsync(ct);
-            dbContext.UserIssueStates.RemoveRange(userStates);
-
-            // Remove shared links
-            var sharedLinks = await dbContext.SharedIssueLinks.AsTracking()
-                .Where(sl => sl.IssueId == issueId)
-                .ToListAsync(ct);
-            dbContext.SharedIssueLinks.RemoveRange(sharedLinks);
-
-            // Remove reingestion jobs referencing this issue
-            var reingestionJobs = await dbContext.ReingestionJobs.AsTracking()
-                .Where(rj => rj.IssueId == issueId)
-                .ToListAsync(ct);
-            foreach (var rj in reingestionJobs)
-                rj.IssueId = null;
-
-            dbContext.Issues.Remove(issue);
         }
-
         await dbContext.SaveChangesAsync(ct);
+
+        // Bulk delete related data for empty issues
+        if (issuesToDelete.Count > 0)
+        {
+            var idsArray = issuesToDelete.ToArray();
+            await dbContext.Database.ExecuteSqlAsync(
+                $"""DELETE FROM "IssueActivities" WHERE "IssueId" = ANY({idsArray})""", ct);
+            await dbContext.Database.ExecuteSqlAsync(
+                $"""DELETE FROM "UserIssueStates" WHERE "IssueId" = ANY({idsArray})""", ct);
+            await dbContext.Database.ExecuteSqlAsync(
+                $"""DELETE FROM "SharedIssueLinks" WHERE "IssueId" = ANY({idsArray})""", ct);
+            await dbContext.Database.ExecuteSqlAsync(
+                $"""UPDATE "ReingestionJobs" SET "IssueId" = NULL WHERE "IssueId" = ANY({idsArray})""", ct);
+            await dbContext.Database.ExecuteSqlAsync(
+                $"""DELETE FROM "Issues" WHERE "Id" = ANY({idsArray})""", ct);
+        }
 
         // Refresh merge set aggregates
         if (affectedMergeSetIds.Count > 0)
             await mergeSetAggregator.RefreshAggregatesAsync(affectedMergeSetIds);
 
-        // Invalidate issue cache
         issueCache.InvalidateAll();
     }
 }

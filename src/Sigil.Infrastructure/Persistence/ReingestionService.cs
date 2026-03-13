@@ -61,7 +61,7 @@ internal class ReingestionService(
             issueIds = mergeIssueIds;
         }
 
-        var totalEvents = await dbContext.Events.CountAsync(e => e.IssueId == issueId);
+        var totalEvents = await dbContext.Events.CountAsync(e => issueIds.Contains(e.IssueId));
 
         var job = new ReingestionJob
         {
