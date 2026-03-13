@@ -1,0 +1,220 @@
+@page "/projects/{ProjectId:int}/settings/reingestion"
+@attribute [Authorize]
+@using Sigil.Application.Models.Reingestion
+@using Sigil.Domain.Enums
+@inject IReingestionService ReingestionService
+@implements IDisposable
+
+@layout ProjectSettingsLayout
+
+<PageTitle>Re-ingestion — Sigil</PageTitle>
+
+<!-- Info alert -->
+<div class="alert alert-info mb-6">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+    </svg>
+    <div>
+        <p class="font-semibold">What does re-ingestion do?</p>
+        <p class="text-sm mt-1">Re-ingestion replays all existing events through the current rule set (inbound filters, normalization rules, auto-tag rules, stack trace filters). Events that now match inbound filters will be deleted. Events whose fingerprints change will be moved to the correct issue. Stack frames and culprits are updated in place.</p>
+    </div>
+</div>
+
+<!-- Trigger button -->
+<div class="mb-6">
+    <button class="btn btn-warning" @onclick="ShowConfirmation" disabled="@(_hasActiveJob || _loading)">
+        Re-ingest All Issues
+    </button>
+    @if (_hasActiveJob)
+    {
+        <span class="text-sm opacity-60 ml-2">A job is already running.</span>
+    }
+</div>
+
+<!-- Job history -->
+@if (_jobs is not null && _jobs.Count > 0)
+{
+    <h2 class="text-lg font-semibold mb-3">Job History</h2>
+    <div class="overflow-x-auto">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Scope</th>
+                    <th>Status</th>
+                    <th>Progress</th>
+                    <th>Moved</th>
+                    <th>Deleted</th>
+                    <th>Started</th>
+                    <th>Completed</th>
+                    <th>Created By</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var job in _jobs)
+                {
+                    <tr>
+                        <td>@(job.IssueId.HasValue ? $"Issue #{job.IssueId}" : "All Issues")</td>
+                        <td>
+                            <span class="badge badge-sm @GetStatusBadgeClass(job.Status)">@job.Status</span>
+                        </td>
+                        <td>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-mono">@job.ProcessedEvents/@job.TotalEvents</span>
+                                @if (job.TotalEvents > 0)
+                                {
+                                    <progress class="progress progress-primary w-20" value="@job.ProcessedEvents" max="@job.TotalEvents"></progress>
+                                }
+                            </div>
+                        </td>
+                        <td class="font-mono">@job.MovedEvents</td>
+                        <td class="font-mono">@job.DeletedEvents</td>
+                        <td>
+                            @if (job.StartedAt.HasValue)
+                            {
+                                <RelativeTime Value="job.StartedAt.Value" />
+                            }
+                            else
+                            {
+                                <span class="opacity-40">—</span>
+                            }
+                        </td>
+                        <td>
+                            @if (job.CompletedAt.HasValue)
+                            {
+                                <RelativeTime Value="job.CompletedAt.Value" />
+                            }
+                            else
+                            {
+                                <span class="opacity-40">—</span>
+                            }
+                        </td>
+                        <td>@(job.CreatedByName ?? "—")</td>
+                        <td>
+                            @if (job.Status is ReingestionJobStatus.Running or ReingestionJobStatus.Pending)
+                            {
+                                <button class="btn btn-xs btn-error btn-outline" @onclick="() => CancelJob(job.Id)">Cancel</button>
+                            }
+                        </td>
+                    </tr>
+                    @if (job.Status == ReingestionJobStatus.Failed && !string.IsNullOrEmpty(job.Error))
+                    {
+                        <tr>
+                            <td colspan="9">
+                                <div class="text-error text-xs">@job.Error</div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else if (_jobs is not null)
+{
+    <p class="text-sm opacity-60">No re-ingestion jobs have been run for this project.</p>
+}
+
+<!-- Confirmation modal -->
+<ModalBase IsOpen="_showConfirmation" Title="Confirm Re-ingestion" OnClose="HideConfirmation">
+    <p class="mb-4">This will re-process all events in this project through the current rule set. Events may be moved, updated, or deleted based on current rules.</p>
+    <p class="mb-4 text-warning font-semibold">This operation cannot be undone.</p>
+    <div class="modal-action">
+        <button class="btn btn-ghost" @onclick="HideConfirmation">Cancel</button>
+        <button class="btn btn-warning" @onclick="StartReingestion" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="loading loading-spinner loading-sm"></span>
+            }
+            Start Re-ingestion
+        </button>
+    </div>
+</ModalBase>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+
+    private List<ReingestionJobResponse>? _jobs;
+    private bool _loading;
+    private bool _hasActiveJob;
+    private bool _showConfirmation;
+    private Timer? _pollTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadJobsAsync();
+        StartPollingIfNeeded();
+    }
+
+    private async Task LoadJobsAsync()
+    {
+        _jobs = await ReingestionService.GetJobsForProjectAsync(ProjectId);
+        _hasActiveJob = _jobs.Any(j => j.Status is ReingestionJobStatus.Pending or ReingestionJobStatus.Running);
+    }
+
+    private void StartPollingIfNeeded()
+    {
+        StopPolling();
+        if (_hasActiveJob)
+        {
+            _pollTimer = new Timer(async _ =>
+            {
+                await LoadJobsAsync();
+                await InvokeAsync(StateHasChanged);
+                if (!_hasActiveJob)
+                    StopPolling();
+            }, null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
+        }
+    }
+
+    private void StopPolling()
+    {
+        _pollTimer?.Dispose();
+        _pollTimer = null;
+    }
+
+    private void ShowConfirmation() => _showConfirmation = true;
+    private void HideConfirmation() => _showConfirmation = false;
+
+    private async Task StartReingestion()
+    {
+        _loading = true;
+        _showConfirmation = false;
+        try
+        {
+            await ReingestionService.StartProjectReingestionAsync(ProjectId);
+            await LoadJobsAsync();
+            StartPollingIfNeeded();
+        }
+        catch (Exception)
+        {
+            // Conflict or other error — just reload
+            await LoadJobsAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task CancelJob(int jobId)
+    {
+        await ReingestionService.CancelJobAsync(jobId);
+        await LoadJobsAsync();
+    }
+
+    private static string GetStatusBadgeClass(ReingestionJobStatus status) => status switch
+    {
+        ReingestionJobStatus.Pending => "badge-info",
+        ReingestionJobStatus.Running => "badge-warning",
+        ReingestionJobStatus.Completed => "badge-success",
+        ReingestionJobStatus.Failed => "badge-error",
+        ReingestionJobStatus.Cancelled => "badge-ghost",
+        _ => ""
+    };
+
+    public void Dispose()
+    {
+        StopPolling();
+    }
+}

@@ -2,6 +2,7 @@
 @using Sigil.Domain
 @inject IIssueService IssueService
 @inject ITagValueFormatter TagValueFormatter
+@inject IReingestionService ReingestionService
 
 <div class="w-full lg:w-72 space-y-4">
     
@@ -12,6 +13,17 @@
         </svg>
         Share
     </button>
+
+    <!-- Re-ingest button (admin only) -->
+    <AuthorizeView Roles="Admin">
+        <button class="btn btn-error btn-outline w-full btn-sm" @onclick="ShowReingestionConfirm" disabled="@_reingesting">
+            @if (_reingesting)
+            {
+                <span class="loading loading-spinner loading-xs"></span>
+            }
+            Re-ingest Issue
+        </button>
+    </AuthorizeView>
     
     <!-- Status + Priority -->
     <div class="card bg-base-100">
@@ -191,15 +203,38 @@
 
 <ShareModal IssueId="Issue.Id" IsOpen="_showShareModal" OnClose="CloseShareModal" />
 
+<ModalBase IsOpen="_showReingestionConfirm" Title="Confirm Re-ingestion" OnClose="HideReingestionConfirm">
+    <p class="mb-2">This will re-process all events for this issue through the current rule set:</p>
+    <ul class="list-disc list-inside text-sm space-y-1 mb-4 opacity-80">
+        <li>Events matching inbound filters will be <strong>deleted</strong></li>
+        <li>Events with changed fingerprints will be <strong>moved</strong> to a different issue</li>
+        <li>Stack frames and culprits will be <strong>updated</strong> in place</li>
+    </ul>
+    <p class="text-error text-sm font-semibold mb-4">This operation cannot be undone.</p>
+    <div class="modal-action">
+        <button class="btn btn-ghost" @onclick="HideReingestionConfirm">Cancel</button>
+        <button class="btn btn-error" @onclick="StartReingestion" disabled="@_reingesting">
+            @if (_reingesting)
+            {
+                <span class="loading loading-spinner loading-sm"></span>
+            }
+            Re-ingest
+        </button>
+    </div>
+</ModalBase>
+
 @code {
     [Parameter, EditorRequired] public IssueDetailResponse Issue { get; set; } = default!;
     [Parameter] public EventCallback<IssueStatus> OnStatusChanged { get; set; }
     [Parameter] public EventCallback<Priority> OnPriorityChanged { get; set; }
+    [Parameter] public EventCallback OnReingestionStarted { get; set; }
 
     private bool _loading;
+    private bool _reingesting;
     private List<int>? _histogram;
 
     private bool _showShareModal;
+    private bool _showReingestionConfirm;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -251,4 +286,26 @@
 
     private void OpenShareModal() => _showShareModal = true;
     private void CloseShareModal() => _showShareModal = false;
+
+    private void ShowReingestionConfirm() => _showReingestionConfirm = true;
+    private void HideReingestionConfirm() => _showReingestionConfirm = false;
+
+    private async Task StartReingestion()
+    {
+        _reingesting = true;
+        _showReingestionConfirm = false;
+        try
+        {
+            await ReingestionService.StartIssueReingestionAsync(Issue.Id);
+            await OnReingestionStarted.InvokeAsync();
+        }
+        catch
+        {
+            // Conflict or error — silently ignore
+        }
+        finally
+        {
+            _reingesting = false;
+        }
+    }
 }

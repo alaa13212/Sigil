@@ -105,6 +105,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IStackTraceFilterService>(UseExisting<StackTraceFilterService>);
         services.AddScoped<IStackTraceFilterSource>(UseExisting<StackTraceFilterService>);
         services.AddScoped<ISharedLinkService, SharedLinkService>();
+        services.AddScoped<IReingestionService, ReingestionService>();
         services.AddSingleton<IRateLimiter, SlidingWindowRateLimiter>();
         
         services.AddScoped<TokenEncryptionService>();
@@ -186,6 +187,10 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<RecommendationAnalysisWorker>();
         services.AddSingleton<IWorker>(UseExisting<RecommendationAnalysisWorker>);
+
+        services.AddSingleton<ReingestionWorker>();
+        services.AddSingleton<IWorker<ReingestionWork>>(UseExisting<ReingestionWorker>);
+        services.AddSingleton<IWorker>(UseExisting<ReingestionWorker>);
 
         services.AddHostedService<RetentionWorker>();
 
