@@ -30,6 +30,8 @@ internal class ReingestionWorker(
 
     public async Task RunAsync(CancellationToken stoppingToken = default)
     {
+        await ResumeOrphanedJobsAsync(stoppingToken);
+
         await foreach (var work in _channel.Reader.ReadAllAsync(stoppingToken))
         {
             try
@@ -40,6 +42,31 @@ internal class ReingestionWorker(
             {
                 logger.LogError(ex, "Re-ingestion job {JobId} failed unexpectedly", work.JobId);
             }
+        }
+    }
+
+    private async Task ResumeOrphanedJobsAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var scope = services.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<SigilDbContext>();
+
+            var orphanedJobIds = await dbContext.ReingestionJobs
+                .AsNoTracking()
+                .Where(j => j.Status == ReingestionJobStatus.Pending || j.Status == ReingestionJobStatus.Running)
+                .Select(j => j.Id)
+                .ToListAsync(ct);
+
+            foreach (var jobId in orphanedJobIds)
+            {
+                logger.LogInformation("Re-enqueueing orphaned re-ingestion job {JobId}", jobId);
+                _channel.Writer.TryWrite(new ReingestionWork(jobId));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to resume orphaned re-ingestion jobs");
         }
     }
 
@@ -68,9 +95,14 @@ internal class ReingestionWorker(
 
         try
         {
+            var isResume = job.Status == ReingestionJobStatus.Running;
             job.Status = ReingestionJobStatus.Running;
-            job.StartedAt = dateTime.UtcNow;
+            job.StartedAt ??= dateTime.UtcNow;
             await dbContext.SaveChangesAsync(ct);
+
+            if (isResume)
+                logger.LogInformation("Resuming re-ingestion job {JobId} from event ID {LastId}",
+                    jobId, job.LastProcessedEventId);
 
             var project = await projectAccess.GetProjectByIdAsync(job.ProjectId);
             if (project is null)
@@ -114,7 +146,7 @@ internal class ReingestionWorker(
 
             var affectedIssueIds = new HashSet<int>();
             var affectedMergeSetIds = new HashSet<int>();
-            long lastId = 0;
+            long lastId = job.LastProcessedEventId;
 
             while (true)
             {
@@ -142,6 +174,7 @@ internal class ReingestionWorker(
                     fingerprintByIssueId, issueIdByFingerprint, suggestedEventIds,
                     affectedIssueIds, affectedMergeSetIds, ct);
 
+                job.LastProcessedEventId = lastId;
                 await dbContext.SaveChangesAsync(ct);
 
                 // Clear change tracker to prevent memory accumulation across batches.

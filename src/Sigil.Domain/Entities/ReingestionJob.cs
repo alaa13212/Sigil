@@ -23,6 +23,7 @@ public class ReingestionJob
     public int ProcessedEvents { get; set; }
     public int MovedEvents { get; set; }
     public int DeletedEvents { get; set; }
+    public long LastProcessedEventId { get; set; }
 
     public DateTime CreatedAt { get; set; }
     public DateTime? StartedAt { get; set; }
