@@ -143,6 +143,11 @@ internal class ReingestionWorker(
                     affectedIssueIds, affectedMergeSetIds, ct);
 
                 await dbContext.SaveChangesAsync(ct);
+
+                // Clear change tracker to prevent memory accumulation across batches.
+                // Re-attach the job entity since we update it every batch.
+                dbContext.ChangeTracker.Clear();
+                dbContext.ReingestionJobs.Attach(job);
             }
 
             // Recalculate stats for all affected issues
