@@ -122,8 +122,15 @@ internal class SourceCodeService(
         if (eventInfo == null) return null;
 
         // Use commit SHA when available; fall back to release name as a git tag
-        var @ref = eventInfo.CommitSha ?? eventInfo.ReleaseTag;
+        var @ref = eventInfo.CommitSha ?? CleanReleaseTag(eventInfo.ReleaseTag);
         return await FetchSourceContextAsync(eventInfo.ProjectId, filename, line, @ref);
+    }
+
+    private string? CleanReleaseTag(string? releaseTag)
+    {
+        if(releaseTag == null)
+            return null;
+        return releaseTag.Contains('@')? releaseTag.Split('@').Last() : releaseTag;
     }
 
     private async Task<SourceContextResponse?> FetchSourceContextAsync(
