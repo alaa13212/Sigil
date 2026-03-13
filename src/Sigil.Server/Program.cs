@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
@@ -13,6 +14,10 @@ using Sigil.Infrastructure.DependencyInjection;
 using Sigil.Server.Auth;
 using Sigil.Server.Authorization;
 using Sigil.Server.Components;
+
+// Force invariant culture to ensure Gregorian calendar and consistent date formatting
+CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseDefaultServiceProvider(options => options.ValidateOnBuild = true);

@@ -1,9 +1,15 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Sigil.Application.DependencyInjection;
 using Sigil.Domain.DependencyInjection;
 using Sigil.Server.Client.Auth;
 using Sigil.Server.Client.DependencyInjection;
+
+// Force invariant culture to ensure Gregorian calendar and consistent date formatting
+// regardless of the browser's locale (prevents Hijri/other calendar rendering)
+CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.UseDefaultServiceProvider(options => options.ValidateOnBuild = true);
