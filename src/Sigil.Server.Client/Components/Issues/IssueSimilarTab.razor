@@ -103,7 +103,11 @@ else
             <table class="table table-zebra table-sm">
                 <thead>
                     <tr>
-                        <th class="w-8"></th>
+                        <th class="w-8">
+                            <input type="checkbox" class="checkbox checkbox-sm"
+                                   checked="@(_similarIssues!.Count > 0 && _selected.Count == _similarIssues.Count)"
+                                   @onchange="e => SelectAll((bool)(e.Value ?? false))" />
+                        </th>
                         <th>Issue</th>
                         <th>Severity</th>
                         <th>Status</th>
@@ -173,6 +177,13 @@ else
     {
         try { _similarIssues = await IssueService.GetSimilarIssuesAsync(IssueId); }
         catch { _similarIssues = []; }
+    }
+
+    private void SelectAll(bool selected)
+    {
+        _mergeError = "";
+        if (selected) foreach (var sim in _similarIssues!) _selected.Add(sim.Id);
+        else _selected.Clear();
     }
 
     private void ToggleSelect(int issueId, bool selected)
