@@ -27,7 +27,7 @@ internal class NoAlertsConfiguredAnalyzer(SigilDbContext dbContext) : IProjectAn
             Severity = RecommendationSeverity.Info,
             Title = "No alert rules configured",
             Description = "You have no active alert rules. Configure alerts to get notified when new issues appear, regressions occur, or event volumes spike.",
-            ActionUrl = $"/projects/{project}/settings/alerts"
+            ActionUrl = $"/projects/{project.Id}/settings/alerts"
         };
     }
 }

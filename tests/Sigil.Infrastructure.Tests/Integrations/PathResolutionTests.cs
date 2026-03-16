@@ -79,9 +79,9 @@ public class PathResolutionTests
     {
         var code = string.Join("\n", Enumerable.Range(1, 20).Select(i => $"line {i}"));
         var lines = SourceCodeClientHelper.ExtractContext(code, lineNumber: 10, contextLines: 2);
-        lines.Should().HaveCount(5); // lines 7..11
-        lines[0].LineNumber.Should().Be(7);
-        lines[4].LineNumber.Should().Be(11);
+        lines.Should().HaveCount(5); // lines 8..12
+        lines[0].LineNumber.Should().Be(8);
+        lines[4].LineNumber.Should().Be(12);
         lines[2].Content.Should().Be("line 10");
     }
 

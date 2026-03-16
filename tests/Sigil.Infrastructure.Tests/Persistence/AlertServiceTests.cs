@@ -304,6 +304,66 @@ public class AlertServiceTests(TestDatabaseFixture fixture)
         await sender.DidNotReceive().SendAsync(Arg.Any<AlertRule>(), Arg.Any<Issue>(), Arg.Any<string>());
     }
 
+    [Fact]
+    public async Task EvaluateNewIssue_BelowMinSeverity_DoesNotFire()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var channel = await TestHelper.CreateAlertChannelAsync(ctx);
+        var rule = await TestHelper.CreateAlertRuleAsync(ctx, project.Id, channel.Id);
+        rule.Trigger = AlertTrigger.NewIssue;
+        rule.MinSeverity = Severity.Fatal; // issue is Error, below Fatal
+        await ctx.SaveChangesAsync();
+
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id); // Level = Error
+        var sender = StubSender();
+        var service = new AlertService(ctx, StubDateTime(), [sender], StubAppConfig());
+
+        await service.EvaluateNewIssueAsync(issue);
+
+        await sender.DidNotReceive().SendAsync(Arg.Any<AlertRule>(), Arg.Any<Issue>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task EvaluateNewIssue_MeetsMinSeverity_Fires()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var channel = await TestHelper.CreateAlertChannelAsync(ctx);
+        var rule = await TestHelper.CreateAlertRuleAsync(ctx, project.Id, channel.Id);
+        rule.Trigger = AlertTrigger.NewIssue;
+        rule.MinSeverity = Severity.Warning; // issue is Error, meets Warning
+        await ctx.SaveChangesAsync();
+
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id); // Level = Error
+        var sender = StubSender();
+        var service = new AlertService(ctx, StubDateTime(), [sender], StubAppConfig());
+
+        await service.EvaluateNewIssueAsync(issue);
+
+        await sender.Received().SendAsync(Arg.Any<AlertRule>(), Arg.Any<Issue>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task EvaluateRegression_BelowMinSeverity_DoesNotFire()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var channel = await TestHelper.CreateAlertChannelAsync(ctx);
+        var rule = await TestHelper.CreateAlertRuleAsync(ctx, project.Id, channel.Id);
+        rule.Trigger = AlertTrigger.IssueRegression;
+        rule.MinSeverity = Severity.Fatal;
+        await ctx.SaveChangesAsync();
+
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var sender = StubSender();
+        var service = new AlertService(ctx, StubDateTime(), [sender], StubAppConfig());
+
+        await service.EvaluateRegressionAsync(issue);
+
+        await sender.DidNotReceive().SendAsync(Arg.Any<AlertRule>(), Arg.Any<Issue>(), Arg.Any<string>());
+    }
+
     // ── Cooldown ──────────────────────────────────────────────────────────────
 
     [Fact]
