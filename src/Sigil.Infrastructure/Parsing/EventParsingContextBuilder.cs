@@ -12,20 +12,18 @@ internal class EventParsingContextBuilder(
 {
     public async Task<EventParsingContext> BuildAsync(int projectId)
     {
-        var normTask    = normalizationRuleEngine.GetRawRulesAsync(projectId);
-        var autoTagTask = autoTagRuleSource.GetRawRulesForProjectAsync(projectId);
-        var filterTask  = filterEngine.GetRawFiltersForProjectAsync(projectId);
-        var stfTask     = stackTraceFilterSource.GetRawFiltersForProjectAsync(projectId);
-
-        await Task.WhenAll(normTask, autoTagTask, filterTask, stfTask);
+        var normRules      = await normalizationRuleEngine.GetRawRulesAsync(projectId);
+        var autoTagRules   = await autoTagRuleSource.GetRawRulesForProjectAsync(projectId);
+        var inboundFilters = await filterEngine.GetRawFiltersForProjectAsync(projectId);
+        var stfFilters     = await stackTraceFilterSource.GetRawFiltersForProjectAsync(projectId);
 
         return new EventParsingContext
         {
             ProjectId = projectId,
-            NormalizationRules = normTask.Result,
-            AutoTagRules = autoTagTask.Result,
-            InboundFilters = filterTask.Result,
-            StackTraceFilters = stfTask.Result,
+            NormalizationRules = normRules,
+            AutoTagRules = autoTagRules,
+            InboundFilters = inboundFilters,
+            StackTraceFilters = stfFilters,
             HighVolumeThreshold = projectConfigService.HighVolumeThreshold(projectId),
         };
     }
