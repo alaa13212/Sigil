@@ -123,7 +123,7 @@ else
                                             }
                                             <SeverityBadge Level="issue.Level" />
                                             <div>
-                                                <div class="font-medium text-sm">@issue.Title</div>
+                                                <div class="font-medium text-sm line-clamp-1">@issue.Title</div>
                                                 @if (!string.IsNullOrEmpty(issue.ExceptionType))
                                                 {
                                                     <div class="text-xs opacity-50 font-mono">@issue.ExceptionType</div>

@@ -23,7 +23,7 @@ internal class WebhookAlertSender(HttpClient http) : IAlertSender
             issue = new
             {
                 id = issue.Id,
-                title = issue.Title,
+                title = AlertTitleHelper.GetAlertTitle(issue),
                 exception_type = issue.ExceptionType,
                 severity = issue.Level.ToString().ToLower(),
                 status = issue.Status.ToString().ToLower(),
