@@ -3,6 +3,7 @@ using NpgsqlTypes;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Application.Models.Events;
+using Sigil.Application.Models.IssueTrackers;
 using Sigil.Application.Models.Issues;
 using Sigil.Application.Models.MergeSets;
 using Sigil.Domain;
@@ -421,6 +422,11 @@ internal class IssueService(
                 issue.MergeSet.Id, primaryIssueId, members, issue.MergeSet.CreatedAt);
         }
 
+        var externalLinks = await dbContext.ExternalIssueLinks
+            .Where(l => l.IssueId == issueId)
+            .Select(l => new ExternalIssueLinkResponse(l.Id, l.IssueId, l.TrackerType, l.ExternalId, l.ExternalUrl, l.ExternalStatus, l.CreatedAt, l.LastSyncedAt))
+            .ToListAsync();
+
         return new IssueDetailResponse(
             issue.Id, issue.ProjectId, issue.Title, issue.ExceptionType, issue.Culprit,
             issue.Fingerprint, issue.Status, issue.Priority, issue.MergeSet?.Level ?? issue.Level,
@@ -430,7 +436,8 @@ internal class IssueService(
             issue.ResolvedBy?.DisplayName, issue.ResolvedAt,
             tagGroups, suggestedEvent,
             releaseInfo?.FirstRelease, releaseInfo?.LastRelease,
-            mergeSetResponse);
+            mergeSetResponse,
+            externalLinks);
     }
 
     public async Task<List<IssueSummary>> GetSimilarIssuesAsync(int issueId)

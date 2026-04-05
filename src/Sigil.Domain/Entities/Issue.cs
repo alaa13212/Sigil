@@ -70,7 +70,9 @@ public class Issue
     // Denormalized for full-text search
     [MaxLength(8192)]
     public string? SuggestedEventMessage { get; set; }
-    
+
     [MaxLength(8192)]
     public string? SuggestedFramesSummary { get; set; }
+
+    public ICollection<ExternalIssueLink> ExternalLinks { get; set; } = [];
 }

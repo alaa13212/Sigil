@@ -27,7 +27,8 @@ public record EventDetailResponse(
     List<StackFrameResponse> StackFrames,
     List<TagSummary> Tags,
     Dictionary<string, string>? Extra,
-    List<ExceptionResponse>? Exceptions = null);
+    List<ExceptionResponse>? Exceptions = null,
+    bool HasSourceMaps = false);
 
 public record IssueEventDetailResponse(
     EventDetailResponse Event,

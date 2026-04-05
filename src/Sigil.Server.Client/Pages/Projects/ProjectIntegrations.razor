@@ -1,0 +1,158 @@
+@page "/projects/{ProjectId:int}/settings/integrations"
+@attribute [Authorize]
+@using Sigil.Application.Models.IssueTrackers
+@using Sigil.Domain.Enums
+@inject IIssueTrackerService IssueTrackerService
+@layout ProjectSettingsLayout
+
+<PageTitle>Integrations — Sigil</PageTitle>
+
+<div class="max-w-2xl space-y-6">
+    <div class="flex items-center justify-between">
+        <h2 class="text-lg font-bold">Issue Tracker Integrations</h2>
+        <button class="btn btn-primary btn-sm" @onclick="OpenAdd">+ Add Integration</button>
+    </div>
+
+    <div class="alert alert-info text-sm">
+        <div>
+            <p>Connect an external issue tracker so you can create tasks directly from a Sigil issue. Supported: GitHub Issues, Jira, Linear, Asana.</p>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>
+    }
+    else if (_configs.Count == 0)
+    {
+        <EmptyState Title="No integrations configured" Description="Add an issue tracker integration to create tasks from Sigil issues." />
+    }
+    else
+    {
+        <div class="space-y-3">
+            @foreach (var cfg in _configs)
+            {
+                <div class="card bg-base-100">
+                    <div class="card-body p-4">
+                        <div class="flex items-center justify-between gap-4">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="font-semibold">@cfg.TrackerType</span>
+                                    @if (cfg.Enabled)
+                                    {
+                                        <span class="badge badge-sm badge-success">Enabled</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-sm badge-ghost">Disabled</span>
+                                    }
+                                    @if (cfg.TwoWaySync)
+                                    {
+                                        <span class="badge badge-sm badge-info">Two-way sync</span>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrEmpty(_testResults.GetValueOrDefault(cfg.Id)))
+                                {
+                                    var msg = _testResults[cfg.Id];
+                                    <div class="text-xs mt-1 @(msg == "OK" ? "text-success" : "text-error")">
+                                        @(msg == "OK" ? "Connection successful" : msg)
+                                    </div>
+                                }
+                            </div>
+                            <div class="flex items-center gap-1 shrink-0">
+                                <button class="btn btn-ghost btn-xs" @onclick="() => TestConfig(cfg.Id)"
+                                        disabled="@(_testing.Contains(cfg.Id))">
+                                    @if (_testing.Contains(cfg.Id))
+                                    {
+                                        <span class="loading loading-spinner loading-xs"></span>
+                                    }
+                                    else
+                                    {
+                                        <span>Test</span>
+                                    }
+                                </button>
+                                <button class="btn btn-ghost btn-xs" @onclick="() => OpenEdit(cfg)">Edit</button>
+                                <button class="btn btn-ghost btn-xs text-error"
+                                        @onclick="() => DeleteConfig(cfg.Id)">Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<IssueTrackerConfigFormModal
+    IsOpen="_showModal"
+    ProjectId="ProjectId"
+    Config="_editingConfig"
+    OnClose="CloseModal"
+    OnSaved="OnSaved" />
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+
+    private List<IssueTrackerConfigResponse> _configs = [];
+    private bool _loading = true;
+
+    private bool _showModal;
+    private IssueTrackerConfigResponse? _editingConfig;
+
+    private Dictionary<int, string> _testResults = new();
+    private HashSet<int> _testing = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        try { _configs = await IssueTrackerService.GetConfigsAsync(ProjectId); }
+        catch { _configs = []; }
+        _loading = false;
+    }
+
+    private void OpenAdd()
+    {
+        _editingConfig = null;
+        _showModal = true;
+    }
+
+    private void OpenEdit(IssueTrackerConfigResponse cfg)
+    {
+        _editingConfig = cfg;
+        _showModal = true;
+    }
+
+    private void CloseModal() => _showModal = false;
+
+    private async Task OnSaved()
+    {
+        _showModal = false;
+        _configs = await IssueTrackerService.GetConfigsAsync(ProjectId);
+    }
+
+    private async Task TestConfig(int configId)
+    {
+        _testing.Add(configId);
+        _testResults.Remove(configId);
+        try
+        {
+            var ok = await IssueTrackerService.TestConfigAsync(configId);
+            _testResults[configId] = ok ? "OK" : "Connection failed";
+        }
+        catch (Exception ex)
+        {
+            _testResults[configId] = ex.Message;
+        }
+        finally
+        {
+            _testing.Remove(configId);
+        }
+    }
+
+    private async Task DeleteConfig(int configId)
+    {
+        await IssueTrackerService.DeleteConfigAsync(configId);
+        _configs.RemoveAll(c => c.Id == configId);
+        _testResults.Remove(configId);
+    }
+}

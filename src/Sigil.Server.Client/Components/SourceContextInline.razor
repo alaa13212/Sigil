@@ -31,9 +31,20 @@ else if (CanLoadFromVcs)
     {
         <span class="mt-1 text-xs text-error">Could not load source.</span>
     }
+    else if (_context != null && _context.Lines.Count == 0 && _context.IsSourceMapped)
+    {
+        <div class="mt-1 text-xs opacity-70">
+            <span class="badge badge-sm badge-accent mr-1">mapped</span>
+            @_context.Filename<span class="opacity-50">:@_context.TargetLine</span>
+        </div>
+    }
     else if (_context != null)
     {
         <div class="mt-1 bg-base-300 rounded whitespace-pre px-3 py-2 text-xs font-mono overflow-x-auto relative">
+            @if (_context.IsSourceMapped)
+            {
+                <span class="badge badge-sm badge-accent mb-1">mapped</span>
+            }
             @if(_context.FileUrl != null)
             {
                 <a class="stretched-link" href="@_context.FileUrl" target="_blank"></a>
@@ -41,7 +52,7 @@ else if (CanLoadFromVcs)
             @for (var i = 0; i < _context.Lines.Count; i++)
             {
                 var line = _context.Lines[i];
-                var isTarget = line.LineNumber == Frame.LineNumber;
+                var isTarget = line.LineNumber == _context.TargetLine;
                 var highlighted = _highlightedLines != null && i < _highlightedLines.Length
                     ? _highlightedLines[i]
                     : null;
@@ -65,6 +76,7 @@ else if (CanLoadFromVcs)
     [Parameter, EditorRequired] public StackFrameResponse Frame { get; set; } = default!;
     [Parameter] public long? EventId { get; set; }
     [Parameter] public bool HasLinkedRepository { get; set; }
+    [Parameter] public bool HasSourceMaps { get; set; }
 
     private SourceContextResponse? _context;
     private bool _loading;
@@ -76,7 +88,7 @@ else if (CanLoadFromVcs)
         Frame.ContextLine != null || Frame.PreContext?.Length > 0 || Frame.PostContext?.Length > 0;
 
     private bool CanLoadFromVcs =>
-        HasLinkedRepository && EventId.HasValue && !string.IsNullOrEmpty(Frame.Filename) && Frame.LineNumber.HasValue;
+        (HasLinkedRepository || HasSourceMaps) && EventId.HasValue && !string.IsNullOrEmpty(Frame.Filename) && Frame.LineNumber.HasValue;
 
     protected override async Task OnInitializedAsync()
     {

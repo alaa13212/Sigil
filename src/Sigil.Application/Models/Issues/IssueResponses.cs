@@ -1,4 +1,5 @@
 using Sigil.Application.Models.Events;
+using Sigil.Application.Models.IssueTrackers;
 using Sigil.Application.Models.MergeSets;
 using Sigil.Domain.Enums;
 
@@ -42,7 +43,8 @@ public record IssueDetailResponse(
     EventSummary? SuggestedEvent,
     string? FirstRelease,
     string? LastRelease,
-    MergeSetResponse? MergeSet = null);
+    MergeSetResponse? MergeSet = null,
+    List<ExternalIssueLinkResponse>? ExternalLinks = null);
 
 public record IssueTagGroup(string Key, List<IssueTagValue> Values, int TotalCount);
 

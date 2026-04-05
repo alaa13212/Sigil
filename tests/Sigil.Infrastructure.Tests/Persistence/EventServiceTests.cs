@@ -28,7 +28,7 @@ public class EventServiceTests(TestDatabaseFixture fixture)
     }
 
     private static EventService Create(SigilDbContext ctx, ICompressionService? compression = null)
-        => new(ctx, compression ?? StubCompression(), StubDateTime());
+        => new(ctx, compression ?? StubCompression(), StubDateTime(), Substitute.For<ISourceMapService>());
 
     private static ParsedEvent MakeEvent(string? release = null, ParsedEventUser? user = null,
         Dictionary<string, string>? tags = null, List<ParsedStackFrame>? frames = null,

@@ -42,6 +42,9 @@ internal class SigilDbContext(DbContextOptions<SigilDbContext> options) : SaveSu
     public DbSet<SourceCodeProvider> SourceCodeProviders => Set<SourceCodeProvider>();
     public DbSet<ProjectRepository> ProjectRepositories => Set<ProjectRepository>();
     public DbSet<ReingestionJob> ReingestionJobs => Set<ReingestionJob>();
+    public DbSet<SourceMap> SourceMaps => Set<SourceMap>();
+    public DbSet<IssueTrackerConfig> IssueTrackerConfigs => Set<IssueTrackerConfig>();
+    public DbSet<ExternalIssueLink> ExternalIssueLinks => Set<ExternalIssueLink>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

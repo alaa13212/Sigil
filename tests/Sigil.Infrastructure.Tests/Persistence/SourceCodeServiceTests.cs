@@ -36,7 +36,7 @@ public class SourceCodeServiceTests(TestDatabaseFixture fixture)
             ? (IEnumerable<ISourceCodeClient>)[mockClient]
             : Array.Empty<ISourceCodeClient>();
         var cache = new MemoryCache(new MemoryCacheOptions());
-        return new SourceCodeService(context, StubDateTime(), encryption, clients, cache);
+        return new SourceCodeService(context, StubDateTime(), encryption, clients, cache, Substitute.For<ISourceMapResolver>());
     }
 
     private static async Task<SourceCodeProvider> CreateProviderAsync(

@@ -90,7 +90,7 @@ else
                                 </div>
                                 @if (isExpanded)
                                 {
-                                    <SourceContextInline Frame="frame" EventId="EventId" HasLinkedRepository="HasLinkedRepository" />
+                                    <SourceContextInline Frame="frame" EventId="EventId" HasLinkedRepository="HasLinkedRepository" HasSourceMaps="HasSourceMaps" />
                                 }
                             }
                         </div>
@@ -142,6 +142,7 @@ else
     [Parameter] public Platform Platform { get; set; } = Platform.Other;
     [Parameter] public long? EventId { get; set; }
     [Parameter] public bool HasLinkedRepository { get; set; }
+    [Parameter] public bool HasSourceMaps { get; set; }
 
     private bool _interactive;
     private bool _hideExternal = true;
@@ -191,7 +192,7 @@ else
         frame.InApp &&
         !string.IsNullOrEmpty(frame.Filename) &&
         frame.LineNumber.HasValue &&
-        (HasSdkContext(frame) || HasLinkedRepository);
+        (HasSdkContext(frame) || HasLinkedRepository || HasSourceMaps);
 
     private static bool HasSdkContext(StackFrameResponse frame) =>
         frame.ContextLine != null || frame.PreContext?.Length > 0 || frame.PostContext?.Length > 0;

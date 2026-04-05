@@ -12,7 +12,7 @@ using Sigil.Infrastructure.Parsing.Models;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class EventService(SigilDbContext dbContext, ICompressionService compressionService, IDateTime dateTime) : IEventService, IEventIngestionService
+internal class EventService(SigilDbContext dbContext, ICompressionService compressionService, IDateTime dateTime, ISourceMapService sourceMapService) : IEventService, IEventIngestionService
 {
     private static readonly JsonSerializerOptions SnakeCaseOptions = new()
     {
@@ -320,12 +320,14 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         var environment = tags.FirstOrDefault(t => t.Key == "environment")?.Value;
 
         var exceptions = await ExtractExceptionsAsync(eventId);
+        var hasSourceMaps = e.ReleaseId.HasValue && await sourceMapService.HasSourceMapsAsync(e.ReleaseId.Value);
 
         return new EventDetailResponse(
             e.Id, e.EventId, e.IssueId, e.Message, e.ExceptionType, e.Culprit, e.Level,
             e.Timestamp, e.Platform, e.Release?.RawName,
             environment, user, stackFrames, tags, e.Extra,
-            exceptions is { Count: > 1 } ? exceptions : null);
+            exceptions is { Count: > 1 } ? exceptions : null,
+            hasSourceMaps);
     }
 
     public async Task<IssueEventDetailResponse?> GetIssueEventDetailAsync(int issueId, long eventId)

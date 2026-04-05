@@ -57,7 +57,7 @@
             <div class="card bg-base-300">
                 <div class="card-body p-4 overflow-auto">
                     <h2 class="card-title text-base">Stack Trace</h2>
-                    <StackTraceViewer Frames="EventDetail.StackFrames" Platform="EventDetail.Platform" EventId="EventDetail.Id" HasLinkedRepository="_hasLinkedRepository"/>
+                    <StackTraceViewer Frames="EventDetail.StackFrames" Platform="EventDetail.Platform" EventId="EventDetail.Id" HasLinkedRepository="_hasLinkedRepository" HasSourceMaps="EventDetail.HasSourceMaps"/>
                 </div>
             </div>
         }
@@ -83,7 +83,7 @@
                                         @if (ex.StackFrames.Count > 0)
                                         {
                                             <div class="mt-2">
-                                                <StackTraceViewer Frames="ex.StackFrames" Platform="EventDetail.Platform" EventId="EventDetail.Id" HasLinkedRepository="_hasLinkedRepository"/>
+                                                <StackTraceViewer Frames="ex.StackFrames" Platform="EventDetail.Platform" EventId="EventDetail.Id" HasLinkedRepository="_hasLinkedRepository" HasSourceMaps="EventDetail.HasSourceMaps"/>
                                             </div>
                                         }
                                     </div>

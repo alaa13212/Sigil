@@ -1,0 +1,151 @@
+@using Sigil.Application.Interfaces
+@using Sigil.Application.Models.IssueTrackers
+@using Sigil.Domain.Enums
+@inject IIssueTrackerService IssueTrackerService
+
+<ModalBase IsOpen="IsOpen" Title="@(Config == null ? "Add Integration" : "Edit Integration")" Size="ModalSize.Medium" OnClose="OnClose">
+    <div class="space-y-4">
+        @if (Config == null)
+        {
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Tracker</legend>
+                <select class="select select-sm w-full" @bind="_trackerType">
+                    @foreach (var t in Enum.GetValues<TrackerType>())
+                    {
+                        <option value="@t">@t</option>
+                    }
+                </select>
+            </fieldset>
+        }
+
+        @if (_trackerType == TrackerType.GitHub)
+        {
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Repository Owner</legend>
+                <input class="input input-sm w-full" @bind="_owner" placeholder="e.g. my-org" />
+            </fieldset>
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Repository Name</legend>
+                <input class="input input-sm w-full" @bind="_repo" placeholder="e.g. my-app" />
+            </fieldset>
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Personal Access Token</legend>
+                <input class="input input-sm w-full" type="password" @bind="_pat" placeholder="ghp_..." />
+                <label class="fieldset-label">Requires <code>repo</code> scope</label>
+            </fieldset>
+        }
+        else if (_trackerType == TrackerType.Jira)
+        {
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Jira Base URL</legend>
+                <input class="input input-sm w-full" @bind="_baseUrl" placeholder="https://yourcompany.atlassian.net" />
+            </fieldset>
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Email</legend>
+                <input class="input input-sm w-full" @bind="_email" placeholder="your@email.com" />
+            </fieldset>
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">API Token</legend>
+                <input class="input input-sm w-full" type="password" @bind="_apiToken" />
+                <label class="fieldset-label">Generate at <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" class="link">Atlassian Account Settings</a></label>
+            </fieldset>
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Project Key</legend>
+                <input class="input input-sm w-full" @bind="_projectKey" placeholder="e.g. PROJ" />
+            </fieldset>
+        }
+        else if (_trackerType == TrackerType.Linear)
+        {
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">API Key</legend>
+                <input class="input input-sm w-full" type="password" @bind="_apiKey" placeholder="lin_api_..." />
+                <label class="fieldset-label">Generate at <a href="https://linear.app/settings/api" target="_blank" class="link">Linear Settings → API</a></label>
+            </fieldset>
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Team ID</legend>
+                <input class="input input-sm w-full" @bind="_teamId" placeholder="Team GID from Linear" />
+            </fieldset>
+        }
+        else if (_trackerType == TrackerType.Asana)
+        {
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Personal Access Token</legend>
+                <input class="input input-sm w-full" type="password" @bind="_pat" placeholder="1/..." />
+                <label class="fieldset-label">Generate at <a href="https://app.asana.com/0/developer-console" target="_blank" class="link">Asana Developer Console</a></label>
+            </fieldset>
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Project GID</legend>
+                <input class="input input-sm w-full" @bind="_projectGid" placeholder="Asana project GID" />
+            </fieldset>
+        }
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="alert alert-error text-sm">@_errorMessage</div>
+        }
+    </div>
+    <div class="modal-action">
+        <button class="btn btn-ghost" @onclick="OnClose" disabled="@_submitting">Cancel</button>
+        <button class="btn btn-primary" @onclick="Submit" disabled="@_submitting">
+            @if (_submitting) { <span class="loading loading-spinner loading-sm"></span> }
+            @(Config == null ? "Add" : "Save")
+        </button>
+    </div>
+</ModalBase>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public int ProjectId { get; set; }
+    [Parameter] public IssueTrackerConfigResponse? Config { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private TrackerType _trackerType = TrackerType.GitHub;
+    private string _owner = "", _repo = "", _pat = "", _baseUrl = "", _email = "";
+    private string _apiToken = "", _projectKey = "", _apiKey = "", _teamId = "", _projectGid = "";
+    private bool _submitting;
+    private string? _errorMessage;
+
+    private async Task Submit()
+    {
+        _submitting = true;
+        _errorMessage = null;
+        try
+        {
+            var configJson = BuildConfigJson();
+            if (Config == null)
+            {
+                await IssueTrackerService.AddConfigAsync(ProjectId, new CreateTrackerConfigRequest(_trackerType, configJson));
+            }
+            else
+            {
+                await IssueTrackerService.UpdateConfigAsync(Config.Id, new UpdateTrackerConfigRequest(configJson, null, null));
+            }
+            ResetForm();
+            await OnSaved.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private string BuildConfigJson() => _trackerType switch
+    {
+        TrackerType.GitHub => System.Text.Json.JsonSerializer.Serialize(new { owner = _owner, repo = _repo, pat = _pat }),
+        TrackerType.Jira   => System.Text.Json.JsonSerializer.Serialize(new { baseUrl = _baseUrl, email = _email, apiToken = _apiToken, projectKey = _projectKey }),
+        TrackerType.Linear => System.Text.Json.JsonSerializer.Serialize(new { apiKey = _apiKey, teamId = _teamId }),
+        TrackerType.Asana  => System.Text.Json.JsonSerializer.Serialize(new { pat = _pat, projectGid = _projectGid }),
+        _ => "{}"
+    };
+
+    private void ResetForm()
+    {
+        _owner = _repo = _pat = _baseUrl = _email = _apiToken = _projectKey = _apiKey = _teamId = _projectGid = "";
+        _errorMessage = null;
+    }
+}

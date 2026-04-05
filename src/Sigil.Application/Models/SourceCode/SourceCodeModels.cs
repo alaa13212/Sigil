@@ -35,7 +35,8 @@ public record SourceContextResponse(
     string Filename,
     int TargetLine,
     List<SourceLine> Lines,
-    string? FileUrl = null);
+    string? FileUrl = null,
+    bool IsSourceMapped = false);
 
 public record SourceLine(
     int LineNumber,

@@ -1,6 +1,8 @@
 @using Sigil.Application.Models.Issues
+@using Sigil.Application.Models.IssueTrackers
 @using Sigil.Domain
 @inject IIssueService IssueService
+@inject IIssueTrackerService IssueTrackerService
 @inject ITagValueFormatter TagValueFormatter
 @inject IReingestionService ReingestionService
 
@@ -132,6 +134,52 @@
         </div>
     </div>
 
+    <!-- External Issue Links -->
+    @if (_trackerConfigs.Count > 0 || (Issue.ExternalLinks?.Count > 0))
+    {
+        <div class="card bg-base-100">
+            <div class="card-body p-4 space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-semibold">Linked Issues</span>
+                    @if (_trackerConfigs.Count > 0)
+                    {
+                        <div class="dropdown dropdown-end">
+                            <label tabindex="0" class="btn btn-xs btn-ghost">+ Create Task</label>
+                            <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box shadow z-10 p-1 min-w-max">
+                                @foreach (var cfg in _trackerConfigs)
+                                {
+                                    <li><button @onclick="() => OpenCreateTaskModal(cfg)">@cfg.TrackerType</button></li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                </div>
+                @if (Issue.ExternalLinks?.Count > 0)
+                {
+                    @foreach (var link in Issue.ExternalLinks)
+                    {
+                        <div class="flex items-center justify-between text-xs">
+                            <a href="@link.ExternalUrl" target="_blank" class="link link-hover font-mono truncate mr-2">
+                                @link.TrackerType: @link.ExternalId
+                            </a>
+                            <div class="flex items-center gap-1 shrink-0">
+                                @if (!string.IsNullOrEmpty(link.ExternalStatus))
+                                {
+                                    <span class="badge badge-xs">@link.ExternalStatus</span>
+                                }
+                                <button class="btn btn-ghost btn-xs text-error opacity-60" @onclick="() => UnlinkExternal(link.Id)">✕</button>
+                            </div>
+                        </div>
+                    }
+                }
+                else if (_trackerConfigs.Count > 0)
+                {
+                    <p class="text-xs opacity-50">No linked issues.</p>
+                }
+            </div>
+        </div>
+    }
+
     <!-- Tags with frequency bars -->
     @{
         var systemTags = Issue.Tags.Where(t => SystemTags.IsSystemTag(t.Key)).ToList();
@@ -202,6 +250,7 @@
 </div>
 
 <ShareModal IssueId="Issue.Id" IsOpen="_showShareModal" OnClose="CloseShareModal" />
+<CreateExternalIssueModal IsOpen="_showCreateTaskModal" Issue="Issue" TrackerConfig="_selectedTrackerConfig" OnClose="CloseCreateTaskModal" OnCreated="OnExternalIssueCreated" />
 
 <ModalBase IsOpen="_showReingestionConfirm" Title="Confirm Re-ingestion" OnClose="HideReingestionConfirm">
     <p class="mb-2">This will re-process all events for this issue through the current rule set:</p>
@@ -228,6 +277,7 @@
     [Parameter] public EventCallback<IssueStatus> OnStatusChanged { get; set; }
     [Parameter] public EventCallback<Priority> OnPriorityChanged { get; set; }
     [Parameter] public EventCallback OnReingestionStarted { get; set; }
+    [Parameter] public EventCallback OnLinksChanged { get; set; }
 
     private bool _loading;
     private bool _reingesting;
@@ -235,11 +285,38 @@
 
     private bool _showShareModal;
     private bool _showReingestionConfirm;
+    private bool _showCreateTaskModal;
+    private IssueTrackerConfigResponse? _selectedTrackerConfig;
+    private List<IssueTrackerConfigResponse> _trackerConfigs = [];
 
     protected override async Task OnParametersSetAsync()
     {
         try { _histogram = await IssueService.GetHistogramAsync(Issue.Id); }
         catch { _histogram = null; }
+
+        try { _trackerConfigs = await IssueTrackerService.GetConfigsAsync(Issue.ProjectId); }
+        catch { _trackerConfigs = []; }
+    }
+
+    private void OpenCreateTaskModal(IssueTrackerConfigResponse cfg)
+    {
+        _selectedTrackerConfig = cfg;
+        _showCreateTaskModal = true;
+    }
+
+    private void CloseCreateTaskModal() => _showCreateTaskModal = false;
+
+    private async Task OnExternalIssueCreated()
+    {
+        _showCreateTaskModal = false;
+        await OnLinksChanged.InvokeAsync();
+    }
+
+    private async Task UnlinkExternal(int linkId)
+    {
+        await IssueTrackerService.UnlinkAsync(linkId);
+        Issue.ExternalLinks?.RemoveAll(l => l.Id == linkId);
+        await OnLinksChanged.InvokeAsync();
     }
 
     private async Task UpdateStatus(IssueStatus status)

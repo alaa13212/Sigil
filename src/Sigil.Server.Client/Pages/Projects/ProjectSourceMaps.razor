@@ -1,0 +1,134 @@
+@page "/projects/{ProjectId:int}/settings/source-maps"
+@attribute [Authorize]
+@using Sigil.Application.Interfaces
+@using Sigil.Application.Models.SourceMaps
+@inject ISourceMapService SourceMapService
+@inject NavigationManager Nav
+@layout ProjectSettingsLayout
+
+<PageTitle>Source Maps — Sigil</PageTitle>
+
+<div class="max-w-3xl space-y-6">
+    <div>
+        <h2 class="text-lg font-bold">Source Maps</h2>
+        <p class="text-sm opacity-60 mt-1">Upload source maps to resolve minified JavaScript stack traces to their original source.</p>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>
+    }
+    else if (_releaseMaps.Count == 0)
+    {
+        <div class="card bg-base-100">
+            <div class="card-body py-12 items-center text-center">
+                <p class="text-sm font-semibold">No source maps uploaded</p>
+                <p class="text-xs opacity-60">Upload source maps for a release using the curl example below.</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="space-y-3">
+            @foreach (var group in _releaseMaps)
+            {
+                <div class="card bg-base-100">
+                    <div class="card-body p-4">
+                        <div class="flex items-center justify-between">
+                            <span class="font-semibold font-mono text-sm">@group.Key</span>
+                            <span class="badge badge-sm">@group.Value.Count map@(group.Value.Count == 1 ? "" : "s")</span>
+                        </div>
+                        <div class="mt-2 space-y-1">
+                            @foreach (var map in group.Value)
+                            {
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="font-mono opacity-70 truncate mr-2">@map.MinifiedFilePath</span>
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        <span class="opacity-50">@FormatSize(map.OriginalSize)</span>
+                                        <button class="btn btn-ghost btn-xs text-error" @onclick="() => DeleteMap(map.Id)">Delete</button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Upload instructions -->
+    <div class="card bg-base-100">
+        <div class="card-body p-4 space-y-3">
+            <h3 class="font-semibold text-sm">Upload via CLI</h3>
+            <p class="text-xs opacity-60">Use the following command to upload a source map from your CI/CD pipeline. The release name must match the release used in your SDK configuration. The <code class="font-mono">@@</code> in the release name must be URL-encoded as <code class="font-mono">%40</code>.</p>
+            <div class="bg-base-200 rounded p-3 text-xs overflow-x-auto">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="opacity-50 font-mono"># Upload a single source map</span>
+                    <CopyButton Text="@_uploadExample" Class="btn-xs" Label="Copy" />
+                </div>
+                <pre class="font-mono whitespace-pre-wrap">@_uploadExample</pre>
+            </div>
+            <div class="bg-base-200 rounded p-3 text-xs overflow-x-auto mt-2">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="opacity-50 font-mono"># Upload all .js.map files in a directory</span>
+                    <CopyButton Text="@_bulkUploadExample" Class="btn-xs" Label="Copy" />
+                </div>
+                <pre class="font-mono whitespace-pre-wrap">@_bulkUploadExample</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+
+    private bool _loading = true;
+    private Dictionary<string, List<SourceMapInfo>> _releaseMaps = [];
+    private string _uploadExample = "";
+    private string _bulkUploadExample = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var baseUrl = new Uri(Nav.Uri).GetLeftPart(UriPartial.Authority);
+        _uploadExample = $"curl -X POST \"{baseUrl}/api/projects/{ProjectId}/releases/myapp%401.0.0/sourcemaps\" \\\n" +
+                         "  -F \"file=@dist/main.js.map\" \\\n" +
+                         "  -F \"minifiedFilePath=/static/js/main.js\" \\\n" +
+                         "  -H \"Authorization: Bearer {token}\"";
+
+        _bulkUploadExample = $"for f in dist/*.js.map; do\n" +
+                             $"  base=$(basename \"$f\" .map)\n" +
+                             $"  curl -X POST \"{baseUrl}/api/projects/{ProjectId}/releases/myapp%401.0.0/sourcemaps\" \\\n" +
+                             "    -F \"file=@$f\" \\\n" +
+                             "    -F \"minifiedFilePath=/static/js/$base\" \\\n" +
+                             "    -H \"Authorization: Bearer {token}\"\n" +
+                             "done";
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _releaseMaps = [];
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task DeleteMap(int mapId)
+    {
+        await SourceMapService.DeleteAsync(mapId);
+        await LoadAsync();
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024} KB";
+        return $"{bytes / 1024.0 / 1024.0:F1} MB";
+    }
+}

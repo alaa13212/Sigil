@@ -111,6 +111,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<TokenEncryptionService>();
         services.AddScoped<ISourceCodeService, SourceCodeService>();
         services.AddAllImplementations<ISourceCodeClient>(lifetime: ServiceLifetime.Singleton);
+        services.AddScoped<ISourceMapService, SourceMapService>();
+        services.AddSingleton<ISourceMapResolver, SourceMapResolver>();
+        services.AddScoped<IIssueTrackerService, IssueTrackerService>();
+        services.AddAllImplementations<IIssueTrackerClient>(lifetime: ServiceLifetime.Singleton);
         services.AddMemoryCache();
         
         services.AddAllImplementations<IStackFrameCleaner>(lifetime: ServiceLifetime.Singleton);
@@ -193,6 +197,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IWorker>(UseExisting<ReingestionWorker>);
 
         services.AddHostedService<RetentionWorker>();
+        services.AddHostedService<IssueTrackerSyncWorker>();
 
         services.Configure<BatchWorkersConfig>(configuration.GetSection("BatchWorkers"));
     }

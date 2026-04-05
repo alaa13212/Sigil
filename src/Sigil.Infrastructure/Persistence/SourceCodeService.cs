@@ -13,7 +13,8 @@ internal class SourceCodeService(
     IDateTime dateTime,
     TokenEncryptionService tokenEncryption,
     IEnumerable<ISourceCodeClient> clients,
-    IMemoryCache cache) : ISourceCodeService
+    IMemoryCache cache,
+    ISourceMapResolver sourceMapResolver) : ISourceCodeService
 {
     public async Task<SourceCodeProviderResponse> AddProviderAsync(CreateProviderRequest request, Guid createdByUserId)
     {
@@ -114,6 +115,7 @@ internal class SourceCodeService(
             .Select(e => new
             {
                 e.ProjectId,
+                e.ReleaseId,
                 CommitSha  = e.Release != null ? e.Release.CommitSha : null,
                 ReleaseTag = e.Release != null ? e.Release.RawName   : null
             })
@@ -121,7 +123,25 @@ internal class SourceCodeService(
 
         if (eventInfo == null) return null;
 
-        // Use commit SHA when available; fall back to release name as a git tag
+        // Try source map resolution first
+        if (eventInfo.ReleaseId.HasValue && !string.IsNullOrEmpty(filename))
+        {
+            var resolved = await sourceMapResolver.ResolveAsync(eventInfo.ReleaseId.Value, filename, line, 0);
+            if (resolved != null)
+            {
+                // Try to fetch source lines for the resolved original file from VCS
+                var @refForResolved = eventInfo.CommitSha ?? CleanReleaseTag(eventInfo.ReleaseTag);
+                var vcsContext = await FetchSourceContextAsync(eventInfo.ProjectId, resolved.OriginalFilename, resolved.OriginalLine, @refForResolved);
+
+                if (vcsContext != null)
+                    return vcsContext with { IsSourceMapped = true };
+
+                // No VCS — return just the resolved position info
+                return new SourceContextResponse(resolved.OriginalFilename, resolved.OriginalLine, [], null, true);
+            }
+        }
+
+        // Fall back to direct VCS-based context
         var @ref = eventInfo.CommitSha ?? CleanReleaseTag(eventInfo.ReleaseTag);
         return await FetchSourceContextAsync(eventInfo.ProjectId, filename, line, @ref);
     }

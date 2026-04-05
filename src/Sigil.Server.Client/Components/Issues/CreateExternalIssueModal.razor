@@ -1,0 +1,81 @@
+@using Sigil.Application.Interfaces
+@using Sigil.Application.Models.IssueTrackers
+@using Sigil.Application.Models.Issues
+@inject IIssueTrackerService IssueTrackerService
+
+<ModalBase IsOpen="IsOpen" Title="@($"Create {TrackerConfig?.TrackerType} Task")" OnClose="OnClose">
+    @if (TrackerConfig != null)
+    {
+        <div class="space-y-4">
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Title</legend>
+                <input class="input input-sm w-full" @bind="_title" placeholder="Issue title" />
+            </fieldset>
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Description</legend>
+                <textarea class="textarea textarea-sm w-full h-24" @bind="_description" placeholder="Describe the issue..."></textarea>
+            </fieldset>
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <div class="alert alert-error text-sm">@_errorMessage</div>
+            }
+        </div>
+        <div class="modal-action">
+            <button class="btn btn-ghost" @onclick="OnClose" disabled="@_submitting">Cancel</button>
+            <button class="btn btn-primary" @onclick="Submit" disabled="@_submitting">
+                @if (_submitting)
+                {
+                    <span class="loading loading-spinner loading-sm"></span>
+                }
+                Create
+            </button>
+        </div>
+    }
+</ModalBase>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public IssueDetailResponse? Issue { get; set; }
+    [Parameter] public IssueTrackerConfigResponse? TrackerConfig { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnCreated { get; set; }
+
+    private string _title = "";
+    private string _description = "";
+    private bool _submitting;
+    private string? _errorMessage;
+
+    protected override void OnParametersSet()
+    {
+        if (Issue != null && string.IsNullOrEmpty(_title))
+            _title = Issue.Title ?? $"Issue #{Issue.Id}";
+    }
+
+    private async Task Submit()
+    {
+        if (TrackerConfig == null || Issue == null) return;
+        if (string.IsNullOrWhiteSpace(_title))
+        {
+            _errorMessage = "Title is required.";
+            return;
+        }
+
+        _submitting = true;
+        _errorMessage = null;
+        try
+        {
+            await IssueTrackerService.CreateExternalIssueAsync(Issue.Id, TrackerConfig.Id);
+            _title = "";
+            _description = "";
+            await OnCreated.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to create task: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+}
