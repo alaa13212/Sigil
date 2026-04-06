@@ -42,17 +42,6 @@ public class CacheManagerTests
     }
 
     [Fact]
-    public void Invalidate_RemovesEntry()
-    {
-        var cache = CreateManager();
-        cache.Set("test-category", "key1", "value1");
-
-        cache.Invalidate("test-category", "key1");
-
-        cache.TryGet<string>("test-category", "key1", out _).Should().BeFalse();
-    }
-
-    [Fact]
     public void Invalidate_Generic_RemovesByCategory()
     {
         var cache = CreateManager();
@@ -90,55 +79,6 @@ public class CacheManagerTests
 
         cache.TryGet<string>("test-category", "k1", out _).Should().BeFalse();
         cache.TryGet<string>("other", "k2", out _).Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task GetOrAdd_CacheMiss_CallsFactory()
-    {
-        var cache = CreateManager();
-        var callCount = 0;
-
-        var result = await cache.GetOrAdd("test-category", "key1", async _ =>
-        {
-            callCount++;
-            return "computed";
-        });
-
-        result.Should().Be("computed");
-        callCount.Should().Be(1);
-    }
-
-    [Fact]
-    public async Task GetOrAdd_CacheHit_SkipsFactory()
-    {
-        var cache = CreateManager();
-        cache.Set("test-category", "key1", "cached");
-        var callCount = 0;
-
-        var result = await cache.GetOrAdd("test-category", "key1", async _ =>
-        {
-            callCount++;
-            return "new";
-        });
-
-        result.Should().Be("cached");
-        callCount.Should().Be(0);
-    }
-
-    [Fact]
-    public async Task GetOrAddNullable_NullValue_CachesAndReturns()
-    {
-        var cache = CreateManager();
-        var callCount = 0;
-
-        var result1 = await cache.GetOrAddNullable<string>("test-category", "key1", async _ =>
-        {
-            callCount++;
-            return null;
-        });
-
-        result1.Should().BeNull();
-        callCount.Should().Be(1);
     }
 
     [Fact]

@@ -10,7 +10,6 @@ public readonly record struct CacheQueryResult<TKey, TModel>(List<TModel> Hits, 
 public static class CacheServiceExtensions
 {
     public static string Category<T>(this T cacheService) where T : ICacheService => T.CategoryName;
-    public static string GetKey<T>(this T cacheService, string key) where T : ICacheService => $"{T.CategoryName}:{key}";
 
     /// <summary>
     /// Partitions <paramref name="keys"/> into cache hits and misses using the provided lookup delegate.

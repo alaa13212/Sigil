@@ -9,7 +9,6 @@ using Sigil.Application.Authorization;
 using Sigil.Application.DependencyInjection;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Auth;
-using Sigil.Domain.DependencyInjection;
 using Sigil.Infrastructure.DependencyInjection;
 using Sigil.Server.Auth;
 using Sigil.Server.Authorization;
@@ -41,7 +40,6 @@ builder.Services.AddSingleton(new JsonSerializerOptions(JsonSerializerDefaults.W
 });
 
 // Core services
-builder.Services.AddDomain();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 

@@ -2,13 +2,12 @@ using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Sigil.Application.Interfaces;
-using Sigil.Domain.Extensions;
 
 namespace Sigil.Infrastructure.Cache;
 
 internal class CacheManager : ICacheManager
 {
-    private record CategoryCache(IMemoryCache Cache, SemaphoreSlim Lock);
+    private record CategoryCache(IMemoryCache Cache);
     
     private readonly Dictionary<string, CategoryCache> _caches = new();
     private readonly CacheManagerOptions _options;
@@ -35,7 +34,7 @@ internal class CacheManager : ICacheManager
             if (category.Value.CompactOnMemoryPressure) 
                 opts.CompactionPercentage = 0.2;
 
-            _caches[category.Key] = new CategoryCache(new MemoryCache(opts), new SemaphoreSlim(1, 1));
+            _caches[category.Key] = new CategoryCache(new MemoryCache(opts));
         }
     }
 
@@ -70,44 +69,9 @@ internal class CacheManager : ICacheManager
         cache.Cache.Set(key, value, options);
     }
     
-    public async Task<T> GetOrAdd<T>(string category, string key, Func<string, Task<T>> valueFactory)
-    {
-        return (await GetOrAddNullable(category, key, async _ => await valueFactory(key)))!;
-    }
-    
-    public async Task<T?> GetOrAddNullable<T>(string category, string key, Func<string, Task<T?>> valueFactory)
-    {
-        var cache = GetOrCreateCache(category);
-        if (cache.Cache.TryGetValue(key, out T? value))
-        {
-            return value;
-        }
-
-        using (await cache.Lock.LockAsync())
-        {
-            if (cache.Cache.TryGetValue(key, out value) && value != null)
-            {
-                return value;
-            }
-            
-            value = await valueFactory(key);
-            Set(category, key, value);
-        }
-        
-        return value;
-    }
-    
     public void Invalidate<TCacheService>(string key) where TCacheService : ICacheService
     {
         if (_caches.TryGetValue(TCacheService.CategoryName, out var cache))
-        {
-            cache.Cache.Remove(key);
-        }
-    }
-
-    public void Invalidate(string category, string key)
-    {
-        if (_caches.TryGetValue(category, out var cache))
         {
             cache.Cache.Remove(key);
         }
