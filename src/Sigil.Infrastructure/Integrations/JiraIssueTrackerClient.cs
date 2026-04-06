@@ -9,7 +9,7 @@ using Sigil.Domain.Enums;
 
 namespace Sigil.Infrastructure.Integrations;
 
-internal class JiraIssueTrackerClient : IIssueTrackerClient
+internal class JiraIssueTrackerClient(IHttpClientFactory httpClientFactory) : IIssueTrackerClient
 {
     public TrackerType TrackerType => TrackerType.Jira;
 
@@ -90,9 +90,9 @@ internal class JiraIssueTrackerClient : IIssueTrackerClient
         return response.IsSuccessStatusCode;
     }
 
-    private static HttpClient CreateHttpClient(JiraTrackerConfig cfg)
+    private HttpClient CreateHttpClient(JiraTrackerConfig cfg)
     {
-        var http = new HttpClient();
+        var http = httpClientFactory.CreateClient();
         var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{cfg.Email}:{cfg.ApiToken}"));
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
         http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));

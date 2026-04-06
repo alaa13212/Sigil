@@ -6,7 +6,7 @@ using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Integrations;
 
-internal class GitHubSourceCodeClient : ISourceCodeClient
+internal class GitHubSourceCodeClient(IHttpClientFactory httpClientFactory) : ISourceCodeClient
 {
     public ProviderType ProviderType => ProviderType.GitHub;
 
@@ -111,9 +111,9 @@ internal class GitHubSourceCodeClient : ISourceCodeClient
             ? "https://api.github.com"
             : $"{baseUrl.TrimEnd('/')}/api/v3";
 
-    private static HttpClient CreateHttpClient(string token)
+    private HttpClient CreateHttpClient(string token)
     {
-        var http = new HttpClient();
+        var http = httpClientFactory.CreateClient();
         http.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
         http.DefaultRequestHeaders.Add("User-Agent", "Sigil/1.0");
         http.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");

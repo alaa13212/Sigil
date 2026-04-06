@@ -8,7 +8,7 @@ using Sigil.Domain.Enums;
 
 namespace Sigil.Infrastructure.Integrations;
 
-internal class LinearIssueTrackerClient : IIssueTrackerClient
+internal class LinearIssueTrackerClient(IHttpClientFactory httpClientFactory) : IIssueTrackerClient
 {
     public TrackerType TrackerType => TrackerType.Linear;
 
@@ -108,9 +108,9 @@ internal class LinearIssueTrackerClient : IIssueTrackerClient
         return response.IsSuccessStatusCode;
     }
 
-    private static HttpClient CreateHttpClient(string apiKey)
+    private HttpClient CreateHttpClient(string apiKey)
     {
-        var http = new HttpClient();
+        var http = httpClientFactory.CreateClient();
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         return http;

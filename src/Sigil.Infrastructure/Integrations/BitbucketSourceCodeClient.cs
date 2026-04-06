@@ -7,7 +7,7 @@ using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Integrations;
 
-internal class BitbucketSourceCodeClient : ISourceCodeClient
+internal class BitbucketSourceCodeClient(IHttpClientFactory httpClientFactory) : ISourceCodeClient
 {
     public ProviderType ProviderType => ProviderType.Bitbucket;
 
@@ -102,9 +102,9 @@ internal class BitbucketSourceCodeClient : ISourceCodeClient
     }
 
     // Bitbucket uses App Passwords in "username:app_password" format
-    private static HttpClient CreateHttpClient(string token)
+    private HttpClient CreateHttpClient(string token)
     {
-        var http = new HttpClient();
+        var http = httpClientFactory.CreateClient();
         var encoded = Convert.ToBase64String(Encoding.ASCII.GetBytes(token));
         http.DefaultRequestHeaders.Add("Authorization", $"Basic {encoded}");
         return http;

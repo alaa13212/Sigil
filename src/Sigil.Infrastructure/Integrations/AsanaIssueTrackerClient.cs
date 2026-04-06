@@ -8,7 +8,7 @@ using Sigil.Domain.Enums;
 
 namespace Sigil.Infrastructure.Integrations;
 
-internal class AsanaIssueTrackerClient : IIssueTrackerClient
+internal class AsanaIssueTrackerClient(IHttpClientFactory httpClientFactory) : IIssueTrackerClient
 {
     public TrackerType TrackerType => TrackerType.Asana;
 
@@ -71,9 +71,9 @@ internal class AsanaIssueTrackerClient : IIssueTrackerClient
         return response.IsSuccessStatusCode;
     }
 
-    private static HttpClient CreateHttpClient(string pat)
+    private HttpClient CreateHttpClient(string pat)
     {
-        var http = new HttpClient();
+        var http = httpClientFactory.CreateClient();
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", pat);
         http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         return http;

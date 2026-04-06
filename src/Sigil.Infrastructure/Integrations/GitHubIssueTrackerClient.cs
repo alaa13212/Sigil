@@ -8,7 +8,7 @@ using Sigil.Domain.Enums;
 
 namespace Sigil.Infrastructure.Integrations;
 
-internal class GitHubIssueTrackerClient : IIssueTrackerClient
+internal class GitHubIssueTrackerClient(IHttpClientFactory httpClientFactory) : IIssueTrackerClient
 {
     public TrackerType TrackerType => TrackerType.GitHub;
 
@@ -59,9 +59,9 @@ internal class GitHubIssueTrackerClient : IIssueTrackerClient
         return response.IsSuccessStatusCode;
     }
 
-    private static HttpClient CreateHttpClient(string pat)
+    private HttpClient CreateHttpClient(string pat)
     {
-        var http = new HttpClient();
+        var http = httpClientFactory.CreateClient();
         http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Sigil", "1.0"));
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", pat);
         return http;

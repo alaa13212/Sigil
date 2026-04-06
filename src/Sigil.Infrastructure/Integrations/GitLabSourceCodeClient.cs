@@ -7,7 +7,7 @@ using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Integrations;
 
-internal class GitLabSourceCodeClient : ISourceCodeClient
+internal class GitLabSourceCodeClient(IHttpClientFactory httpClientFactory) : ISourceCodeClient
 {
     public ProviderType ProviderType => ProviderType.GitLab;
 
@@ -124,9 +124,9 @@ internal class GitLabSourceCodeClient : ISourceCodeClient
         return null;
     }
 
-    private static HttpClient CreateHttpClient(string token)
+    private HttpClient CreateHttpClient(string token)
     {
-        var http = new HttpClient();
+        var http = httpClientFactory.CreateClient();
         http.DefaultRequestHeaders.Add("PRIVATE-TOKEN", token);
         return http;
     }
