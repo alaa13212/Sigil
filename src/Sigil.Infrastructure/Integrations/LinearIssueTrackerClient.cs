@@ -8,13 +8,18 @@ using Sigil.Domain.Enums;
 
 namespace Sigil.Infrastructure.Integrations;
 
-internal class LinearIssueTrackerClient(IHttpClientFactory httpClientFactory) : IIssueTrackerClient
+internal class LinearIssueTrackerClient(IHttpClientFactory httpClientFactory)
+    : TrackerClientBase(httpClientFactory), IIssueTrackerClient
 {
+    // Linear returns camelCase property names but uses a different casing convention
+    private static readonly JsonSerializerOptions LinearOptions =
+        new() { PropertyNameCaseInsensitive = true };
+
     public TrackerType TrackerType => TrackerType.Linear;
 
     public async Task<ExternalIssueResult> CreateIssueAsync(TrackerConfig config, CreateExternalIssueRequest request)
     {
-        var cfg = ParseConfig(config.DecryptedConfigJson);
+        var cfg = ParseConfig<LinearTrackerConfig>(config.DecryptedConfigJson);
         using var http = CreateHttpClient(cfg.ApiKey);
 
         const string mutation = @"
@@ -34,7 +39,7 @@ internal class LinearIssueTrackerClient(IHttpClientFactory httpClientFactory) : 
         var response = await http.PostAsJsonAsync("https://api.linear.app/graphql", new { query = mutation, variables });
         response.EnsureSuccessStatusCode();
 
-        var result = await response.Content.ReadFromJsonAsync<LinearCreateResponse>(JsonOptions);
+        var result = await response.Content.ReadFromJsonAsync<LinearCreateResponse>(LinearOptions);
         var issue = result?.Data?.IssueCreate?.Issue
             ?? throw new InvalidOperationException("Linear issue creation failed.");
 
@@ -43,7 +48,7 @@ internal class LinearIssueTrackerClient(IHttpClientFactory httpClientFactory) : 
 
     public async Task<ExternalIssueStatus?> GetStatusAsync(TrackerConfig config, string externalId)
     {
-        var cfg = ParseConfig(config.DecryptedConfigJson);
+        var cfg = ParseConfig<LinearTrackerConfig>(config.DecryptedConfigJson);
         using var http = CreateHttpClient(cfg.ApiKey);
 
         const string query = @"
@@ -56,7 +61,7 @@ internal class LinearIssueTrackerClient(IHttpClientFactory httpClientFactory) : 
 
         if (!response.IsSuccessStatusCode) return null;
 
-        var result = await response.Content.ReadFromJsonAsync<LinearIssueQueryResponse>(JsonOptions);
+        var result = await response.Content.ReadFromJsonAsync<LinearIssueQueryResponse>(LinearOptions);
         var issue = result?.Data?.Issue;
         if (issue?.State == null) return null;
 
@@ -66,10 +71,9 @@ internal class LinearIssueTrackerClient(IHttpClientFactory httpClientFactory) : 
 
     public async Task<bool> CloseIssueAsync(TrackerConfig config, string externalId)
     {
-        var cfg = ParseConfig(config.DecryptedConfigJson);
+        var cfg = ParseConfig<LinearTrackerConfig>(config.DecryptedConfigJson);
         using var http = CreateHttpClient(cfg.ApiKey);
 
-        // Find the first "completed" workflow state for the issue's team
         const string stateQuery = @"
             query GetCompletedState($issueId: String!) {
               issue(id: $issueId) {
@@ -83,7 +87,7 @@ internal class LinearIssueTrackerClient(IHttpClientFactory httpClientFactory) : 
             new { query = stateQuery, variables = new { issueId = externalId } });
         if (!stateResponse.IsSuccessStatusCode) return false;
 
-        var stateResult = await stateResponse.Content.ReadFromJsonAsync<LinearCompletedStateQueryResponse>(JsonOptions);
+        var stateResult = await stateResponse.Content.ReadFromJsonAsync<LinearCompletedStateQueryResponse>(LinearOptions);
         var completedStateId = stateResult?.Data?.Issue?.Team?.States?.Nodes
             ?.FirstOrDefault(s => s.Type == "completed")?.Id;
         if (completedStateId == null) return false;
@@ -100,7 +104,7 @@ internal class LinearIssueTrackerClient(IHttpClientFactory httpClientFactory) : 
 
     public async Task<bool> TestConnectionAsync(TrackerConfig config)
     {
-        var cfg = ParseConfig(config.DecryptedConfigJson);
+        var cfg = ParseConfig<LinearTrackerConfig>(config.DecryptedConfigJson);
         using var http = CreateHttpClient(cfg.ApiKey);
 
         const string query = "query { viewer { id } }";
@@ -110,17 +114,11 @@ internal class LinearIssueTrackerClient(IHttpClientFactory httpClientFactory) : 
 
     private HttpClient CreateHttpClient(string apiKey)
     {
-        var http = httpClientFactory.CreateClient();
+        var http = CreateClient();
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         return http;
     }
-
-    private static LinearTrackerConfig ParseConfig(string json) =>
-        JsonSerializer.Deserialize<LinearTrackerConfig>(json, JsonOptions)
-        ?? throw new InvalidOperationException("Invalid Linear tracker config.");
-
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private record LinearTrackerConfig(string ApiKey, string TeamId);
 

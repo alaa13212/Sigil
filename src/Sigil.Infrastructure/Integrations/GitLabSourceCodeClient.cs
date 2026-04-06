@@ -7,32 +7,13 @@ using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Integrations;
 
-internal class GitLabSourceCodeClient(IHttpClientFactory httpClientFactory) : ISourceCodeClient
+internal class GitLabSourceCodeClient(IHttpClientFactory httpClientFactory)
+    : SourceCodeClientBase(httpClientFactory), ISourceCodeClient
 {
     public ProviderType ProviderType => ProviderType.GitLab;
 
-    public async Task<SourceContextLines?> GetSourceContextAsync(
-        ResolvedRepository repo,
-        string filePath,
-        int lineNumber,
-        string? commitSha,
-        int contextLines = 5)
-    {
-        var result = await GetSourceContextCoreAsync(repo, filePath, lineNumber, commitSha, contextLines);
-
-        // If search failed with a specific commit SHA, retry with default branch
-        if (result == null && commitSha != null)
-            result = await GetSourceContextCoreAsync(repo, filePath, lineNumber, null, contextLines);
-
-        return result;
-    }
-
-    private async Task<SourceContextLines?> GetSourceContextCoreAsync(
-        ResolvedRepository repo,
-        string filePath,
-        int lineNumber,
-        string? commitSha,
-        int contextLines)
+    protected override async Task<SourceContextLines?> GetSourceContextCoreAsync(
+        ResolvedRepository repo, string filePath, int lineNumber, string? commitSha, int contextLines)
     {
         var baseApi = $"{repo.BaseUrl.TrimEnd('/')}/api/v4";
         var projectPath = HttpUtility.UrlEncode($"{repo.RepositoryOwner}/{repo.RepositoryName}");
@@ -55,7 +36,7 @@ internal class GitLabSourceCodeClient(IHttpClientFactory httpClientFactory) : IS
             resolvedPath);
     }
 
-    public async Task<CommitInfo?> GetCommitAsync(ResolvedRepository repo, string commitSha)
+    public override async Task<CommitInfo?> GetCommitAsync(ResolvedRepository repo, string commitSha)
     {
         var baseApi = $"{repo.BaseUrl.TrimEnd('/')}/api/v4";
         var projectPath = HttpUtility.UrlEncode($"{repo.RepositoryOwner}/{repo.RepositoryName}");
@@ -83,13 +64,11 @@ internal class GitLabSourceCodeClient(IHttpClientFactory httpClientFactory) : IS
     {
         var candidate = SourceCodeClientHelper.NormalizePath(filePath);
 
-        // 1. Try exact path first
         var encodedCandidate = HttpUtility.UrlEncode(candidate);
         var directUrl = $"{baseApi}/projects/{projectPath}/repository/files/{encodedCandidate}?ref={@ref}";
         var check = await http.SendAsync(new HttpRequestMessage(HttpMethod.Head, directUrl));
         if (check.IsSuccessStatusCode) return candidate;
 
-        // 2. Fetch the full tree (paginated) and find the best matching file
         var allPaths = new List<string>();
         var treeUrl = (string?)$"{baseApi}/projects/{projectPath}/repository/tree?recursive=true&ref={@ref}&per_page=100";
 
@@ -102,7 +81,6 @@ internal class GitLabSourceCodeClient(IHttpClientFactory httpClientFactory) : IS
             if (items != null)
                 allPaths.AddRange(items.Where(i => i.Type == "blob" && i.Path != null).Select(i => i.Path!));
 
-            // GitLab returns next page URL in the Link header
             treeUrl = ParseNextLink(treeResponse);
         }
 
@@ -126,7 +104,7 @@ internal class GitLabSourceCodeClient(IHttpClientFactory httpClientFactory) : IS
 
     private HttpClient CreateHttpClient(string token)
     {
-        var http = httpClientFactory.CreateClient();
+        var http = CreateClient();
         http.DefaultRequestHeaders.Add("PRIVATE-TOKEN", token);
         return http;
     }

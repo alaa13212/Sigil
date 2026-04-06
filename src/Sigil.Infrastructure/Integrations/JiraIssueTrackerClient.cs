@@ -1,7 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.IssueTrackers;
@@ -9,13 +8,14 @@ using Sigil.Domain.Enums;
 
 namespace Sigil.Infrastructure.Integrations;
 
-internal class JiraIssueTrackerClient(IHttpClientFactory httpClientFactory) : IIssueTrackerClient
+internal class JiraIssueTrackerClient(IHttpClientFactory httpClientFactory)
+    : TrackerClientBase(httpClientFactory), IIssueTrackerClient
 {
     public TrackerType TrackerType => TrackerType.Jira;
 
     public async Task<ExternalIssueResult> CreateIssueAsync(TrackerConfig config, CreateExternalIssueRequest request)
     {
-        var cfg = ParseConfig(config.DecryptedConfigJson);
+        var cfg = ParseConfig<JiraTrackerConfig>(config.DecryptedConfigJson);
         using var http = CreateHttpClient(cfg);
 
         var body = new
@@ -36,20 +36,20 @@ internal class JiraIssueTrackerClient(IHttpClientFactory httpClientFactory) : II
         var response = await http.PostAsJsonAsync($"{cfg.BaseUrl.TrimEnd('/')}/rest/api/3/issue", body);
         response.EnsureSuccessStatusCode();
 
-        var result = await response.Content.ReadFromJsonAsync<JiraCreateResponse>(JsonOptions);
+        var result = await response.Content.ReadFromJsonAsync<JiraCreateResponse>(CamelCaseOptions);
         var issueUrl = $"{cfg.BaseUrl.TrimEnd('/')}/browse/{result!.Key}";
         return new ExternalIssueResult(result.Key, issueUrl, "Open");
     }
 
     public async Task<ExternalIssueStatus?> GetStatusAsync(TrackerConfig config, string externalId)
     {
-        var cfg = ParseConfig(config.DecryptedConfigJson);
+        var cfg = ParseConfig<JiraTrackerConfig>(config.DecryptedConfigJson);
         using var http = CreateHttpClient(cfg);
 
         var response = await http.GetAsync($"{cfg.BaseUrl.TrimEnd('/')}/rest/api/3/issue/{externalId}?fields=status");
         if (!response.IsSuccessStatusCode) return null;
 
-        var issue = await response.Content.ReadFromJsonAsync<JiraIssueResponse>(JsonOptions);
+        var issue = await response.Content.ReadFromJsonAsync<JiraIssueResponse>(CamelCaseOptions);
         if (issue?.Fields?.Status?.Name == null) return null;
 
         var status = issue.Fields.Status.Name;
@@ -62,28 +62,26 @@ internal class JiraIssueTrackerClient(IHttpClientFactory httpClientFactory) : II
 
     public async Task<bool> CloseIssueAsync(TrackerConfig config, string externalId)
     {
-        var cfg = ParseConfig(config.DecryptedConfigJson);
+        var cfg = ParseConfig<JiraTrackerConfig>(config.DecryptedConfigJson);
         using var http = CreateHttpClient(cfg);
 
-        // Fetch available transitions and find one that leads to a "done" status category
         var transitionsResponse = await http.GetAsync(
             $"{cfg.BaseUrl.TrimEnd('/')}/rest/api/3/issue/{externalId}/transitions");
         if (!transitionsResponse.IsSuccessStatusCode) return false;
 
-        var transitions = await transitionsResponse.Content.ReadFromJsonAsync<JiraTransitionsResponse>(JsonOptions);
-        var doneTransition = transitions?.Transitions?.FirstOrDefault(t =>
-            t.To?.StatusCategory?.Key == "done");
+        var transitions = await transitionsResponse.Content.ReadFromJsonAsync<JiraTransitionsResponse>(CamelCaseOptions);
+        var doneTransition = transitions?.Transitions?.FirstOrDefault(t => t.To?.StatusCategory?.Key == "done");
         if (doneTransition == null) return false;
 
         var body = new { transition = new { id = doneTransition.Id } };
         var response = await http.PostAsJsonAsync(
-            $"{cfg.BaseUrl.TrimEnd('/')}/rest/api/3/issue/{externalId}/transitions", body, JsonOptions);
+            $"{cfg.BaseUrl.TrimEnd('/')}/rest/api/3/issue/{externalId}/transitions", body, CamelCaseOptions);
         return response.IsSuccessStatusCode;
     }
 
     public async Task<bool> TestConnectionAsync(TrackerConfig config)
     {
-        var cfg = ParseConfig(config.DecryptedConfigJson);
+        var cfg = ParseConfig<JiraTrackerConfig>(config.DecryptedConfigJson);
         using var http = CreateHttpClient(cfg);
 
         var response = await http.GetAsync($"{cfg.BaseUrl.TrimEnd('/')}/rest/api/3/project/{cfg.ProjectKey}");
@@ -92,18 +90,12 @@ internal class JiraIssueTrackerClient(IHttpClientFactory httpClientFactory) : II
 
     private HttpClient CreateHttpClient(JiraTrackerConfig cfg)
     {
-        var http = httpClientFactory.CreateClient();
+        var http = CreateClient();
         var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{cfg.Email}:{cfg.ApiToken}"));
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
         http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         return http;
     }
-
-    private static JiraTrackerConfig ParseConfig(string json) =>
-        JsonSerializer.Deserialize<JiraTrackerConfig>(json, JsonOptions)
-        ?? throw new InvalidOperationException("Invalid Jira tracker config.");
-
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     private record JiraTrackerConfig(string BaseUrl, string Email, string ApiToken, string ProjectKey);
     private record JiraCreateResponse([property: JsonPropertyName("key")] string Key);

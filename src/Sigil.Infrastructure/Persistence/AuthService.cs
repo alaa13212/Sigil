@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Auth;
-using Sigil.Domain;
 using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Persistence;

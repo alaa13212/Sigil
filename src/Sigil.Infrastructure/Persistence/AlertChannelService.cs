@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Alerts;
-using Sigil.Domain;
 using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Persistence;

@@ -10,7 +10,6 @@ using Sigil.Application.Services;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Interfaces;
 using Sigil.Infrastructure.Cache;
-using Sigil.Infrastructure.Integrations;
 using Sigil.Infrastructure.Parsing;
 using Sigil.Infrastructure.Persistence;
 using Sigil.Infrastructure.Services;

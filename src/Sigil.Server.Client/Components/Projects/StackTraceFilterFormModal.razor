@@ -1,5 +1,4 @@
 @using Sigil.Application.Models.Filters
-@using Sigil.Domain.Enums
 @inject IStackTraceFilterService FilterService
 
 <ModalBase IsOpen="IsOpen" OnClose="OnClosed" Title="@(EditingFilter is null ? "New Stack Trace Filter" : "Edit Stack Trace Filter")" Size="ModalSize.Medium">

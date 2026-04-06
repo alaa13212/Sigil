@@ -1,4 +1,3 @@
-using System.Collections;
 using Sigil.Domain.Enums;
 
 namespace Sigil.Application.Models.Events;

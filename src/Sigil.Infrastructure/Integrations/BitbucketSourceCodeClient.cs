@@ -7,35 +7,15 @@ using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Integrations;
 
-internal class BitbucketSourceCodeClient(IHttpClientFactory httpClientFactory) : ISourceCodeClient
+internal class BitbucketSourceCodeClient(IHttpClientFactory httpClientFactory)
+    : SourceCodeClientBase(httpClientFactory), ISourceCodeClient
 {
     public ProviderType ProviderType => ProviderType.Bitbucket;
 
-    public async Task<SourceContextLines?> GetSourceContextAsync(
-        ResolvedRepository repo,
-        string filePath,
-        int lineNumber,
-        string? commitSha,
-        int contextLines = 5)
-    {
-        var result = await GetSourceContextCoreAsync(repo, filePath, lineNumber, commitSha, contextLines);
-
-        // If search failed with a specific commit SHA, retry with default branch
-        if (result == null && commitSha != null)
-            result = await GetSourceContextCoreAsync(repo, filePath, lineNumber, null, contextLines);
-
-        return result;
-    }
-
-    private async Task<SourceContextLines?> GetSourceContextCoreAsync(
-        ResolvedRepository repo,
-        string filePath,
-        int lineNumber,
-        string? commitSha,
-        int contextLines)
+    protected override async Task<SourceContextLines?> GetSourceContextCoreAsync(
+        ResolvedRepository repo, string filePath, int lineNumber, string? commitSha, int contextLines)
     {
         var @ref = commitSha ?? repo.DefaultBranch ?? "master";
-
         using var http = CreateHttpClient(repo.AccessToken);
 
         var resolvedPath = await ResolvePathAsync(http, repo, filePath, @ref);
@@ -51,7 +31,7 @@ internal class BitbucketSourceCodeClient(IHttpClientFactory httpClientFactory) :
             resolvedPath);
     }
 
-    public async Task<CommitInfo?> GetCommitAsync(ResolvedRepository repo, string commitSha)
+    public override async Task<CommitInfo?> GetCommitAsync(ResolvedRepository repo, string commitSha)
     {
         var url = $"https://api.bitbucket.org/2.0/repositories/{repo.RepositoryOwner}/{repo.RepositoryName}/commit/{commitSha}";
 
@@ -77,12 +57,10 @@ internal class BitbucketSourceCodeClient(IHttpClientFactory httpClientFactory) :
     {
         var candidate = SourceCodeClientHelper.NormalizePath(filePath);
 
-        // 1. Try exact path first
         var directUrl = $"https://api.bitbucket.org/2.0/repositories/{repo.RepositoryOwner}/{repo.RepositoryName}/src/{@ref}/{candidate}";
         var check = await http.SendAsync(new HttpRequestMessage(HttpMethod.Head, directUrl));
         if (check.IsSuccessStatusCode) return candidate;
 
-        // 2. List all files recursively (paginated) and find the best match
         var allPaths = new List<string>();
         var listUrl = (string?)$"https://api.bitbucket.org/2.0/repositories/{repo.RepositoryOwner}/{repo.RepositoryName}/src/{@ref}/?pagelen=100&recursive=true&fields=values.path,values.type,next";
 
@@ -104,7 +82,7 @@ internal class BitbucketSourceCodeClient(IHttpClientFactory httpClientFactory) :
     // Bitbucket uses App Passwords in "username:app_password" format
     private HttpClient CreateHttpClient(string token)
     {
-        var http = httpClientFactory.CreateClient();
+        var http = CreateClient();
         var encoded = Convert.ToBase64String(Encoding.ASCII.GetBytes(token));
         http.DefaultRequestHeaders.Add("Authorization", $"Basic {encoded}");
         return http;

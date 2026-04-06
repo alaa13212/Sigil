@@ -6,32 +6,13 @@ using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Integrations;
 
-internal class GitHubSourceCodeClient(IHttpClientFactory httpClientFactory) : ISourceCodeClient
+internal class GitHubSourceCodeClient(IHttpClientFactory httpClientFactory)
+    : SourceCodeClientBase(httpClientFactory), ISourceCodeClient
 {
     public ProviderType ProviderType => ProviderType.GitHub;
 
-    public async Task<SourceContextLines?> GetSourceContextAsync(
-        ResolvedRepository repo,
-        string filePath,
-        int lineNumber,
-        string? commitSha,
-        int contextLines = 5)
-    {
-        var result = await GetSourceContextCoreAsync(repo, filePath, lineNumber, commitSha, contextLines);
-
-        // If search failed with a specific commit SHA, retry with default branch
-        if (result == null && commitSha != null)
-            result = await GetSourceContextCoreAsync(repo, filePath, lineNumber, null, contextLines);
-
-        return result;
-    }
-
-    private async Task<SourceContextLines?> GetSourceContextCoreAsync(
-        ResolvedRepository repo,
-        string filePath,
-        int lineNumber,
-        string? commitSha,
-        int contextLines)
+    protected override async Task<SourceContextLines?> GetSourceContextCoreAsync(
+        ResolvedRepository repo, string filePath, int lineNumber, string? commitSha, int contextLines)
     {
         var baseApi = GetBaseApiUrl(repo.BaseUrl);
         using var http = CreateHttpClient(repo.AccessToken);
@@ -56,7 +37,7 @@ internal class GitHubSourceCodeClient(IHttpClientFactory httpClientFactory) : IS
             resolvedPath);
     }
 
-    public async Task<CommitInfo?> GetCommitAsync(ResolvedRepository repo, string commitSha)
+    public override async Task<CommitInfo?> GetCommitAsync(ResolvedRepository repo, string commitSha)
     {
         var baseApi = GetBaseApiUrl(repo.BaseUrl);
         var url = $"{baseApi}/repos/{repo.RepositoryOwner}/{repo.RepositoryName}/commits/{commitSha}";
@@ -78,22 +59,16 @@ internal class GitHubSourceCodeClient(IHttpClientFactory httpClientFactory) : IS
             commitUrl);
     }
 
-    /// <summary>
-    /// Resolves a Sentry-provided file path (which may be a bare filename, sub-project relative path,
-    /// or absolute path) to the actual path within the repository using the Git tree API.
-    /// </summary>
     private static async Task<string?> ResolvePathAsync(
         HttpClient http, string baseApi, ResolvedRepository repo, string filePath, string? commitSha)
     {
         var candidate = SourceCodeClientHelper.NormalizePath(filePath);
 
-        // 1. Try exact path first
         var directUrl = $"{baseApi}/repos/{repo.RepositoryOwner}/{repo.RepositoryName}/contents/{candidate}";
         if (commitSha != null) directUrl += $"?ref={commitSha}";
         var check = await http.SendAsync(new HttpRequestMessage(HttpMethod.Head, directUrl));
         if (check.IsSuccessStatusCode) return candidate;
 
-        // 2. Fetch the full tree and find the best matching file
         var @ref = commitSha ?? repo.DefaultBranch ?? "master";
         var treeUrl = $"{baseApi}/repos/{repo.RepositoryOwner}/{repo.RepositoryName}/git/trees/{@ref}?recursive=1";
         var treeResponse = await http.GetAsync(treeUrl);
@@ -113,7 +88,7 @@ internal class GitHubSourceCodeClient(IHttpClientFactory httpClientFactory) : IS
 
     private HttpClient CreateHttpClient(string token)
     {
-        var http = httpClientFactory.CreateClient();
+        var http = CreateClient();
         http.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
         http.DefaultRequestHeaders.Add("User-Agent", "Sigil/1.0");
         http.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
