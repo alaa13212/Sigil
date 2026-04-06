@@ -17,28 +17,28 @@ public class ApiAlertService(HttpClient http) : IAlertService
         return (await response.Content.ReadFromJsonAsync<AlertRuleResponse>())!;
     }
 
-    public async Task<AlertRuleResponse?> UpdateRuleAsync(int ruleId, UpdateAlertRuleRequest request)
+    public async Task<AlertRuleResponse?> UpdateRuleAsync(int projectId, int ruleId, UpdateAlertRuleRequest request)
     {
-        var response = await http.PutAsJsonAsync($"api/alert-rules/{ruleId}", request);
+        var response = await http.PutAsJsonAsync($"api/projects/{projectId}/alert-rules/{ruleId}", request);
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadFromJsonAsync<AlertRuleResponse>();
     }
 
-    public async Task<bool> DeleteRuleAsync(int ruleId)
+    public async Task<bool> DeleteRuleAsync(int projectId, int ruleId)
     {
-        var response = await http.DeleteAsync($"api/alert-rules/{ruleId}");
+        var response = await http.DeleteAsync($"api/projects/{projectId}/alert-rules/{ruleId}");
         return response.IsSuccessStatusCode;
     }
 
-    public async Task<bool> ToggleRuleAsync(int ruleId, bool enabled)
+    public async Task<bool> ToggleRuleAsync(int projectId, int ruleId, bool enabled)
     {
-        var response = await http.PatchAsJsonAsync($"api/alert-rules/{ruleId}/toggle", new { enabled });
+        var response = await http.PatchAsJsonAsync($"api/projects/{projectId}/alert-rules/{ruleId}/toggle", new { enabled });
         return response.IsSuccessStatusCode;
     }
 
-    public async Task SendTestAlertAsync(int ruleId)
+    public async Task SendTestAlertAsync(int projectId, int ruleId)
     {
-        var response = await http.PostAsync($"api/alert-rules/{ruleId}/test", null);
+        var response = await http.PostAsync($"api/projects/{projectId}/alert-rules/{ruleId}/test", null);
         response.EnsureSuccessStatusCode();
     }
 

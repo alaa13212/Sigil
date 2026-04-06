@@ -27,53 +27,25 @@ public class IssueTrackerConfigsController(IIssueTrackerService issueTrackerServ
 
     [Authorize(Policy = SigilPermissions.CanManageProject)]
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, [FromBody] UpdateTrackerConfigRequest request)
+    public async Task<IActionResult> Update(int projectId, int id, [FromBody] UpdateTrackerConfigRequest request)
     {
-        var updated = await issueTrackerService.UpdateConfigAsync(id, request);
+        var updated = await issueTrackerService.UpdateConfigAsync(projectId, id, request);
         return updated ? Ok() : NotFound();
     }
 
     [Authorize(Policy = SigilPermissions.CanManageProject)]
     [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> Delete(int projectId, int id)
     {
-        var deleted = await issueTrackerService.DeleteConfigAsync(id);
+        var deleted = await issueTrackerService.DeleteConfigAsync(projectId, id);
         return deleted ? NoContent() : NotFound();
     }
 
     [Authorize(Policy = SigilPermissions.CanManageProject)]
     [HttpPost("{id:int}/test")]
-    public async Task<IActionResult> Test(int id)
+    public async Task<IActionResult> Test(int projectId, int id)
     {
-        var ok = await issueTrackerService.TestConfigAsync(id);
+        var ok = await issueTrackerService.TestConfigAsync(projectId, id);
         return ok ? Ok(new { success = true }) : BadRequest(new { error = "Connection test failed. Check the API key/token and configuration." });
-    }
-}
-
-// Non-scoped endpoints for when only the config ID is known
-[ApiController]
-[Authorize]
-[Route("api/issue-tracker-configs")]
-public class IssueTrackerConfigsByIdController(IIssueTrackerService issueTrackerService) : SigilController
-{
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, [FromBody] UpdateTrackerConfigRequest request)
-    {
-        var updated = await issueTrackerService.UpdateConfigAsync(id, request);
-        return updated ? Ok() : NotFound();
-    }
-
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
-    {
-        var deleted = await issueTrackerService.DeleteConfigAsync(id);
-        return deleted ? NoContent() : NotFound();
-    }
-
-    [HttpPost("{id:int}/test")]
-    public async Task<IActionResult> Test(int id)
-    {
-        var ok = await issueTrackerService.TestConfigAsync(id);
-        return ok ? Ok(new { success = true }) : BadRequest(new { error = "Connection test failed." });
     }
 }

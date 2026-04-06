@@ -118,7 +118,7 @@
             else
             {
                 var req = new UpdateFilterRequest(_field.Trim(), _operator, _value.Trim(), _action, EditingFilter.Enabled, EditingFilter.Priority, _description?.Trim());
-                result = await FilterService.UpdateFilterAsync(EditingFilter.Id, req)
+                result = await FilterService.UpdateFilterAsync(ProjectId, EditingFilter.Id, req)
                          ?? throw new InvalidOperationException("Filter not found.");
             }
             await OnSaved.InvokeAsync(result);

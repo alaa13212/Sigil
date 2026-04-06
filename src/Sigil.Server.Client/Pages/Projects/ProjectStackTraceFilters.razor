@@ -105,7 +105,7 @@
     {
         try
         {
-            var updated = await FilterService.UpdateFilterAsync(filter.Id,
+            var updated = await FilterService.UpdateFilterAsync(ProjectId, filter.Id,
                 new UpdateStackTraceFilterRequest(filter.Field, filter.Operator, filter.Value, !filter.Enabled, filter.Priority, filter.Description));
             if (updated is not null)
             {
@@ -120,7 +120,7 @@
     {
         try
         {
-            if (await FilterService.DeleteFilterAsync(id))
+            if (await FilterService.DeleteFilterAsync(ProjectId, id))
                 _filters.RemoveAll(f => f.Id == id);
         }
         catch { /* ignore */ }

@@ -26,17 +26,19 @@ public class EventFiltersController(IEventFilterService filterService) : SigilCo
         return Ok(filter);
     }
 
-    [HttpPut("api/filters/{id:int}")]
-    public async Task<IActionResult> Update(int id, [FromBody] UpdateFilterRequest request)
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
+    [HttpPut("api/projects/{projectId:int}/filters/{id:int}")]
+    public async Task<IActionResult> Update(int projectId, int id, [FromBody] UpdateFilterRequest request)
     {
-        var filter = await filterService.UpdateFilterAsync(id, request);
+        var filter = await filterService.UpdateFilterAsync(projectId, id, request);
         return filter is not null ? Ok(filter) : NotFound();
     }
 
-    [HttpDelete("api/filters/{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
+    [HttpDelete("api/projects/{projectId:int}/filters/{id:int}")]
+    public async Task<IActionResult> Delete(int projectId, int id)
     {
-        var deleted = await filterService.DeleteFilterAsync(id);
+        var deleted = await filterService.DeleteFilterAsync(projectId, id);
         return deleted ? NoContent() : NotFound();
     }
 }

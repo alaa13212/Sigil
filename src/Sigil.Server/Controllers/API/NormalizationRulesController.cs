@@ -25,17 +25,19 @@ public class NormalizationRulesController(INormalizationRuleService service) : S
         return Ok(await service.CreateRuleAsync(projectId, request));
     }
 
-    [HttpPut("api/normalization-rules/{id:int}")]
-    public async Task<IActionResult> Update(int id, [FromBody] UpdateNormalizationRuleRequest request)
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
+    [HttpPut("api/projects/{projectId:int}/normalization-rules/{id:int}")]
+    public async Task<IActionResult> Update(int projectId, int id, [FromBody] UpdateNormalizationRuleRequest request)
     {
-        var result = await service.UpdateRuleAsync(id, request);
+        var result = await service.UpdateRuleAsync(projectId, id, request);
         return result is not null ? Ok(result) : NotFound();
     }
 
-    [HttpDelete("api/normalization-rules/{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
+    [HttpDelete("api/projects/{projectId:int}/normalization-rules/{id:int}")]
+    public async Task<IActionResult> Delete(int projectId, int id)
     {
-        var deleted = await service.DeleteRuleAsync(id);
+        var deleted = await service.DeleteRuleAsync(projectId, id);
         return deleted ? NoContent() : NotFound();
     }
 

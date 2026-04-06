@@ -27,17 +27,19 @@ public class AutoTagController(IAutoTagService autoTagService) : SigilController
         return Ok(rule);
     }
 
-    [HttpPut("api/auto-tags/{id:int}")]
-    public async Task<IActionResult> UpdateRule(int id, [FromBody] UpdateAutoTagRuleRequest request)
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
+    [HttpPut("api/projects/{projectId:int}/auto-tags/{id:int}")]
+    public async Task<IActionResult> UpdateRule(int projectId, int id, [FromBody] UpdateAutoTagRuleRequest request)
     {
-        var updated = await autoTagService.UpdateRuleAsync(id, request);
+        var updated = await autoTagService.UpdateRuleAsync(projectId, id, request);
         return updated is not null ? Ok(updated) : NotFound();
     }
 
-    [HttpDelete("api/auto-tags/{id:int}")]
-    public async Task<IActionResult> DeleteRule(int id)
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
+    [HttpDelete("api/projects/{projectId:int}/auto-tags/{id:int}")]
+    public async Task<IActionResult> DeleteRule(int projectId, int id)
     {
-        var deleted = await autoTagService.DeleteRuleAsync(id);
+        var deleted = await autoTagService.DeleteRuleAsync(projectId, id);
         return deleted ? NoContent() : NotFound();
     }
 }

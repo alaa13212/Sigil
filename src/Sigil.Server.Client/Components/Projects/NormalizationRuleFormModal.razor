@@ -123,7 +123,7 @@
             else
             {
                 var req = new UpdateNormalizationRuleRequest(_pattern.Trim(), _replacement.Trim(), _priority, EditingRule.Enabled, _description?.Trim());
-                result = await NormalizationService.UpdateRuleAsync(EditingRule.Id, req)
+                result = await NormalizationService.UpdateRuleAsync(ProjectId, EditingRule.Id, req)
                          ?? throw new InvalidOperationException("Rule not found.");
             }
             await OnSaved.InvokeAsync(result);

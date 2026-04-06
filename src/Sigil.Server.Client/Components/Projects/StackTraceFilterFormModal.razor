@@ -98,7 +98,7 @@
             else
             {
                 var req = new UpdateStackTraceFilterRequest(_field, _operator, _value.Trim(), EditingFilter.Enabled, EditingFilter.Priority, _description?.Trim());
-                result = await FilterService.UpdateFilterAsync(EditingFilter.Id, req)
+                result = await FilterService.UpdateFilterAsync(ProjectId, EditingFilter.Id, req)
                          ?? throw new InvalidOperationException("Filter not found.");
             }
             await OnSaved.InvokeAsync(result);

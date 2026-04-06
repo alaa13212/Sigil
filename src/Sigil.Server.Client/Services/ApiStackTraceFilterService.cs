@@ -16,16 +16,16 @@ public class ApiStackTraceFilterService(HttpClient http) : IStackTraceFilterServ
         return (await resp.Content.ReadFromJsonAsync<StackTraceFilterResponse>())!;
     }
 
-    public async Task<StackTraceFilterResponse?> UpdateFilterAsync(int filterId, UpdateStackTraceFilterRequest request)
+    public async Task<StackTraceFilterResponse?> UpdateFilterAsync(int projectId, int filterId, UpdateStackTraceFilterRequest request)
     {
-        var resp = await http.PutAsJsonAsync($"api/stack-trace-filters/{filterId}", request);
+        var resp = await http.PutAsJsonAsync($"api/projects/{projectId}/stack-trace-filters/{filterId}", request);
         if (!resp.IsSuccessStatusCode) return null;
         return await resp.Content.ReadFromJsonAsync<StackTraceFilterResponse>();
     }
 
-    public async Task<bool> DeleteFilterAsync(int filterId)
+    public async Task<bool> DeleteFilterAsync(int projectId, int filterId)
     {
-        var resp = await http.DeleteAsync($"api/stack-trace-filters/{filterId}");
+        var resp = await http.DeleteAsync($"api/projects/{projectId}/stack-trace-filters/{filterId}");
         return resp.IsSuccessStatusCode;
     }
 

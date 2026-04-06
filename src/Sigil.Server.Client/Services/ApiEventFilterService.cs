@@ -18,16 +18,16 @@ public class ApiEventFilterService(HttpClient http) : IEventFilterService
         return (await response.Content.ReadFromJsonAsync<EventFilterResponse>())!;
     }
 
-    public async Task<EventFilterResponse?> UpdateFilterAsync(int filterId, UpdateFilterRequest request)
+    public async Task<EventFilterResponse?> UpdateFilterAsync(int projectId, int filterId, UpdateFilterRequest request)
     {
-        var response = await http.PutAsJsonAsync($"api/filters/{filterId}", request);
+        var response = await http.PutAsJsonAsync($"api/projects/{projectId}/filters/{filterId}", request);
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadFromJsonAsync<EventFilterResponse>();
     }
 
-    public async Task<bool> DeleteFilterAsync(int filterId)
+    public async Task<bool> DeleteFilterAsync(int projectId, int filterId)
     {
-        var response = await http.DeleteAsync($"api/filters/{filterId}");
+        var response = await http.DeleteAsync($"api/projects/{projectId}/filters/{filterId}");
         return response.IsSuccessStatusCode;
     }
 

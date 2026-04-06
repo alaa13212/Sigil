@@ -121,7 +121,7 @@
 
     private async Task DeleteMap(int mapId)
     {
-        await SourceMapService.DeleteAsync(mapId);
+        await SourceMapService.DeleteAsync(ProjectId, mapId);
         await LoadAsync();
     }
 

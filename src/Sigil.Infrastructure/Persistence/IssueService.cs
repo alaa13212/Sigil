@@ -211,7 +211,7 @@ internal class IssueService(
             // Remove ignore filter when reopening
             if (issue.IgnoreFilterId.HasValue)
             {
-                await eventFilterService.DeleteFilterAsync(issue.IgnoreFilterId.Value);
+                await eventFilterService.DeleteFilterAsync(issue.ProjectId, issue.IgnoreFilterId.Value);
                 issue.IgnoreFilterId = null;
             }
         }

@@ -30,25 +30,18 @@ public class ExternalIssueLinksController(IIssueTrackerService issueTrackerServi
             return BadRequest(new { error = ex.Message });
         }
     }
-
-    [Authorize(Policy = SigilPermissions.CanEditIssue)]
-    [HttpDelete("{linkId:int}")]
-    public async Task<IActionResult> Delete(int linkId)
-    {
-        var deleted = await issueTrackerService.UnlinkAsync(linkId);
-        return deleted ? NoContent() : NotFound();
-    }
 }
 
 [ApiController]
 [Authorize]
-[Route("api/external-links")]
-public class ExternalLinksByIdController(IIssueTrackerService issueTrackerService) : SigilController
+[Route("api/projects/{projectId:int}/external-links")]
+public class ProjectExternalLinksController(IIssueTrackerService issueTrackerService) : SigilController
 {
+    [Authorize(Policy = SigilPermissions.CanEditIssue)]
     [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> Delete(int projectId, int id)
     {
-        var deleted = await issueTrackerService.UnlinkAsync(id);
+        var deleted = await issueTrackerService.UnlinkAsync(projectId, id);
         return deleted ? NoContent() : NotFound();
     }
 }

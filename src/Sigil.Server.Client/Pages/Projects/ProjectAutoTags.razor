@@ -120,7 +120,7 @@
                 rule.Field, rule.Operator, rule.Value,
                 rule.TagKey, rule.TagValue,
                 !rule.Enabled, rule.Priority, rule.Description);
-            var updated = await AutoTagService.UpdateRuleAsync(rule.Id, req);
+            var updated = await AutoTagService.UpdateRuleAsync(ProjectId, rule.Id, req);
             if (updated is not null)
             {
                 var idx = rules.IndexOf(rule);
@@ -134,7 +134,7 @@
     {
         try
         {
-            if (await AutoTagService.DeleteRuleAsync(ruleId))
+            if (await AutoTagService.DeleteRuleAsync(ProjectId, ruleId))
                 rules.RemoveAll(r => r.Id == ruleId);
         }
         catch { /* ignore */ }

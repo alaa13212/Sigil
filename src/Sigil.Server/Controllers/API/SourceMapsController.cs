@@ -46,25 +46,18 @@ public class SourceMapsController(ISourceMapService sourceMapService) : SigilCon
         var decoded = Uri.UnescapeDataString(releaseName);
         return Ok(await sourceMapService.ListByReleaseNameAsync(projectId, decoded));
     }
-
-    [Authorize(Policy = SigilPermissions.CanManageProject)]
-    [HttpDelete("{sourceMapId:int}")]
-    public async Task<IActionResult> Delete(int projectId, string releaseName, int sourceMapId)
-    {
-        var deleted = await sourceMapService.DeleteAsync(sourceMapId);
-        return deleted ? NoContent() : NotFound();
-    }
 }
 
 [ApiController]
 [Authorize]
-[Route("api/sourcemaps")]
-public class SourceMapDeleteController(ISourceMapService sourceMapService) : SigilController
+[Route("api/projects/{projectId:int}/source-maps")]
+public class SourceMapsByIdController(ISourceMapService sourceMapService) : SigilController
 {
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
     [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> Delete(int projectId, int id)
     {
-        var deleted = await sourceMapService.DeleteAsync(id);
+        var deleted = await sourceMapService.DeleteAsync(projectId, id);
         return deleted ? NoContent() : NotFound();
     }
 }

@@ -117,7 +117,7 @@
         try
         {
             var req = new UpdateFilterRequest(filter.Field, filter.Operator, filter.Value, filter.Action, !filter.Enabled, filter.Priority, filter.Description);
-            var updated = await FilterService.UpdateFilterAsync(filter.Id, req);
+            var updated = await FilterService.UpdateFilterAsync(ProjectId, filter.Id, req);
             if (updated is not null)
             {
                 var idx = filters.IndexOf(filter);
@@ -131,7 +131,7 @@
     {
         try
         {
-            if (await FilterService.DeleteFilterAsync(filterId))
+            if (await FilterService.DeleteFilterAsync(ProjectId, filterId))
                 filters.RemoveAll(f => f.Id == filterId);
         }
         catch { /* ignore */ }

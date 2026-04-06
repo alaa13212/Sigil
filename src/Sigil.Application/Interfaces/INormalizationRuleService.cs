@@ -7,6 +7,6 @@ public interface INormalizationRuleService
 {
     Task<List<TextNormalizationRule>> GetRulesAsync(int projectId);
     Task<TextNormalizationRule> CreateRuleAsync(int projectId, CreateNormalizationRuleRequest request);
-    Task<TextNormalizationRule?> UpdateRuleAsync(int ruleId, UpdateNormalizationRuleRequest request);
-    Task<bool> DeleteRuleAsync(int ruleId);
+    Task<TextNormalizationRule?> UpdateRuleAsync(int projectId, int ruleId, UpdateNormalizationRuleRequest request);
+    Task<bool> DeleteRuleAsync(int projectId, int ruleId);
 }

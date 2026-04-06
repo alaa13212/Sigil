@@ -148,7 +148,7 @@
                     _field.Trim(), _operator, _value.Trim(),
                     _tagKey.Trim(), _tagValue.Trim(),
                     EditingRule.Enabled, _priority, _description?.Trim());
-                result = await AutoTagService.UpdateRuleAsync(EditingRule.Id, req)
+                result = await AutoTagService.UpdateRuleAsync(ProjectId, EditingRule.Id, req)
                          ?? throw new InvalidOperationException("Rule not found.");
             }
             await OnSaved.InvokeAsync(result);

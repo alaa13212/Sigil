@@ -19,10 +19,9 @@ public class ApiSourceMapService(HttpClient http) : ISourceMapService
             $"api/projects/{projectId}/releases/{encoded}/sourcemaps") ?? [];
     }
 
-    public async Task<bool> DeleteAsync(int sourceMapId)
+    public async Task<bool> DeleteAsync(int projectId, int sourceMapId)
     {
-        // sourceMapId without release context — handled via separate endpoint if needed
-        var response = await http.DeleteAsync($"api/sourcemaps/{sourceMapId}");
+        var response = await http.DeleteAsync($"api/projects/{projectId}/source-maps/{sourceMapId}");
         return response.IsSuccessStatusCode;
     }
 

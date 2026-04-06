@@ -136,7 +136,7 @@
         _testResults.Remove(configId);
         try
         {
-            var ok = await IssueTrackerService.TestConfigAsync(configId);
+            var ok = await IssueTrackerService.TestConfigAsync(ProjectId, configId);
             _testResults[configId] = ok ? "OK" : "Connection failed";
         }
         catch (Exception ex)
@@ -151,7 +151,7 @@
 
     private async Task DeleteConfig(int configId)
     {
-        await IssueTrackerService.DeleteConfigAsync(configId);
+        await IssueTrackerService.DeleteConfigAsync(ProjectId, configId);
         _configs.RemoveAll(c => c.Id == configId);
         _testResults.Remove(configId);
     }

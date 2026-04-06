@@ -33,7 +33,7 @@ internal class StackTraceFilterService(SigilDbContext dbContext, IStackTraceFilt
         return ToResponse(filter);
     }
 
-    public async Task<StackTraceFilterResponse?> UpdateFilterAsync(int filterId, UpdateStackTraceFilterRequest request)
+    public async Task<StackTraceFilterResponse?> UpdateFilterAsync(int projectId, int filterId, UpdateStackTraceFilterRequest request)
     {
         var filter = await dbContext.StackTraceFilters.AsTracking().FirstOrDefaultAsync(f => f.Id == filterId);
         if (filter is null) return null;
@@ -50,7 +50,7 @@ internal class StackTraceFilterService(SigilDbContext dbContext, IStackTraceFilt
         return ToResponse(filter);
     }
 
-    public async Task<bool> DeleteFilterAsync(int filterId)
+    public async Task<bool> DeleteFilterAsync(int projectId, int filterId)
     {
         var filter = await dbContext.StackTraceFilters.FirstOrDefaultAsync(f => f.Id == filterId);
         if (filter is null) return false;

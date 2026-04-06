@@ -91,7 +91,7 @@ public class StackTraceFilterServiceTests(TestDatabaseFixture fixture)
         var created = await service.CreateFilterAsync(projectId, new("function", FilterOperator.Contains, "old",
             true, 0, "Original"));
 
-        var updated = await service.UpdateFilterAsync(created.Id, new UpdateStackTraceFilterRequest(
+        var updated = await service.UpdateFilterAsync(projectId, created.Id, new UpdateStackTraceFilterRequest(
             "module", FilterOperator.Equals, "new-value", false, 5, "Updated"));
 
         updated.Should().NotBeNull();
@@ -106,7 +106,7 @@ public class StackTraceFilterServiceTests(TestDatabaseFixture fixture)
         await using var context = CreateContext();
         var service = new StackTraceFilterService(context, StubCache(), StubDateTime());
 
-        var result = await service.UpdateFilterAsync(999999, new("f", FilterOperator.Equals, "v", true, 0, null));
+        var result = await service.UpdateFilterAsync(0, 999999, new("f", FilterOperator.Equals, "v", true, 0, null));
 
         result.Should().BeNull();
     }
@@ -120,7 +120,7 @@ public class StackTraceFilterServiceTests(TestDatabaseFixture fixture)
         var created = await service.CreateFilterAsync(projectId, new("function", FilterOperator.Contains, "test",
             true, 0, null));
 
-        var deleted = await service.DeleteFilterAsync(created.Id);
+        var deleted = await service.DeleteFilterAsync(projectId, created.Id);
 
         deleted.Should().BeTrue();
 
@@ -135,7 +135,7 @@ public class StackTraceFilterServiceTests(TestDatabaseFixture fixture)
         await using var context = CreateContext();
         var service = new StackTraceFilterService(context, StubCache(), StubDateTime());
 
-        var result = await service.DeleteFilterAsync(999999);
+        var result = await service.DeleteFilterAsync(0, 999999);
 
         result.Should().BeFalse();
     }
@@ -165,7 +165,7 @@ public class StackTraceFilterServiceTests(TestDatabaseFixture fixture)
             true, 0, null));
         cache.ClearReceivedCalls();
 
-        await service.UpdateFilterAsync(created.Id, new("module", FilterOperator.Equals, "new", true, 5, null));
+        await service.UpdateFilterAsync(projectId, created.Id, new("module", FilterOperator.Equals, "new", true, 5, null));
 
         cache.Received(1).Invalidate(projectId);
     }
@@ -181,7 +181,7 @@ public class StackTraceFilterServiceTests(TestDatabaseFixture fixture)
             true, 0, null));
         cache.ClearReceivedCalls();
 
-        await service.DeleteFilterAsync(created.Id);
+        await service.DeleteFilterAsync(projectId, created.Id);
 
         cache.Received(1).Invalidate(projectId);
     }

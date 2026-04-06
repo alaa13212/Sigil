@@ -119,7 +119,7 @@
             }
             else
             {
-                await IssueTrackerService.UpdateConfigAsync(Config.Id, new UpdateTrackerConfigRequest(configJson, null, null));
+                await IssueTrackerService.UpdateConfigAsync(ProjectId, Config.Id, new UpdateTrackerConfigRequest(configJson, null, null));
             }
             ResetForm();
             await OnSaved.InvokeAsync();

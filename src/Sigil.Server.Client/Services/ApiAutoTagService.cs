@@ -16,16 +16,16 @@ public class ApiAutoTagService(HttpClient http) : IAutoTagService
         return (await response.Content.ReadFromJsonAsync<AutoTagRuleResponse>())!;
     }
 
-    public async Task<AutoTagRuleResponse?> UpdateRuleAsync(int ruleId, UpdateAutoTagRuleRequest request)
+    public async Task<AutoTagRuleResponse?> UpdateRuleAsync(int projectId, int ruleId, UpdateAutoTagRuleRequest request)
     {
-        var response = await http.PutAsJsonAsync($"api/auto-tags/{ruleId}", request);
+        var response = await http.PutAsJsonAsync($"api/projects/{projectId}/auto-tags/{ruleId}", request);
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadFromJsonAsync<AutoTagRuleResponse>();
     }
 
-    public async Task<bool> DeleteRuleAsync(int ruleId)
+    public async Task<bool> DeleteRuleAsync(int projectId, int ruleId)
     {
-        var response = await http.DeleteAsync($"api/auto-tags/{ruleId}");
+        var response = await http.DeleteAsync($"api/projects/{projectId}/auto-tags/{ruleId}");
         return response.IsSuccessStatusCode;
     }
 

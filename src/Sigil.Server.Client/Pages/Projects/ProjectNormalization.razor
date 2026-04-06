@@ -139,7 +139,7 @@
         try
         {
             var req = new UpdateNormalizationRuleRequest(rule.Pattern, rule.Replacement, rule.Priority, !rule.Enabled, rule.Description);
-            var updated = await NormalizationService.UpdateRuleAsync(rule.Id, req);
+            var updated = await NormalizationService.UpdateRuleAsync(ProjectId, rule.Id, req);
             if (updated is not null)
             {
                 var idx = rules.IndexOf(rule);
@@ -153,7 +153,7 @@
     {
         try
         {
-            if (await NormalizationService.DeleteRuleAsync(ruleId))
+            if (await NormalizationService.DeleteRuleAsync(ProjectId, ruleId))
                 rules.RemoveAll(r => r.Id == ruleId);
         }
         catch { /* ignore */ }

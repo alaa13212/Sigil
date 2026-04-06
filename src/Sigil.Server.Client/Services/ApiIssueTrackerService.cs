@@ -17,21 +17,21 @@ public class ApiIssueTrackerService(HttpClient http) : IIssueTrackerService
         await http.GetFromJsonAsync<List<IssueTrackerConfigResponse>>(
             $"api/projects/{projectId}/issue-tracker-configs") ?? [];
 
-    public async Task<bool> UpdateConfigAsync(int configId, UpdateTrackerConfigRequest request)
+    public async Task<bool> UpdateConfigAsync(int projectId, int configId, UpdateTrackerConfigRequest request)
     {
-        var response = await http.PutAsJsonAsync($"api/issue-tracker-configs/{configId}", request);
+        var response = await http.PutAsJsonAsync($"api/projects/{projectId}/issue-tracker-configs/{configId}", request);
         return response.IsSuccessStatusCode;
     }
 
-    public async Task<bool> DeleteConfigAsync(int configId)
+    public async Task<bool> DeleteConfigAsync(int projectId, int configId)
     {
-        var response = await http.DeleteAsync($"api/issue-tracker-configs/{configId}");
+        var response = await http.DeleteAsync($"api/projects/{projectId}/issue-tracker-configs/{configId}");
         return response.IsSuccessStatusCode;
     }
 
-    public async Task<bool> TestConfigAsync(int configId)
+    public async Task<bool> TestConfigAsync(int projectId, int configId)
     {
-        var response = await http.PostAsync($"api/issue-tracker-configs/{configId}/test", null);
+        var response = await http.PostAsync($"api/projects/{projectId}/issue-tracker-configs/{configId}/test", null);
         return response.IsSuccessStatusCode;
     }
 
@@ -47,9 +47,9 @@ public class ApiIssueTrackerService(HttpClient http) : IIssueTrackerService
         await http.GetFromJsonAsync<List<ExternalIssueLinkResponse>>(
             $"api/issues/{issueId}/external-links") ?? [];
 
-    public async Task<bool> UnlinkAsync(int linkId)
+    public async Task<bool> UnlinkAsync(int projectId, int linkId)
     {
-        var response = await http.DeleteAsync($"api/external-links/{linkId}");
+        var response = await http.DeleteAsync($"api/projects/{projectId}/external-links/{linkId}");
         return response.IsSuccessStatusCode;
     }
 }

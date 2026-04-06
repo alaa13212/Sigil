@@ -24,33 +24,37 @@ public class AlertsController(IAlertService alertService) : SigilController
         return CreatedAtAction(nameof(ListRules), new { projectId }, rule);
     }
 
-    [HttpPut("api/alert-rules/{id:int}")]
-    public async Task<IActionResult> UpdateRule(int id, [FromBody] UpdateAlertRuleRequest request)
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
+    [HttpPut("api/projects/{projectId:int}/alert-rules/{id:int}")]
+    public async Task<IActionResult> UpdateRule(int projectId, int id, [FromBody] UpdateAlertRuleRequest request)
     {
-        var rule = await alertService.UpdateRuleAsync(id, request);
+        var rule = await alertService.UpdateRuleAsync(projectId, id, request);
         return rule is not null ? Ok(rule) : NotFound();
     }
 
-    [HttpDelete("api/alert-rules/{id:int}")]
-    public async Task<IActionResult> DeleteRule(int id)
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
+    [HttpDelete("api/projects/{projectId:int}/alert-rules/{id:int}")]
+    public async Task<IActionResult> DeleteRule(int projectId, int id)
     {
-        var deleted = await alertService.DeleteRuleAsync(id);
+        var deleted = await alertService.DeleteRuleAsync(projectId, id);
         return deleted ? NoContent() : NotFound();
     }
 
-    [HttpPatch("api/alert-rules/{id:int}/toggle")]
-    public async Task<IActionResult> ToggleRule(int id, [FromBody] ToggleRequest body)
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
+    [HttpPatch("api/projects/{projectId:int}/alert-rules/{id:int}/toggle")]
+    public async Task<IActionResult> ToggleRule(int projectId, int id, [FromBody] ToggleRequest body)
     {
-        var success = await alertService.ToggleRuleAsync(id, body.Enabled);
+        var success = await alertService.ToggleRuleAsync(projectId, id, body.Enabled);
         return success ? Ok() : NotFound();
     }
 
-    [HttpPost("api/alert-rules/{id:int}/test")]
-    public async Task<IActionResult> TestRule(int id)
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
+    [HttpPost("api/projects/{projectId:int}/alert-rules/{id:int}/test")]
+    public async Task<IActionResult> TestRule(int projectId, int id)
     {
         try
         {
-            await alertService.SendTestAlertAsync(id);
+            await alertService.SendTestAlertAsync(projectId, id);
             return Ok(new { message = "Test alert sent." });
         }
         catch (Exception ex)

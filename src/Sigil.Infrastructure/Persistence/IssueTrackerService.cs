@@ -43,7 +43,7 @@ internal class IssueTrackerService(
         return configs.Select(ToResponse).ToList();
     }
 
-    public async Task<bool> UpdateConfigAsync(int configId, UpdateTrackerConfigRequest request)
+    public async Task<bool> UpdateConfigAsync(int projectId, int configId, UpdateTrackerConfigRequest request)
     {
         var config = await dbContext.IssueTrackerConfigs.FirstOrDefaultAsync(c => c.Id == configId);
         if (config == null) return false;
@@ -62,13 +62,13 @@ internal class IssueTrackerService(
         return true;
     }
 
-    public async Task<bool> DeleteConfigAsync(int configId)
+    public async Task<bool> DeleteConfigAsync(int projectId, int configId)
     {
         var deleted = await dbContext.IssueTrackerConfigs.Where(c => c.Id == configId).ExecuteDeleteAsync();
         return deleted > 0;
     }
 
-    public async Task<bool> TestConfigAsync(int configId)
+    public async Task<bool> TestConfigAsync(int projectId, int configId)
     {
         var config = await dbContext.IssueTrackerConfigs.FirstOrDefaultAsync(c => c.Id == configId);
         if (config == null) return false;
@@ -127,7 +127,7 @@ internal class IssueTrackerService(
         return links.Select(ToLinkResponse).ToList();
     }
 
-    public async Task<bool> UnlinkAsync(int linkId)
+    public async Task<bool> UnlinkAsync(int projectId, int linkId)
     {
         var deleted = await dbContext.ExternalIssueLinks.Where(l => l.Id == linkId).ExecuteDeleteAsync();
         return deleted > 0;

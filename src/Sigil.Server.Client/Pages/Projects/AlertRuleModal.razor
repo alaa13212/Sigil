@@ -312,7 +312,7 @@
                     string.IsNullOrEmpty(form.MinSeverityStr) ? null : Enum.Parse<Severity>(form.MinSeverityStr),
                     TimeSpan.FromMinutes(form.CooldownMinutes),
                     form.Enabled);
-                result = await AlertService.UpdateRuleAsync(EditingRule.Id, request)
+                result = await AlertService.UpdateRuleAsync(ProjectId, EditingRule.Id, request)
                          ?? throw new InvalidOperationException("Rule not found.");
             }
 

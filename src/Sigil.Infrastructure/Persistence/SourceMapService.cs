@@ -85,7 +85,7 @@ internal class SourceMapService(SigilDbContext dbContext, ICompressionService co
             .ToListAsync();
     }
 
-    public async Task<bool> DeleteAsync(int sourceMapId)
+    public async Task<bool> DeleteAsync(int projectId, int sourceMapId)
     {
         var deleted = await dbContext.SourceMaps.Where(s => s.Id == sourceMapId).ExecuteDeleteAsync();
         return deleted > 0;

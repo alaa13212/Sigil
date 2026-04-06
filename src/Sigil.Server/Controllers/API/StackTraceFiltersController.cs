@@ -21,14 +21,16 @@ public class StackTraceFiltersController(IStackTraceFilterService filterService)
     public async Task<IActionResult> CreateFilter(int projectId, [FromBody] CreateStackTraceFilterRequest request)
         => Ok(await filterService.CreateFilterAsync(projectId, request));
 
-    [HttpPut("api/stack-trace-filters/{id:int}")]
-    public async Task<IActionResult> UpdateFilter(int id, [FromBody] UpdateStackTraceFilterRequest request)
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
+    [HttpPut("api/projects/{projectId:int}/stack-trace-filters/{id:int}")]
+    public async Task<IActionResult> UpdateFilter(int projectId, int id, [FromBody] UpdateStackTraceFilterRequest request)
     {
-        var result = await filterService.UpdateFilterAsync(id, request);
+        var result = await filterService.UpdateFilterAsync(projectId, id, request);
         return result is null ? NotFound() : Ok(result);
     }
 
-    [HttpDelete("api/stack-trace-filters/{id:int}")]
-    public async Task<IActionResult> DeleteFilter(int id)
-        => await filterService.DeleteFilterAsync(id) ? Ok() : NotFound();
+    [Authorize(Policy = SigilPermissions.CanManageProject)]
+    [HttpDelete("api/projects/{projectId:int}/stack-trace-filters/{id:int}")]
+    public async Task<IActionResult> DeleteFilter(int projectId, int id)
+        => await filterService.DeleteFilterAsync(projectId, id) ? NoContent() : NotFound();
 }

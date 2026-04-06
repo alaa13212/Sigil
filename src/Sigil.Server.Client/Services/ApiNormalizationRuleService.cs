@@ -17,16 +17,16 @@ public class ApiNormalizationRuleService(HttpClient http) : INormalizationRuleSe
         return (await response.Content.ReadFromJsonAsync<TextNormalizationRule>())!;
     }
 
-    public async Task<TextNormalizationRule?> UpdateRuleAsync(int ruleId, UpdateNormalizationRuleRequest request)
+    public async Task<TextNormalizationRule?> UpdateRuleAsync(int projectId, int ruleId, UpdateNormalizationRuleRequest request)
     {
-        var response = await http.PutAsJsonAsync($"api/normalization-rules/{ruleId}", request);
+        var response = await http.PutAsJsonAsync($"api/projects/{projectId}/normalization-rules/{ruleId}", request);
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadFromJsonAsync<TextNormalizationRule>();
     }
 
-    public async Task<bool> DeleteRuleAsync(int ruleId)
+    public async Task<bool> DeleteRuleAsync(int projectId, int ruleId)
     {
-        var response = await http.DeleteAsync($"api/normalization-rules/{ruleId}");
+        var response = await http.DeleteAsync($"api/projects/{projectId}/normalization-rules/{ruleId}");
         return response.IsSuccessStatusCode;
     }
 

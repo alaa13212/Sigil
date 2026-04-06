@@ -87,7 +87,7 @@ public class NormalizationRuleServiceTests(TestDatabaseFixture fixture)
         var service = new NormalizationRuleService(context, StubCache(), StubDateTime());
         var created = await service.CreateRuleAsync(projectId, new(@"\d+", "<NUM>", Priority: 10, Enabled: true, Description: "Original"));
 
-        var updated = await service.UpdateRuleAsync(created.Id,
+        var updated = await service.UpdateRuleAsync(projectId, created.Id,
             new UpdateNormalizationRuleRequest(@"\d{3,}", "<BIGNUM>", Priority: 20, Enabled: false, Description: "Updated"));
 
         updated.Should().NotBeNull();
@@ -103,7 +103,7 @@ public class NormalizationRuleServiceTests(TestDatabaseFixture fixture)
         await using var context = CreateContext();
         var service = new NormalizationRuleService(context, StubCache(), StubDateTime());
 
-        var result = await service.UpdateRuleAsync(999999,
+        var result = await service.UpdateRuleAsync(0, 999999,
             new UpdateNormalizationRuleRequest("x", "y", 0, true, null));
 
         result.Should().BeNull();
@@ -117,7 +117,7 @@ public class NormalizationRuleServiceTests(TestDatabaseFixture fixture)
         var service = new NormalizationRuleService(context, StubCache(), StubDateTime());
         var created = await service.CreateRuleAsync(projectId, new(@"\d+", "<NUM>", Priority: 10, Enabled: true, Description: null));
 
-        var deleted = await service.DeleteRuleAsync(created.Id);
+        var deleted = await service.DeleteRuleAsync(projectId, created.Id);
 
         deleted.Should().BeTrue();
 
@@ -132,7 +132,7 @@ public class NormalizationRuleServiceTests(TestDatabaseFixture fixture)
         await using var context = CreateContext();
         var service = new NormalizationRuleService(context, StubCache(), StubDateTime());
 
-        var deleted = await service.DeleteRuleAsync(999999);
+        var deleted = await service.DeleteRuleAsync(0, 999999);
 
         deleted.Should().BeFalse();
     }
@@ -160,7 +160,7 @@ public class NormalizationRuleServiceTests(TestDatabaseFixture fixture)
         var created = await service.CreateRuleAsync(projectId, new(@"\d+", "<NUM>", Priority: 10, Enabled: true, Description: null));
         cache.ClearReceivedCalls();
 
-        await service.UpdateRuleAsync(created.Id, new(@"\w+", "<WORD>", Priority: 20, Enabled: false, Description: null));
+        await service.UpdateRuleAsync(projectId, created.Id, new(@"\w+", "<WORD>", Priority: 20, Enabled: false, Description: null));
 
         cache.Received(1).Invalidate(projectId);
     }
@@ -175,7 +175,7 @@ public class NormalizationRuleServiceTests(TestDatabaseFixture fixture)
         var created = await service.CreateRuleAsync(projectId, new(@"\d+", "<NUM>", Priority: 10, Enabled: true, Description: null));
         cache.ClearReceivedCalls();
 
-        await service.DeleteRuleAsync(created.Id);
+        await service.DeleteRuleAsync(projectId, created.Id);
 
         cache.Received(1).Invalidate(projectId);
     }

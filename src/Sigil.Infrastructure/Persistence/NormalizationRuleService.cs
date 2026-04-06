@@ -82,7 +82,7 @@ internal class NormalizationRuleService(
         return rule;
     }
 
-    public async Task<TextNormalizationRule?> UpdateRuleAsync(int ruleId, UpdateNormalizationRuleRequest request)
+    public async Task<TextNormalizationRule?> UpdateRuleAsync(int projectId, int ruleId, UpdateNormalizationRuleRequest request)
     {
         var rule = await dbContext.TextNormalizationRules.AsTracking().FirstOrDefaultAsync(r => r.Id == ruleId);
         if (rule is null) return null;
@@ -98,7 +98,7 @@ internal class NormalizationRuleService(
         return rule;
     }
 
-    public async Task<bool> DeleteRuleAsync(int ruleId)
+    public async Task<bool> DeleteRuleAsync(int projectId, int ruleId)
     {
         var rule = await dbContext.TextNormalizationRules.FirstOrDefaultAsync(r => r.Id == ruleId);
         if (rule is null) return false;

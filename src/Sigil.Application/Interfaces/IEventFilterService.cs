@@ -6,6 +6,6 @@ public interface IEventFilterService
 {
     Task<List<EventFilterResponse>> GetFiltersAsync(int projectId);
     Task<EventFilterResponse> CreateFilterAsync(int projectId, CreateFilterRequest request);
-    Task<EventFilterResponse?> UpdateFilterAsync(int filterId, UpdateFilterRequest request);
-    Task<bool> DeleteFilterAsync(int filterId);
+    Task<EventFilterResponse?> UpdateFilterAsync(int projectId, int filterId, UpdateFilterRequest request);
+    Task<bool> DeleteFilterAsync(int projectId, int filterId);
 }

@@ -139,7 +139,7 @@
 
     private async Task ToggleRule(AlertRuleResponse rule, bool enabled)
     {
-        await AlertService.ToggleRuleAsync(rule.Id, enabled);
+        await AlertService.ToggleRuleAsync(ProjectId, rule.Id, enabled);
         var idx = rules.FindIndex(r => r.Id == rule.Id);
         if (idx >= 0)
         {
@@ -150,7 +150,7 @@
 
     private async Task DeleteRule(int ruleId)
     {
-        await AlertService.DeleteRuleAsync(ruleId);
+        await AlertService.DeleteRuleAsync(ProjectId, ruleId);
         rules.RemoveAll(r => r.Id == ruleId);
     }
 
@@ -160,7 +160,7 @@
         testFeedback = "";
         try
         {
-            await AlertService.SendTestAlertAsync(rule.Id);
+            await AlertService.SendTestAlertAsync(ProjectId, rule.Id);
             testSuccess = true;
             testFeedback = "Test alert sent successfully.";
         }

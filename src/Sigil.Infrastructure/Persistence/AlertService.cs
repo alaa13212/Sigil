@@ -50,7 +50,7 @@ internal class AlertService(
         return ToResponse(rule);
     }
 
-    public async Task<AlertRuleResponse?> UpdateRuleAsync(int ruleId, UpdateAlertRuleRequest request)
+    public async Task<AlertRuleResponse?> UpdateRuleAsync(int projectId, int ruleId, UpdateAlertRuleRequest request)
     {
         var rule = await dbContext.AlertRules.AsTracking()
             .Include(r => r.AlertChannel)
@@ -74,13 +74,13 @@ internal class AlertService(
         return ToResponse(rule);
     }
 
-    public async Task<bool> DeleteRuleAsync(int ruleId)
+    public async Task<bool> DeleteRuleAsync(int projectId, int ruleId)
     {
         var deleted = await dbContext.AlertRules.Where(r => r.Id == ruleId).ExecuteDeleteAsync();
         return deleted > 0;
     }
 
-    public async Task<bool> ToggleRuleAsync(int ruleId, bool enabled)
+    public async Task<bool> ToggleRuleAsync(int projectId, int ruleId, bool enabled)
     {
         var rule = await dbContext.AlertRules.AsTracking().FirstOrDefaultAsync(r => r.Id == ruleId);
         if (rule is null) return false;
@@ -90,7 +90,7 @@ internal class AlertService(
         return true;
     }
 
-    public async Task SendTestAlertAsync(int ruleId)
+    public async Task SendTestAlertAsync(int projectId, int ruleId)
     {
         var rule = await dbContext.AlertRules
             .Include(r => r.Project)

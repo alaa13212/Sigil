@@ -70,7 +70,7 @@ public class EventFilterServiceTests(TestDatabaseFixture fixture)
         var service = new EventFilterService(ctx, StubCache(), StubDateTime(), StubRuleEngine());
         var created = await service.CreateFilterAsync(project.Id, new("message", FilterOperator.Contains, "old"));
 
-        var updated = await service.UpdateFilterAsync(created.Id, new UpdateFilterRequest(
+        var updated = await service.UpdateFilterAsync(project.Id, created.Id, new UpdateFilterRequest(
             "environment", FilterOperator.Equals, "staging", FilterAction.Reject, false, 10, "Updated"));
 
         updated.Should().NotBeNull();
@@ -84,7 +84,7 @@ public class EventFilterServiceTests(TestDatabaseFixture fixture)
         await using var ctx = Ctx();
         var service = new EventFilterService(ctx, StubCache(), StubDateTime(), StubRuleEngine());
 
-        var result = await service.UpdateFilterAsync(999999, new("f", FilterOperator.Equals, "v", FilterAction.Reject, true, 0, null));
+        var result = await service.UpdateFilterAsync(0, 999999, new("f", FilterOperator.Equals, "v", FilterAction.Reject, true, 0, null));
 
         result.Should().BeNull();
     }
@@ -97,7 +97,7 @@ public class EventFilterServiceTests(TestDatabaseFixture fixture)
         var service = new EventFilterService(ctx, StubCache(), StubDateTime(), StubRuleEngine());
         var created = await service.CreateFilterAsync(project.Id, new("message", FilterOperator.Contains, "err"));
 
-        var deleted = await service.DeleteFilterAsync(created.Id);
+        var deleted = await service.DeleteFilterAsync(project.Id, created.Id);
 
         deleted.Should().BeTrue();
     }
@@ -108,7 +108,7 @@ public class EventFilterServiceTests(TestDatabaseFixture fixture)
         await using var ctx = Ctx();
         var service = new EventFilterService(ctx, StubCache(), StubDateTime(), StubRuleEngine());
 
-        (await service.DeleteFilterAsync(999999)).Should().BeFalse();
+        (await service.DeleteFilterAsync(0, 999999)).Should().BeFalse();
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public class EventFilterServiceTests(TestDatabaseFixture fixture)
         var created = await service.CreateFilterAsync(project.Id, new("message", FilterOperator.Contains, "err"));
         cache.ClearReceivedCalls();
 
-        await service.UpdateFilterAsync(created.Id, new("environment", FilterOperator.Equals, "prod", FilterAction.Reject, true, 10, null));
+        await service.UpdateFilterAsync(project.Id, created.Id, new("environment", FilterOperator.Equals, "prod", FilterAction.Reject, true, 10, null));
 
         cache.Received(1).Invalidate(project.Id);
     }
@@ -188,7 +188,7 @@ public class EventFilterServiceTests(TestDatabaseFixture fixture)
         var created = await service.CreateFilterAsync(project.Id, new("message", FilterOperator.Contains, "err"));
         cache.ClearReceivedCalls();
 
-        await service.DeleteFilterAsync(created.Id);
+        await service.DeleteFilterAsync(project.Id, created.Id);
 
         cache.Received(1).Invalidate(project.Id);
     }

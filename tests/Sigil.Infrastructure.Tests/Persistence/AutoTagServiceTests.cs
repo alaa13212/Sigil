@@ -105,7 +105,7 @@ public class AutoTagServiceTests(TestDatabaseFixture fixture)
         var created = await service.CreateRuleAsync(projectId, new("message", FilterOperator.Contains, "err",
             "tag", "val", true, 0, "Original"));
 
-        var updated = await service.UpdateRuleAsync(created.Id, new UpdateAutoTagRuleRequest(
+        var updated = await service.UpdateRuleAsync(projectId, created.Id, new UpdateAutoTagRuleRequest(
             "environment", FilterOperator.Equals, "staging",
             "new-tag", "new-val", false, 10, "Updated"));
 
@@ -124,7 +124,7 @@ public class AutoTagServiceTests(TestDatabaseFixture fixture)
         var created = await service.CreateRuleAsync(projectId, new("message", FilterOperator.Contains, "err",
             "tag", "val", true, 0, null));
 
-        var act = () => service.UpdateRuleAsync(created.Id, new UpdateAutoTagRuleRequest(
+        var act = () => service.UpdateRuleAsync(projectId, created.Id, new UpdateAutoTagRuleRequest(
             "message", FilterOperator.Contains, "err",
             "sigil.reserved", "val", true, 0, null));
 
@@ -140,7 +140,7 @@ public class AutoTagServiceTests(TestDatabaseFixture fixture)
         var created = await service.CreateRuleAsync(projectId, new("message", FilterOperator.Contains, "err",
             "tag", "val", true, 0, null));
 
-        var deleted = await service.DeleteRuleAsync(created.Id);
+        var deleted = await service.DeleteRuleAsync(projectId, created.Id);
 
         deleted.Should().BeTrue();
 
@@ -155,7 +155,7 @@ public class AutoTagServiceTests(TestDatabaseFixture fixture)
         await using var context = CreateContext();
         var service = new AutoTagService(context, StubCache(), StubDateTime());
 
-        var result = await service.DeleteRuleAsync(999999);
+        var result = await service.DeleteRuleAsync(0, 999999);
 
         result.Should().BeFalse();
     }
@@ -171,7 +171,7 @@ public class AutoTagServiceTests(TestDatabaseFixture fixture)
             "tag", "val", true, 0, null));
         cache.ClearReceivedCalls();
 
-        await service.UpdateRuleAsync(created.Id, new("environment", FilterOperator.Equals, "prod",
+        await service.UpdateRuleAsync(projectId, created.Id, new("environment", FilterOperator.Equals, "prod",
             "new-tag", "new-val", true, 10, null));
 
         cache.Received(1).Invalidate(projectId);
@@ -188,7 +188,7 @@ public class AutoTagServiceTests(TestDatabaseFixture fixture)
             "tag", "val", true, 0, null));
         cache.ClearReceivedCalls();
 
-        await service.DeleteRuleAsync(created.Id);
+        await service.DeleteRuleAsync(projectId, created.Id);
 
         cache.Received(1).Invalidate(projectId);
     }

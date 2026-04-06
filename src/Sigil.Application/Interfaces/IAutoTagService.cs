@@ -6,6 +6,6 @@ public interface IAutoTagService
 {
     Task<List<AutoTagRuleResponse>> GetRulesForProjectAsync(int projectId);
     Task<AutoTagRuleResponse> CreateRuleAsync(int projectId, CreateAutoTagRuleRequest request);
-    Task<AutoTagRuleResponse?> UpdateRuleAsync(int ruleId, UpdateAutoTagRuleRequest request);
-    Task<bool> DeleteRuleAsync(int ruleId);
+    Task<AutoTagRuleResponse?> UpdateRuleAsync(int projectId, int ruleId, UpdateAutoTagRuleRequest request);
+    Task<bool> DeleteRuleAsync(int projectId, int ruleId);
 }

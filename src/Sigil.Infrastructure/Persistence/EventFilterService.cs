@@ -37,7 +37,7 @@ internal class EventFilterService(SigilDbContext dbContext, IEventFilterCache fi
         return ToResponse(filter);
     }
 
-    public async Task<EventFilterResponse?> UpdateFilterAsync(int filterId, UpdateFilterRequest request)
+    public async Task<EventFilterResponse?> UpdateFilterAsync(int projectId, int filterId, UpdateFilterRequest request)
     {
         var filter = await dbContext.EventFilters.AsTracking().FirstOrDefaultAsync(f => f.Id == filterId);
         if (filter is null) return null;
@@ -55,7 +55,7 @@ internal class EventFilterService(SigilDbContext dbContext, IEventFilterCache fi
         return ToResponse(filter);
     }
 
-    public async Task<bool> DeleteFilterAsync(int filterId)
+    public async Task<bool> DeleteFilterAsync(int projectId, int filterId)
     {
         var filter = await dbContext.EventFilters.FirstOrDefaultAsync(f => f.Id == filterId);
         if (filter is null) return false;

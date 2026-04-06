@@ -71,7 +71,7 @@ public class AlertServiceTests(TestDatabaseFixture fixture)
         var service = new AlertService(ctx, StubDateTime(), [], StubAppConfig());
         var created = await service.CreateRuleAsync(project.Id, new("Original", AlertTrigger.NewIssue, channel.Id));
 
-        var updated = await service.UpdateRuleAsync(created.Id, new UpdateAlertRuleRequest(
+        var updated = await service.UpdateRuleAsync(project.Id, created.Id, new UpdateAlertRuleRequest(
             "Renamed", AlertTrigger.IssueRegression, channel.Id,
             ThresholdCount: 10, ThresholdWindow: TimeSpan.FromHours(1),
             MinSeverity: Severity.Fatal, CooldownPeriod: TimeSpan.FromMinutes(5), Enabled: false));
@@ -88,7 +88,7 @@ public class AlertServiceTests(TestDatabaseFixture fixture)
         await using var ctx = Ctx();
         var service = new AlertService(ctx, StubDateTime(), [], StubAppConfig());
 
-        var result = await service.UpdateRuleAsync(999999, new("x", AlertTrigger.NewIssue, 1,
+        var result = await service.UpdateRuleAsync(0, 999999, new("x", AlertTrigger.NewIssue, 1,
             null, null, null, TimeSpan.FromMinutes(5), true));
 
         result.Should().BeNull();
@@ -103,7 +103,7 @@ public class AlertServiceTests(TestDatabaseFixture fixture)
         var service = new AlertService(ctx, StubDateTime(), [], StubAppConfig());
         var created = await service.CreateRuleAsync(project.Id, new("ToDelete", AlertTrigger.NewIssue, channel.Id));
 
-        var deleted = await service.DeleteRuleAsync(created.Id);
+        var deleted = await service.DeleteRuleAsync(project.Id, created.Id);
 
         deleted.Should().BeTrue();
 
@@ -118,7 +118,7 @@ public class AlertServiceTests(TestDatabaseFixture fixture)
         await using var ctx = Ctx();
         var service = new AlertService(ctx, StubDateTime(), [], StubAppConfig());
 
-        (await service.DeleteRuleAsync(999999)).Should().BeFalse();
+        (await service.DeleteRuleAsync(0, 999999)).Should().BeFalse();
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public class AlertServiceTests(TestDatabaseFixture fixture)
         var service = new AlertService(ctx, StubDateTime(), [], StubAppConfig());
         var created = await service.CreateRuleAsync(project.Id, new("Toggle", AlertTrigger.NewIssue, channel.Id, Enabled: true));
 
-        (await service.ToggleRuleAsync(created.Id, false)).Should().BeTrue();
+        (await service.ToggleRuleAsync(project.Id, created.Id, false)).Should().BeTrue();
 
         await using var verifyCtx = Ctx();
         var inDb = await verifyCtx.AlertRules.FindAsync(created.Id);
@@ -143,7 +143,7 @@ public class AlertServiceTests(TestDatabaseFixture fixture)
         await using var ctx = Ctx();
         var service = new AlertService(ctx, StubDateTime(), [], StubAppConfig());
 
-        (await service.ToggleRuleAsync(999999, true)).Should().BeFalse();
+        (await service.ToggleRuleAsync(0, 999999, true)).Should().BeFalse();
     }
 
     // ── Evaluation ────────────────────────────────────────────────────────────

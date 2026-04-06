@@ -45,7 +45,7 @@ internal class AutoTagService(
         return ToResponse(rule);
     }
 
-    public async Task<AutoTagRuleResponse?> UpdateRuleAsync(int ruleId, UpdateAutoTagRuleRequest request)
+    public async Task<AutoTagRuleResponse?> UpdateRuleAsync(int projectId, int ruleId, UpdateAutoTagRuleRequest request)
     {
         if (SystemTags.IsSystemTag(request.TagKey))
             throw new InvalidOperationException($"Cannot use the reserved '{SystemTags.Prefix}' prefix for auto-tag rules.");
@@ -67,7 +67,7 @@ internal class AutoTagService(
         return ToResponse(rule);
     }
 
-    public async Task<bool> DeleteRuleAsync(int ruleId)
+    public async Task<bool> DeleteRuleAsync(int projectId, int ruleId)
     {
         var rule = await dbContext.AutoTagRules.FirstOrDefaultAsync(r => r.Id == ruleId);
         if (rule is null) return false;

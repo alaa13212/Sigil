@@ -314,7 +314,7 @@
 
     private async Task UnlinkExternal(int linkId)
     {
-        await IssueTrackerService.UnlinkAsync(linkId);
+        await IssueTrackerService.UnlinkAsync(Issue.ProjectId, linkId);
         Issue.ExternalLinks?.RemoveAll(l => l.Id == linkId);
         await OnLinksChanged.InvokeAsync();
     }
