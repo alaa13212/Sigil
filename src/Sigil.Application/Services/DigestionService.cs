@@ -28,6 +28,7 @@ public class DigestionService(
 
         var existingIds = await eventIngestion.FindExistingEventIdsAsync(parsedEvents.Select(e => e.EventId));
         parsedEvents.RemoveAll(e => existingIds.Contains(e.EventId));
+        // Stryker disable once Statement : second guard at line 36 handles the empty case identically — removing this return has no observable effect
         if (parsedEvents.Count == 0)
             return;
 
@@ -123,7 +124,9 @@ public class DigestionService(
 
     private static void AddSystemTag(Issue issue, string tagKey, Dictionary<string, Dictionary<string, int>> tagValues, DateTime timestamp)
     {
+        // Stryker disable once Statement : defensive guard — tagKey always present (system tags are always seeded); removing return would crash on next line
         if (!tagValues.TryGetValue(tagKey, out var valueMap)) return;
+        // Stryker disable once Statement : defensive guard — "true" always present for system tag values
         if (!valueMap.TryGetValue("true", out var tagValueId)) return;
 
         IssueTag? existing = issue.Tags.FirstOrDefault(t => t.TagValueId == tagValueId);
@@ -165,6 +168,7 @@ public class DigestionService(
 
     private static List<EventBucketIncrement> AggregateEventCountsByBucket(List<ParsedEvent> parsedEvents, Dictionary<string, Issue> issues)
     {
+        // Stryker disable once Logical : events reaching here all have non-empty fingerprints mapped in issues — && and || produce identical results
         List<EventBucketIncrement> bucketIncrements = parsedEvents
             .Where(e => !e.Fingerprint.IsNullOrEmpty() && issues.ContainsKey(e.Fingerprint!))
             .GroupBy(e => new
@@ -181,9 +185,10 @@ public class DigestionService(
     private static void ApplySystemTags(EventParsingContext context, HashSet<int> regressionIssueIds, Dictionary<string, Issue> issues,
         Dictionary<string, Dictionary<string, int>> tagValues, DateTime now)
     {
+        var issuesById = issues.Values.ToDictionary(i => i.Id);
         foreach (var issueId in regressionIssueIds)
         {
-            var issue = issues.Values.First(i => i.Id == issueId);
+            var issue = issuesById[issueId];
             AddSystemTag(issue, SystemTags.Regression, tagValues, now);
             AddSystemTag(issue, SystemTags.Reopened, tagValues, now);
         }
@@ -200,9 +205,10 @@ public class DigestionService(
     private static List<PriorityChange> ElevateIssuePriorities(EventParsingContext context, HashSet<int> regressionIssueIds, Dictionary<string, Issue> issues)
     {
         var priorityChanges = new List<PriorityChange>();
+        var issuesById = issues.Values.ToDictionary(i => i.Id);
         foreach (var issueId in regressionIssueIds)
         {
-            var issue = issues.Values.First(i => i.Id == issueId);
+            var issue = issuesById[issueId];
             if (issue.Priority < Priority.Medium)
             {
                 priorityChanges.Add(new PriorityChange(issue.Id, issue.Priority, Priority.Medium, "Regression detected"));

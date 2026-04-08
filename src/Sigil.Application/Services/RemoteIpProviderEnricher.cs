@@ -12,6 +12,7 @@ public class RemoteIpProviderEnricher(IHttpContextAccessor httpContextAccessor) 
         if (parsedEvent.User is { IpAddress: "{{auto}}" })
         {
             string? userIpAddress = httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
+            // Stryker disable once Conditional : IPAddress.ToString() never returns "", so IsNullOrEmpty only triggers on null — the false-branch mutation produces identical runtime behavior
             parsedEvent.User.IpAddress = userIpAddress.IsNullOrEmpty() ? null : userIpAddress;
         }
     }

@@ -9,6 +9,7 @@ public class StackTraceFilterEnricher(IRuleEngine ruleEngine) : IEventEnricher
 {
     public void Enrich(ParsedEvent parsedEvent, EventParsingContext context)
     {
+        // Stryker disable once Logical,Statement : processing 0 filters (all frames kept) or 0 frames (empty result) produces identical output — early return is an optimization only
         if (context.StackTraceFilters.Count == 0 || parsedEvent.Stacktrace.Count == 0)
             return;
 

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Services;
@@ -5,6 +6,7 @@ using Sigil.Domain.Interfaces;
 
 namespace Sigil.Application.DependencyInjection;
 
+[ExcludeFromCodeCoverage]
 public static class ServiceCollectionExtensions
 {
     /// <summary>

@@ -106,4 +106,21 @@ public class IssueSearchParserTests
         var serialized = IssueSearchParser.Serialize(freeText, tags);
         serialized.Should().Be(original);
     }
+
+    [Fact]
+    public void Parse_BareColonAtEnd_TreatedAsFreeText()
+    {
+        // "key:" — colon with no value; guard i < s.Length before checking s[i] == '"' prevents out-of-bounds
+        var (freeText, tags) = IssueSearchParser.Parse("key:");
+        tags.Should().BeEmpty();
+        freeText.Should().Be("key:");
+    }
+
+    [Fact]
+    public void Parse_UnclosedQuote_ValueIsRestOfString()
+    {
+        // Guard i < s.Length inside the quoted-value loop prevents out-of-bounds when closing '"' is absent
+        var (_, tags) = IssueSearchParser.Parse("key:\"unclosed");
+        tags.Should().ContainSingle(t => t.Key == "key" && t.Value == "unclosed");
+    }
 }

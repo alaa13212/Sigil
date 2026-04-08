@@ -5,6 +5,7 @@ namespace Sigil.Application.Services;
 
 public class PlatformInfoProvider
 {
+    // Stryker disable String : static SDK metadata strings — not business logic
     private static readonly Dictionary<Platform, PlatformInfo> _platforms = new()
     {
         [Platform.CSharp] = new PlatformInfo
@@ -228,6 +229,7 @@ public class PlatformInfoProvider
             DocumentationUrl = "https://docs.sentry.io/platforms/android",
         },
     };
+    // Stryker restore String
 
     public PlatformInfo GetInfo(Platform platform)
         => _platforms.GetValueOrDefault(platform) ?? _platforms[Platform.Other];

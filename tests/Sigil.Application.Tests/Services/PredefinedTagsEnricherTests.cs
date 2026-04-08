@@ -127,4 +127,16 @@ public class PredefinedTagsEnricherTests
 
         evt.Tags.Should().NotBeNull();
     }
+
+    [Fact]
+    public void Enrich_ExistingTags_Preserved()
+    {
+        // ??= must not overwrite an existing Tags dict (not simple assignment)
+        var evt = MakeEvent(environment: "prod");
+        evt.Tags = new Dictionary<string, string> { ["custom"] = "value" };
+        _enricher.Enrich(evt, MakeContext());
+
+        evt.Tags.Should().ContainKey("custom").WhoseValue.Should().Be("value");
+        evt.Tags.Should().ContainKey("environment"); // predefined tag still added
+    }
 }

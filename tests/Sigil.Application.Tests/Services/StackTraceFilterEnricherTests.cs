@@ -156,4 +156,37 @@ public class StackTraceFilterEnricherTests
 
         evt.Stacktrace.Should().HaveCount(1);
     }
+
+    [Fact]
+    public void Enrich_DisabledFilter_RuleEngineMatchTrue_FrameKept()
+    {
+        // disabled filter must be skipped even when ruleEngine would match (kills "remove Enabled check" mutation)
+        var filter = new StackTraceFilter
+        {
+            Field = "function", Operator = FilterOperator.Contains, Value = "Internal", Enabled = false,
+        };
+        _ruleEngine.Match("InternalMethod", FilterOperator.Contains, "Internal").Returns(true);
+        var evt = MakeEvent([new ParsedStackFrame { Function = "InternalMethod" }]);
+
+        _enricher.Enrich(evt, MakeContext(filter));
+
+        evt.Stacktrace.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void Enrich_UnknownField_WithRealRuleEngine_NoThrow()
+    {
+        // null fieldValue must be guarded before calling Match (kills "remove null check" mutation)
+        var enricher = new StackTraceFilterEnricher(new RuleEngine());
+        var filter = new StackTraceFilter
+        {
+            Field = "unknown", Operator = FilterOperator.Contains, Value = "test", Enabled = true,
+        };
+        var evt = MakeEvent([new ParsedStackFrame { Function = "MyMethod" }]);
+
+        var act = () => enricher.Enrich(evt, MakeContext(filter));
+
+        act.Should().NotThrow();
+        evt.Stacktrace.Should().HaveCount(1);
+    }
 }

@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using Sigil.Application.Interfaces;
 using Sigil.Domain.Extensions;
 using Sigil.Domain.Ingestion;
@@ -9,13 +8,29 @@ namespace Sigil.Application.Services;
 public class DefaultFingerprintGenerator(IHashGenerator hashGenerator) : IFingerprintGenerator
 {
     private const string DefaultFingerprintPlaceholder = "{{ default }}";
-    
+
     public string GenerateFingerprint(ParsedEvent parsedEvent)
     {
-        IReadOnlyList<string> fingerprintParts = ShouldUseCustomFingerprint(parsedEvent.FingerprintHints) 
-            ? ExtractEventFingerprintParts(parsedEvent) 
-            : parsedEvent.FingerprintHints;
-        
+        var hints = parsedEvent.FingerprintHints;
+        List<string> fingerprintParts;
+
+        if (hints.IsNullOrEmpty())
+        {
+            // No custom hints → pure event-derived fingerprint
+            fingerprintParts = ExtractEventFingerprintParts(parsedEvent);
+        }
+        else if (hints.Contains(DefaultFingerprintPlaceholder))
+        {
+            // "{{ default }}" present → blend event parts with client hints
+            fingerprintParts = ExtractEventFingerprintParts(parsedEvent);
+            InsertClientFingerprintComponents(fingerprintParts, hints);
+        }
+        else
+        {
+            // Pure client fingerprint (no {{ default }})
+            fingerprintParts = hints.ToList();
+        }
+
         return hashGenerator.ComputeHash(string.Join("|", fingerprintParts));
     }
 
@@ -25,49 +40,35 @@ public class DefaultFingerprintGenerator(IHashGenerator hashGenerator) : IFinger
 
         // Exception basics
         parts.Add(parsedEvent.ExceptionType ?? "unknown-exception");
-        
+
         string message = parsedEvent.NormalizedMessage ?? "no-message";
         parts.Add(message);
 
         // Stacktrace digest
         IEnumerable<ParsedStackFrame> frames = parsedEvent.Stacktrace;
 
-        if(frames.Any(f => f.InApp)) 
+        if(frames.Any(f => f.InApp))
             frames = frames.Where(f => f.InApp);
-            
+
         frames = frames
             .Where(f => !f.Filename.IsNullOrEmpty())
             .Where(f => !f.Function.IsNullOrEmpty());
-            
+
         // Only keep top N frames for stability (e.g., top 5 app frames)
         parts.AddRange(frames.TakeLast(5).Select(frame => $"{frame.Function}@{frame.Filename}"));
 
-        InsertClientFingerprintComponents(parts, parsedEvent.FingerprintHints);
-        
         return parts;
     }
 
-    private static void InsertClientFingerprintComponents(List<string> parts, IReadOnlyList<string>? fingerprintHints)
+    private static void InsertClientFingerprintComponents(List<string> parts, IReadOnlyList<string> fingerprintHints)
     {
-        if(ShouldUseCustomFingerprint(fingerprintHints))
-            return;
-            
         int i = 0;
         foreach (string fingerprintHint in fingerprintHints)
         {
             if (fingerprintHint == DefaultFingerprintPlaceholder)
-            {
-                i = parts.Count;
-            }
+                i = parts.Count; // {{ default }} → set insert point to end of event parts
             else
-            {
                 parts.Insert(i++, fingerprintHint);
-            }
         }
-    }
-
-    private static bool ShouldUseCustomFingerprint([NotNullWhen(false)] IReadOnlyList<string>? fingerprintHints)
-    {
-        return fingerprintHints.IsNullOrEmpty() || !fingerprintHints.Contains(DefaultFingerprintPlaceholder);
     }
 }

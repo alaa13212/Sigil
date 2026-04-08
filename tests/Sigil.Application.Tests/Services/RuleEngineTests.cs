@@ -326,4 +326,43 @@ public class RuleEngineTests
         var evt = MakeEvent();
         _engine.EvaluateAll([], evt, requireAll: false).Should().BeFalse();
     }
+
+    [Fact]
+    public void Evaluate_Stacktrace_Empty_EqualsEmpty_ReturnsFalse()
+    {
+        // Empty stacktrace → null (not ""); Equals "" must return false to distinguish from always-join mutation
+        var evt = MakeEvent(stacktrace: []);
+        var cond = new RuleCondition("stacktrace", FilterOperator.Equals, "");
+        _engine.Evaluate(cond, evt).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Evaluate_Stacktrace_MultiFrame_JoinedWithNewline()
+    {
+        // Separator between frames is "\n", not ""
+        var evt = MakeEvent(stacktrace:
+        [
+            new ParsedStackFrame { Function = "Main" },
+            new ParsedStackFrame { Function = "Run" },
+        ]);
+        var cond = new RuleCondition("stacktrace", FilterOperator.Equals, "Main\nRun");
+        _engine.Evaluate(cond, evt).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_FieldWithoutTagPrefix_NotMatchedAsTag()
+    {
+        // Field "xyz" without "tag:" prefix is unknown even if a tag with that key exists
+        var evt = MakeEvent(tags: new Dictionary<string, string> { ["xyz"] = "abc" });
+        var cond = new RuleCondition("xyz", FilterOperator.Equals, "abc");
+        _engine.Evaluate(cond, evt).Should().BeFalse();
+    }
+    
+    [Fact]
+    public void Evaluate_InvalidOperator_ReturnFalse()
+    {
+        var evt = MakeEvent(message: "hello");
+        var cond = new RuleCondition("message", (FilterOperator) 123, "hello");
+        _engine.Evaluate(cond, evt).Should().BeFalse();
+    }
 }

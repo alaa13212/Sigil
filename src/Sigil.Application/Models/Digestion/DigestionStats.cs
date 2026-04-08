@@ -19,6 +19,7 @@ public class DigestionStats
 public class ProjectEnvelopeStats
 {
     public int ProjectId { get; init; }
+    // Stryker disable once String : default empty string; always overwritten by the caller
     public string ProjectName { get; init; } = string.Empty;
     public int PendingCount { get; init; }
     public int FailedCount { get; init; }
@@ -28,6 +29,7 @@ public class FailedEnvelopeSummary
 {
     public long Id { get; init; }
     public int ProjectId { get; init; }
+    // Stryker disable once String : default empty string; always overwritten by the caller
     public string ProjectName { get; init; } = string.Empty;
     public DateTime ReceivedAt { get; init; }
     public string? Error { get; init; }
