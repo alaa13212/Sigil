@@ -43,7 +43,6 @@ public static class PlatformHelper
         "php" => Platform.PHP,
         "python" => Platform.Python,
         "ruby" => Platform.Ruby,
-        "other" => Platform.Other,
         _ => Platform.Other
     };
 

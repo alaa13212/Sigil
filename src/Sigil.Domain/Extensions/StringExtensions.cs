@@ -11,6 +11,6 @@ public static partial class StringExtensions
     {
         public string SplitPascal() => SplitPascalRegex().Replace(input, "$1 $2");
         
-        public string Truncate(int maxLength) => input.Length > maxLength ? input[..maxLength] : input;
+        public string Truncate(int maxLength) => input[..Math.Min(maxLength, input.Length)];
     }
 }

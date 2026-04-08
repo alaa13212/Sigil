@@ -74,4 +74,38 @@ public class ParsedEventUserTests
 
         result.Should().BeSameAs(user1);
     }
+
+    [Fact]
+    public void Merge_User1IdNull_User2IdEmpty_IdRemainsNull()
+    {
+        // user2.Id is "" (null-or-empty) so user1.Id should NOT be overwritten
+        var user1 = new ParsedEventUser { Id = null };
+        var user2 = new ParsedEventUser { Id = "" };
+
+        var result = ParsedEventUser.Merge(user1, user2);
+
+        result.Id.Should().BeNull();
+    }
+
+    [Fact]
+    public void Merge_BothHaveUsername_User1Wins()
+    {
+        var user1 = new ParsedEventUser { Username = "alice" };
+        var user2 = new ParsedEventUser { Username = "bob" };
+
+        var result = ParsedEventUser.Merge(user1, user2);
+
+        result.Username.Should().Be("alice");
+    }
+
+    [Fact]
+    public void Merge_BothHaveIpAddress_User1Wins()
+    {
+        var user1 = new ParsedEventUser { IpAddress = "1.1.1.1" };
+        var user2 = new ParsedEventUser { IpAddress = "2.2.2.2" };
+
+        var result = ParsedEventUser.Merge(user1, user2);
+
+        result.IpAddress.Should().Be("1.1.1.1");
+    }
 }

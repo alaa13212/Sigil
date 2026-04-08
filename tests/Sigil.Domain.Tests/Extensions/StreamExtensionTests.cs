@@ -36,4 +36,29 @@ public class StreamExtensionTests
 
         result.Should().Be(content);
     }
+
+    [Fact]
+    public async Task ReadAsStringAsync_ExplicitLatin1Encoding_UsesProvidedEncodingNotUtf8()
+    {
+        // 'é' is 0xE9 in Latin1; that byte is invalid in UTF-8, so using UTF-8 would return a replacement char
+        var content = "caf\u00E9";
+        using var stream = new MemoryStream(Encoding.Latin1.GetBytes(content));
+
+        var result = await stream.ReadAsStringAsync(Encoding.Latin1);
+
+        result.Should().Be(content);
+    }
+
+    [Fact]
+    public async Task ReadAsStringAsync_StreamWithUtf16Bom_DetectsEncodingFromByteOrderMark()
+    {
+        // UTF-16 LE BOM + UTF-16 LE content; without BOM detection this reads as garbled UTF-8
+        var content = "Hello BOM";
+        var bytes = new byte[] { 0xFF, 0xFE }.Concat(Encoding.Unicode.GetBytes(content)).ToArray();
+        using var stream = new MemoryStream(bytes);
+
+        var result = await stream.ReadAsStringAsync();
+
+        result.Should().Be(content);
+    }
 }

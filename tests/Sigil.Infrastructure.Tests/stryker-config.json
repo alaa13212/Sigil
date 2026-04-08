@@ -1,0 +1,19 @@
+{
+  "stryker-config": {
+    "project": "Sigil.Infrastructure.csproj",
+    "reporters": [ "html", "cleartext", "json" ],
+    "mutation-level": "Standard",
+    "thresholds": {
+      "high": 80,
+      "low": 70,
+      "break": 0
+    },
+    "mutate": [
+      "**/*.cs",
+      "!**/Migrations/**",
+      "!**/*.Designer.cs"
+    ],
+    "report-file-name": "mutation-report",
+    "concurrency": 1
+  }
+}

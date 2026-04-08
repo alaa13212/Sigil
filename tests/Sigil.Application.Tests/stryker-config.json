@@ -1,0 +1,13 @@
+{
+  "stryker-config": {
+    "project": "Sigil.Application.csproj",
+    "reporters": [ "html", "cleartext", "json" ],
+    "mutation-level": "Standard",
+    "thresholds": {
+      "high": 80,
+      "low": 70,
+      "break": 0
+    },
+    "report-file-name": "mutation-report"
+  }
+}
