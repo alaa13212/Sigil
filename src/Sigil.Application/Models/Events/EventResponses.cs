@@ -8,7 +8,12 @@ public record EventSummary(
     string? Message,
     Severity Level,
     DateTime Timestamp,
-    string? Release);
+    string? Release,
+    string? ExceptionType = null,
+    string? Culprit = null,
+    string? Logger = null,
+    Platform Platform = Platform.Other,
+    int? IssueId = null);
 
 public record EventDetailResponse(
     long Id,

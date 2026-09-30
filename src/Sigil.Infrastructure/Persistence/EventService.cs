@@ -4,7 +4,9 @@ using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Application.Models.Events;
+using Sigil.Application.Models.Issues;
 using Sigil.Domain.Entities;
+using Sigil.Domain.Enums;
 using Sigil.Domain.Extensions;
 using Sigil.Domain.Ingestion;
 using Sigil.Infrastructure.Parsing;
@@ -89,20 +91,141 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
             .FirstOrDefaultAsync(e => e.Id == eventId);
     }
 
-    public async Task<(List<CapturedEvent> Items, int TotalCount)> GetEventsForIssueAsync(int issueId, int page = 1, int pageSize = 50)
+    public async Task<(List<CapturedEvent> Items, int TotalCount)> GetEventsForIssueAsync(int issueId, EventQueryParams query)
     {
-        var query = dbContext.Events.Where(e => e.IssueId == issueId);
+        return await QueryEventsAsync(dbContext.Events.Where(e => e.IssueId == issueId), query);
+    }
 
-        int totalCount = await query.CountAsync();
+    public async Task<PagedResponse<EventSummary>> SearchEventsAsync(int projectId, EventQueryParams query)
+    {
+        return await QueryEventSummariesAsync(dbContext.Events.Where(e => e.ProjectId == projectId), query);
+    }
 
-        var items = await query
+    private async Task<(List<CapturedEvent> Items, int TotalCount)> QueryEventsAsync(
+        IQueryable<CapturedEvent> source, EventQueryParams query)
+    {
+        var filtered = ApplyFilters(source, query);
+        int totalCount = await filtered.CountAsync();
+
+        var items = await ApplyOrder(filtered, query)
             .Include(e => e.Release)
-            .OrderByDescending(e => e.Timestamp)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize)
             .ToListAsync();
 
         return (items, totalCount);
+    }
+
+    private async Task<PagedResponse<EventSummary>> QueryEventSummariesAsync(
+        IQueryable<CapturedEvent> source, EventQueryParams query)
+    {
+        var filtered = ApplyFilters(source, query);
+        int totalCount = await filtered.CountAsync();
+
+        var items = await ApplyOrder(filtered, query)
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize)
+            .ToListAsync();
+
+        var summaries = items.Select(e => new EventSummary(
+            e.Id, e.EventId, e.Message, e.Level, e.Timestamp, e.Release?.RawName,
+            e.ExceptionType, e.Culprit, e.Logger, e.Platform, e.IssueId)).ToList();
+
+        return new PagedResponse<EventSummary>(summaries, totalCount, query.Page, query.PageSize);
+    }
+
+    private const int MaxDateRangeDays = 365;
+
+    private static IQueryable<CapturedEvent> ApplyFilters(IQueryable<CapturedEvent> source, EventQueryParams query)
+    {
+        ValidateDateRange(query);
+
+        var q = source;
+
+        if (!string.IsNullOrWhiteSpace(query.EventId))
+        {
+            var eventId = query.EventId.Trim();
+            q = q.Where(e => e.EventId == eventId);
+        }
+
+        if (query.Since.HasValue)
+            q = q.Where(e => e.Timestamp >= query.Since.Value.UtcDateTime);
+
+        if (query.Until.HasValue)
+            q = q.Where(e => e.Timestamp <= query.Until.Value.UtcDateTime);
+
+        if (query.Level.HasValue)
+            q = q.Where(e => e.Level == query.Level.Value);
+
+        if (query.ReleaseId.HasValue)
+            q = q.Where(e => e.ReleaseId == query.ReleaseId.Value);
+
+        if (!string.IsNullOrWhiteSpace(query.Logger))
+        {
+            var logger = query.Logger.Trim();
+            q = q.Where(e => EF.Functions.ILike(e.Logger, logger));
+        }
+
+        if (query.Platform.HasValue)
+            q = q.Where(e => e.Platform == query.Platform.Value);
+
+        if (!string.IsNullOrWhiteSpace(query.UserId))
+        {
+            var userId = query.UserId.Trim();
+            q = q.Where(e => e.UserId == userId);
+        }
+
+        var (freeText, tagFilters) = IssueSearchParser.Parse(query.Search);
+
+        // An exact event id identifies the row on its own, so the free text is not applied on top of it.
+        if (string.IsNullOrWhiteSpace(query.EventId) && !string.IsNullOrWhiteSpace(freeText))
+        {
+            foreach (var term in freeText.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var pattern = $"%{Escape(term)}%";
+                q = q.Where(e =>
+                    (e.Message != null && EF.Functions.ILike(e.Message, pattern)) ||
+                    (e.ExceptionType != null && EF.Functions.ILike(e.ExceptionType, pattern)) ||
+                    (e.Culprit != null && EF.Functions.ILike(e.Culprit, pattern)));
+            }
+        }
+
+        foreach (var (tagKey, tagValue) in tagFilters)
+        {
+            q = q.Where(e => e.Tags.Any(t =>
+                EF.Functions.ILike(t.TagKey!.Key, tagKey) && EF.Functions.ILike(t.Value, tagValue)));
+        }
+
+        return q;
+    }
+
+    private static IQueryable<CapturedEvent> ApplyOrder(IQueryable<CapturedEvent> q, EventQueryParams query) =>
+        query.SortBy switch
+        {
+            EventSortBy.Level => query.SortDescending
+                ? q.OrderByDescending(e => e.Level).ThenByDescending(e => e.Timestamp).ThenByDescending(e => e.Id)
+                : q.OrderBy(e => e.Level).ThenBy(e => e.Timestamp).ThenBy(e => e.Id),
+            EventSortBy.EventId => query.SortDescending
+                ? q.OrderByDescending(e => e.EventId).ThenByDescending(e => e.Id)
+                : q.OrderBy(e => e.EventId).ThenBy(e => e.Id),
+            _ => query.SortDescending
+                ? q.OrderByDescending(e => e.Timestamp).ThenByDescending(e => e.Id)
+                : q.OrderBy(e => e.Timestamp).ThenBy(e => e.Id),
+        };
+
+    private static string Escape(string value) =>
+        value.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+
+    private static void ValidateDateRange(EventQueryParams query)
+    {
+        if (query.Since is not { } since || query.Until is not { } until)
+            return;
+
+        if (since > until)
+            throw new ArgumentException("Since must be the same instant as or earlier than Until.", nameof(query));
+
+        if (until - since > TimeSpan.FromDays(MaxDateRangeDays))
+            throw new ArgumentException($"The date range cannot span more than {MaxDateRangeDays} days.", nameof(query));
     }
 
     public async Task<byte[]?> GetRawEventJsonAsync(long eventId)
@@ -287,15 +410,9 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         });
     }
 
-    public async Task<PagedResponse<EventSummary>> GetEventSummariesAsync(int issueId, int page = 1, int pageSize = 50)
+    public async Task<PagedResponse<EventSummary>> GetEventSummariesAsync(int issueId, EventQueryParams query)
     {
-        var (items, totalCount) = await GetEventsForIssueAsync(issueId, page, pageSize);
-
-        var summaries = items.Select(e => new EventSummary(
-            e.Id, e.EventId, e.Message, e.Level,
-            e.Timestamp, e.Release?.RawName)).ToList();
-
-        return new PagedResponse<EventSummary>(summaries, totalCount, page, pageSize);
+        return await QueryEventSummariesAsync(dbContext.Events.Where(e => e.IssueId == issueId), query);
     }
 
     public async Task<EventDetailResponse?> GetEventDetailAsync(long eventId)

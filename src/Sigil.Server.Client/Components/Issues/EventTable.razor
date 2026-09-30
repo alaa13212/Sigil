@@ -1,0 +1,272 @@
+@using Sigil.Application.Models.Events
+@using Sigil.Application.Models.Issues
+@using Sigil.Application.Models.Releases
+@using Sigil.Application.Models.Shared
+@inject IReleaseHealthService ReleaseHealthService
+@inject NavigationManager NavigationManager
+
+<!-- Filters -->
+<div class="flex flex-wrap gap-2 items-center">
+    <label class="select select-sm w-40">
+        <span class="label">Severity</span>
+        <select value="@(Query.Level?.ToString() ?? "")" @onchange="OnLevelChanged">
+            <option value="">All</option>
+            @foreach (Severity sev in Enum.GetValues<Severity>())
+            {
+                <option value="@sev">@sev</option>
+            }
+        </select>
+    </label>
+
+    <label class="select select-sm w-48">
+        <span class="label">Release</span>
+        <select value="@(Query.ReleaseId?.ToString() ?? "")" @onchange="OnReleaseChanged">
+            <option value="">All</option>
+            @foreach (var release in _releases)
+            {
+                <option value="@release.Id">@release.RawName</option>
+            }
+        </select>
+    </label>
+
+    <label class="select select-sm w-48">
+        <span class="label">Sort</span>
+        <select value="@SortValue" @onchange="OnSortChanged">
+            @foreach (var option in SortOptions)
+            {
+                <option value="@SortKey(option)">@option.Label</option>
+            }
+        </select>
+    </label>
+
+    <form class="flex-1 min-w-48" @onsubmit="ApplySearch" @onsubmit:preventDefault>
+        <input type="text" class="input input-sm w-full" placeholder="Search events — free text or tag:value"
+               aria-label="Search events" @bind="searchText" @bind:event="oninput" />
+    </form>
+
+    <form class="min-w-48" @onsubmit="ApplyEventId" @onsubmit:preventDefault>
+        <input type="text" class="input input-sm w-full font-mono" placeholder="Event ID" aria-label="Event ID"
+               @bind="eventIdText" @bind:event="oninput" />
+    </form>
+</div>
+
+<DateRangePicker Since="Query.Since" Until="Query.Until" RangeChanged="OnRangeChanged" />
+
+@{
+    var (_, activeTagFilters) = IssueSearchParser.Parse(Query.Search);
+}
+@if (activeTagFilters.Count > 0)
+{
+    <div class="flex flex-wrap gap-2">
+        @foreach (var (key, value) in activeTagFilters)
+        {
+            <div class="badge badge-lg badge-outline gap-2">
+                <span class="font-mono">@key: @value</span>
+                <button class="btn btn-xs btn-circle btn-ghost" @onclick="() => RemoveTagFilter(key, value)"
+                        title="Remove filter">×</button>
+            </div>
+        }
+    </div>
+}
+
+<!-- Content -->
+@if (Loading)
+{
+    <div class="flex justify-center py-16">
+        <span class="loading loading-spinner loading-lg"></span>
+    </div>
+}
+else if (Error is not null)
+{
+    <div class="alert alert-error">
+        <span>@Error</span>
+        <button class="btn btn-sm" @onclick="Retry">Retry</button>
+    </div>
+}
+else if (Events is null || Events.Items.Count == 0)
+{
+    <EmptyState Title="No events" Description="No events match the current filters. Widen the date range or clear a filter." />
+}
+else
+{
+    <div class="overflow-x-auto">
+        <table class="table table-zebra table-sm">
+            <thead>
+                <tr>
+                    @Header("Time", EventSortBy.Timestamp)
+                    <th>Exception</th>
+                    <th>Message</th>
+                    <th>Culprit</th>
+                    <th>Logger</th>
+                    @Header("Severity", EventSortBy.Level)
+                    <th>Release</th>
+                    <th>Event ID</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var evt in Events.Items)
+                {
+                    <tr class="hover:bg-base-300 relative">
+                        <td>
+                            <a href="@EventUrl(evt)" class="stretched-link">
+                                <span title="@AbsoluteTime(evt.Timestamp)">
+                                    <RelativeTime Value="evt.Timestamp" />
+                                </span>
+                            </a>
+                        </td>
+                        <td class="text-sm font-mono opacity-80">@(evt.ExceptionType ?? "—")</td>
+                        <td class="line-clamp-1" title="@evt.Message">@(evt.Message ?? "—")</td>
+                        <td class="text-sm opacity-60 line-clamp-1" title="@evt.Culprit">@(evt.Culprit ?? "—")</td>
+                        <td class="text-sm font-mono opacity-60 line-clamp-1" title="@evt.Logger">@(evt.Logger ?? "—")</td>
+                        <td><SeverityBadge Level="evt.Level" /></td>
+                        <td class="text-sm font-mono opacity-70">@(evt.Release ?? "—")</td>
+                        <td class="text-xs font-mono opacity-50">@evt.EventId</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <Pagination Page="Query.Page" TotalCount="Events.TotalCount" PageSize="Query.PageSize" />
+}
+
+@code {
+    [Parameter, EditorRequired] public int ProjectId { get; set; }
+
+    /// <summary>Issue the listing is scoped to, or <c>null</c> for the whole project.</summary>
+    [Parameter] public int? IssueId { get; set; }
+
+    [Parameter, EditorRequired] public EventQueryParams Query { get; set; } = new();
+
+    [Parameter] public PagedResponse<EventSummary>? Events { get; set; }
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback Retry { get; set; }
+    [Parameter] public EventCallback<EventQueryParams> QueryChanged { get; set; }
+
+    private static readonly (string Label, EventSortBy SortBy, bool Descending)[] SortOptions =
+    [
+        ("Newest first", EventSortBy.Timestamp, true),
+        ("Oldest first", EventSortBy.Timestamp, false),
+        ("Severity high to low", EventSortBy.Level, true),
+        ("Severity low to high", EventSortBy.Level, false),
+        ("Event ID ascending", EventSortBy.EventId, false),
+        ("Event ID descending", EventSortBy.EventId, true),
+    ];
+
+    private List<ReleaseHealthSummary> _releases = [];
+    private bool _releasesLoaded;
+    private string searchText = "";
+    private string eventIdText = "";
+    private string? _lastSearch;
+    private string? _lastEventId;
+    private int _lastProjectId;
+
+    private string SortValue
+    {
+        get
+        {
+            foreach (var option in SortOptions)
+            {
+                if (option.SortBy == Query.SortBy && option.Descending == Query.SortDescending)
+                    return SortKey(option);
+            }
+
+            return "";
+        }
+    }
+
+    private static string SortKey((string Label, EventSortBy SortBy, bool Descending) option) =>
+        $"{option.SortBy}:{(option.Descending ? "desc" : "asc")}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Query.Search != _lastSearch)
+        {
+            _lastSearch = Query.Search;
+            searchText = Query.Search ?? "";
+        }
+
+        if (Query.EventId != _lastEventId)
+        {
+            _lastEventId = Query.EventId;
+            eventIdText = Query.EventId ?? "";
+        }
+
+        if (ProjectId == _lastProjectId && _releasesLoaded) return;
+        _lastProjectId = ProjectId;
+        _releasesLoaded = true;
+        _releases = [];
+        try
+        {
+            var page = await ReleaseHealthService.GetReleaseHealthAsync(ProjectId, 1, 100);
+            _releases = page.Items;
+        }
+        catch (HttpRequestException)
+        {
+            _releases = [];
+        }
+    }
+
+    private RenderFragment Header(string label, EventSortBy sortBy) =>
+        @<th>
+            <button type="button" class="inline-flex items-center gap-1 hover:text-primary"
+                    @onclick="() => ToggleSort(sortBy)">
+                @label
+                @if (Query.SortBy == sortBy)
+                {
+                    <span aria-hidden="true">@(Query.SortDescending ? "▼" : "▲")</span>
+                }
+            </button>
+        </th>;
+
+    private Task Emit(EventQueryParams next) => QueryChanged.InvokeAsync(next with { Page = 1 });
+
+    private Task ToggleSort(EventSortBy sortBy)
+    {
+        var descending = Query.SortBy == sortBy ? !Query.SortDescending : sortBy == EventSortBy.Timestamp;
+        return QueryChanged.InvokeAsync(Query with { SortBy = sortBy, SortDescending = descending, Page = 1 });
+    }
+
+    private Task OnLevelChanged(ChangeEventArgs e) =>
+        Emit(Query with { Level = Enum.TryParse<Severity>(e.Value?.ToString(), out var level) ? level : null });
+
+    private Task OnReleaseChanged(ChangeEventArgs e) =>
+        Emit(Query with { ReleaseId = int.TryParse(e.Value?.ToString(), out var id) ? id : null });
+
+    private Task OnSortChanged(ChangeEventArgs e)
+    {
+        var parsed = EventQueryState.ParseSort(e.Value?.ToString());
+        if (parsed is not { } selection) return Task.CompletedTask;
+        return Emit(Query with { SortBy = selection.SortBy, SortDescending = selection.Descending });
+    }
+
+    private Task OnRangeChanged(DateRange range) =>
+        Emit(Query with { Since = range.Since, Until = range.Until });
+
+    private Task ApplySearch() =>
+        Emit(Query with { Search = string.IsNullOrWhiteSpace(searchText) ? null : searchText });
+
+    private Task ApplyEventId() =>
+        Emit(Query with { EventId = string.IsNullOrWhiteSpace(eventIdText) ? null : eventIdText.Trim() });
+
+    private Task RemoveTagFilter(string key, string value)
+    {
+        var (freeText, tags) = IssueSearchParser.Parse(Query.Search);
+        var remaining = tags.Where(t => !(t.Key == key && t.Value == value)).ToList();
+        return Emit(Query with { Search = IssueSearchParser.Serialize(freeText, remaining) });
+    }
+
+    private string EventUrl(EventSummary evt)
+    {
+        var issueId = IssueId ?? evt.IssueId;
+        return issueId is null
+            ? $"/projects/{ProjectId}/events"
+            : NavigationManager.GetUriWithQueryParameters(
+                $"/projects/{ProjectId}/issues/{issueId}",
+                new Dictionary<string, object?> { ["tab"] = "SuggestedEvent", ["event"] = evt.Id });
+    }
+
+    private static string AbsoluteTime(DateTime timestamp) =>
+        $"{timestamp:yyyy-MM-dd HH:mm:ss} UTC";
+}

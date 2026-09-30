@@ -1,14 +1,29 @@
+@page "/projects/{ProjectId:int}/events"
+@attribute [Authorize]
 @using Sigil.Application.Models.Events
 @using Sigil.Application.Models.Shared
 @inject IEventService EventService
 @inject NavigationManager NavigationManager
 
-<EventTable ProjectId="ProjectId" IssueId="IssueId" Query="Query" Events="_events"
-            Loading="_loading" Error="_error" Retry="LoadAsync" QueryChanged="ApplyQuery" />
+<PageTitle>Events — Sigil</PageTitle>
+
+<PageBreadcrumb Items="@([ new PageBreadcrumb.BreadcrumbItem("Projects", "/"), new PageBreadcrumb.BreadcrumbItem("Events") ])" />
+
+<div class="bg-base-100 p-4 space-y-4">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold">Events</h1>
+        @if (_events is not null)
+        {
+            <span class="text-sm opacity-60">@_events.TotalCount total</span>
+        }
+    </div>
+
+    <EventTable ProjectId="ProjectId" Query="Query" Events="_events"
+                Loading="_loading" Error="_error" Retry="LoadAsync" QueryChanged="ApplyQuery" />
+</div>
 
 @code {
-    [Parameter, EditorRequired] public int ProjectId { get; set; }
-    [Parameter, EditorRequired] public int IssueId { get; set; }
+    [Parameter] public int ProjectId { get; set; }
 
     [SupplyParameterFromQuery(Name = EventQueryState.PageKey)] public int Page { get; set; } = 1;
     [SupplyParameterFromQuery(Name = EventQueryState.LevelKey)] public Severity? Level { get; set; }
@@ -26,19 +41,26 @@
     private bool _loading = true;
     private string _lastQueryState = "";
 
-    private EventQueryParams Query => new()
+    private EventQueryParams Query
     {
-        Since = Since,
-        Until = Until,
-        Level = Level,
-        ReleaseId = ReleaseId,
-        Search = Search,
-        EventId = EventId,
-        SortBy = EventQueryState.ParseSort(Sort) is { } selection ? selection.SortBy : EventSortBy.Timestamp,
-        SortDescending = EventQueryState.ParseSort(Sort) is { } parsed ? parsed.Descending : true,
-        Page = Math.Max(1, Page),
-        PageSize = PageSize,
-    };
+        get
+        {
+            var sort = EventQueryState.ParseSort(Sort);
+            return new EventQueryParams
+            {
+                Since = Since,
+                Until = Until,
+                Level = Level,
+                ReleaseId = ReleaseId,
+                Search = Search,
+                EventId = EventId,
+                SortBy = sort is { } selection ? selection.SortBy : EventSortBy.Timestamp,
+                SortDescending = sort is { } parsed ? parsed.Descending : true,
+                Page = Math.Max(1, Page),
+                PageSize = PageSize,
+            };
+        }
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -56,7 +78,7 @@
         _error = null;
         try
         {
-            _events = await EventService.GetEventSummariesAsync(IssueId, Query);
+            _events = await EventService.SearchEventsAsync(ProjectId, Query);
         }
         catch (Exception ex) when (ex is HttpRequestException or ArgumentException)
         {

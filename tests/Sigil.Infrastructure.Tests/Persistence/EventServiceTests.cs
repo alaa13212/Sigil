@@ -1,4 +1,5 @@
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models.Events;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 using Sigil.Domain.Ingestion;
@@ -287,7 +288,7 @@ public class EventServiceTests(TestDatabaseFixture fixture)
         var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
         var service = Create(ctx);
 
-        var (items, totalCount) = await service.GetEventsForIssueAsync(issue.Id);
+        var (items, totalCount) = await service.GetEventsForIssueAsync(issue.Id, new EventQueryParams());
 
         items.Should().BeEmpty();
         totalCount.Should().Be(0);
@@ -305,7 +306,7 @@ public class EventServiceTests(TestDatabaseFixture fixture)
         var newest = await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id, timestamp: now);
         var service = Create(ctx);
 
-        var (items, _) = await service.GetEventsForIssueAsync(issue.Id);
+        var (items, _) = await service.GetEventsForIssueAsync(issue.Id, new EventQueryParams());
 
         items[0].EventId.Should().Be(newest.EventId);
         items[1].EventId.Should().Be(middle.EventId);
@@ -323,8 +324,8 @@ public class EventServiceTests(TestDatabaseFixture fixture)
             await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id, timestamp: now.AddMinutes(-i));
         var service = Create(ctx);
 
-        var (page1, total) = await service.GetEventsForIssueAsync(issue.Id, page: 1, pageSize: 2);
-        var (page2, _) = await service.GetEventsForIssueAsync(issue.Id, page: 2, pageSize: 2);
+        var (page1, total) = await service.GetEventsForIssueAsync(issue.Id, new EventQueryParams { Page = 1, PageSize = 2 });
+        var (page2, _) = await service.GetEventsForIssueAsync(issue.Id, new EventQueryParams { Page = 2, PageSize = 2 });
 
         total.Should().Be(5);
         page1.Should().HaveCount(2);
@@ -342,7 +343,7 @@ public class EventServiceTests(TestDatabaseFixture fixture)
             await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id);
         var service = Create(ctx);
 
-        var (_, totalCount) = await service.GetEventsForIssueAsync(issue.Id, page: 1, pageSize: 3);
+        var (_, totalCount) = await service.GetEventsForIssueAsync(issue.Id, new EventQueryParams { Page = 1, PageSize = 3 });
 
         totalCount.Should().Be(7);
     }
@@ -360,7 +361,7 @@ public class EventServiceTests(TestDatabaseFixture fixture)
             await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id, timestamp: now.AddMinutes(-i));
         var service = Create(ctx);
 
-        var result = await service.GetEventSummariesAsync(issue.Id, page: 1, pageSize: 10);
+        var result = await service.GetEventSummariesAsync(issue.Id, new EventQueryParams { Page = 1, PageSize = 10 });
 
         result.Items.Should().HaveCount(3);
         result.TotalCount.Should().Be(3);
@@ -378,7 +379,7 @@ public class EventServiceTests(TestDatabaseFixture fixture)
             await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id, timestamp: now.AddMinutes(-i));
         var service = Create(ctx);
 
-        var result = await service.GetEventSummariesAsync(issue.Id, page: 2, pageSize: 2);
+        var result = await service.GetEventSummariesAsync(issue.Id, new EventQueryParams { Page = 2, PageSize = 2 });
 
         result.Items.Should().HaveCount(2);
         result.TotalCount.Should().Be(5);

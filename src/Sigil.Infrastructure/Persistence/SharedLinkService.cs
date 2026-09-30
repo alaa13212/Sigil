@@ -53,7 +53,7 @@ internal class SharedLinkService(SigilDbContext dbContext, IIssueService issueSe
     {
         var link = await ValidateTokenAsync(token);
         if (link is null) return null;
-        return await eventService.GetEventSummariesAsync(link.IssueId, page, pageSize);
+        return await eventService.GetEventSummariesAsync(link.IssueId, new EventQueryParams { Page = page, PageSize = pageSize });
     }
 
     public async Task<IssueEventDetailResponse?> GetSharedEventDetailAsync(Guid token, long eventId)
