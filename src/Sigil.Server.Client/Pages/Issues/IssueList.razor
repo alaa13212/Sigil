@@ -266,7 +266,7 @@
     private Guid currentUserId;
 
     // Histograms: issueId → daily event counts for last 14 days
-    private Dictionary<int, List<int>> _histograms = [];
+    private Dictionary<int, TimeSeries> _histograms = [];
 
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
 
