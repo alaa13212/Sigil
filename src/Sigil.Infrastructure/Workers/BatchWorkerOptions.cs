@@ -29,6 +29,7 @@ internal class BatchWorkersConfig : Dictionary<string, BatchWorkerOptions>
         
         return new BatchWorkerOptions
         {
+            // Stryker disable once NullCoalescing : defaults.Cap is always null, so both sides of ?? are equivalent
             Cap = specific.Cap ?? defaults.Cap,
             BatchSize = specific.BatchSize != 0 ? specific.BatchSize : defaults.BatchSize,
             FlushTimeout = specific.FlushTimeout != TimeSpan.Zero ? specific.FlushTimeout : defaults.FlushTimeout

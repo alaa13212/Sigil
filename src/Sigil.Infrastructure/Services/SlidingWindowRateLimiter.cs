@@ -38,6 +38,7 @@ internal class SlidingWindowRateLimiter(IAppConfigService appConfig) : IRateLimi
             lock (_lock)
             {
                 DateTime now = DateTime.UtcNow;
+                // Stryker disable once Equality : > vs >= at the exact window boundary is immaterial; resetting one request earlier or later has no observable effect
                 if (now - _windowStart > window)
                 {
                     _windowStart = now;

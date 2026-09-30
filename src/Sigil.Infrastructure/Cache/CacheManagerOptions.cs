@@ -29,6 +29,7 @@ internal class CacheManagerOptions
         public TimeSpan? AbsoluteExpiration { get; set; } = TimeSpan.FromHours(1);
         public TimeSpan? SlidingExpiration { get; set; }
         public TimeSpan? ExpirationScanFrequency { get; set; }
+        // Stryker disable once Boolean : default value; callers override as needed; memory pressure behavior is an integration concern
         public bool CompactOnMemoryPressure { get; set; } = true;
     }
 

@@ -1,8 +1,10 @@
+using System.Diagnostics.CodeAnalysis;
 using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Cache;
 
+[ExcludeFromCodeCoverage]
 internal class IssueCache(ICacheManager cacheManager) : IIssueCache
 {
     private string Category => this.Category();

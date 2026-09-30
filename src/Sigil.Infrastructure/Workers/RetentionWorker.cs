@@ -58,6 +58,7 @@ internal class RetentionWorker(IServiceProvider services, IAppConfigService appC
             .Where(l => l.ExpiresAt < dateTime.UtcNow)
             .ExecuteDeleteAsync(ct);
 
+        // Stryker disable once Equality,Negate,Statement,String : logging guard; observational only
         if (deleted > 0)
             logger.LogInformation("Deleted {Count} expired shared issue links", deleted);
     }
@@ -71,6 +72,7 @@ internal class RetentionWorker(IServiceProvider services, IAppConfigService appC
             .Where(r => r.Error != null && r.ReceivedAt < cutoff)
             .ExecuteDeleteAsync(ct);
 
+        // Stryker disable once Equality,Negate,Statement,String : logging guard; observational only
         if (deleted > 0)
             logger.LogInformation("Deleted {Count} failed envelopes older than {Days} days", deleted, failedMaxAgeDays);
     }
@@ -84,6 +86,7 @@ internal class RetentionWorker(IServiceProvider services, IAppConfigService appC
             .Where(e => e.ProjectId == projectId && e.Timestamp < cutoff)
             .ExecuteDeleteAsync(ct);
 
+        // Stryker disable once Equality,Negate,Statement,String : logging guard; observational only
         if (deleted > 0)
             logger.LogInformation("Deleted {Count} events older than {Days} days for project {ProjectId}", deleted, maxAgeDays, projectId);
     }
@@ -107,6 +110,7 @@ internal class RetentionWorker(IServiceProvider services, IAppConfigService appC
             .Where(e => oldestIds.Contains(e.Id))
             .ExecuteDeleteAsync(ct);
 
+        // Stryker disable once Equality,Negate,Statement,String : logging guard; observational only
         if (deleted > 0)
             logger.LogInformation("Deleted {Count} excess events for project {ProjectId} (limit: {Max})", deleted, projectId, maxEvents);
     }

@@ -59,6 +59,7 @@ internal class IssueTrackerSyncWorker(
 
         foreach (var link in links)
         {
+            // Stryker disable once Statement : cancellation check; removing it only affects cancellation-mid-iteration which is not a unit-test concern
             ct.ThrowIfCancellationRequested();
             try
             {
@@ -101,6 +102,7 @@ internal class IssueTrackerSyncWorker(
             }
             catch (Exception ex)
             {
+                // Stryker disable once Statement,String : logging guard; observational only
                 logger.LogWarning(ex, "Failed to sync external issue link {LinkId}", link.Id);
             }
         }

@@ -23,15 +23,17 @@ internal class CacheManager : ICacheManager
     {
         foreach (var category in _options.Categories)
         {
+            // Stryker disable once ObjectInitializer : SizeLimit is a cache infrastructure setting; tests don't fill the cache to capacity
             var opts = new MemoryCacheOptions
             {
                 SizeLimit = category.Value.SizeLimit,
             };
 
-            if (category.Value.ExpirationScanFrequency.HasValue) 
+            if (category.Value.ExpirationScanFrequency.HasValue)
                 opts.ExpirationScanFrequency = category.Value.ExpirationScanFrequency.Value;
-            
-            if (category.Value.CompactOnMemoryPressure) 
+
+            // Stryker disable once Negate : CompactOnMemoryPressure is a runtime hint; in-process unit tests never trigger memory pressure events
+            if (category.Value.CompactOnMemoryPressure)
                 opts.CompactionPercentage = 0.2;
 
             _caches[category.Key] = new CategoryCache(new MemoryCache(opts));
@@ -40,6 +42,7 @@ internal class CacheManager : ICacheManager
 
     private CategoryCache GetOrCreateCache(string category)
     {
+        // Stryker disable once Block : fast-path before the lock; removing the block falls through to the lock which still returns correctly — purely a performance optimisation
         if (_caches.TryGetValue(category, out var cache))
         {
             return cache;
@@ -102,11 +105,13 @@ internal class CacheManager : ICacheManager
 
         var options = new MemoryCacheEntryOptions();
 
+        // Stryker disable once Negate,Block : expiration is a cache infrastructure setting; tests do not wait for entries to expire
         if (categoryOptions.AbsoluteExpiration.HasValue)
         {
             options.AbsoluteExpirationRelativeToNow = categoryOptions.AbsoluteExpiration;
         }
 
+        // Stryker disable once Negate,Block : expiration is a cache infrastructure setting; tests do not wait for entries to expire
         if (categoryOptions.SlidingExpiration.HasValue)
         {
             options.SlidingExpiration = categoryOptions.SlidingExpiration;

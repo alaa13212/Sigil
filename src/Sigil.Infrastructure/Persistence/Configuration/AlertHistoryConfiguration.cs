@@ -1,9 +1,11 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Persistence.Configuration;
 
+[ExcludeFromCodeCoverage]
 internal class AlertHistoryConfiguration : IEntityTypeConfiguration<AlertHistory>
 {
     public void Configure(EntityTypeBuilder<AlertHistory> builder)

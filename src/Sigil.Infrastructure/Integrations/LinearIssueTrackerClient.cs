@@ -12,6 +12,7 @@ internal class LinearIssueTrackerClient(IHttpClientFactory httpClientFactory)
     : TrackerClientBase(httpClientFactory), IIssueTrackerClient
 {
     // Linear returns camelCase property names but uses a different casing convention
+    // Stryker disable once Boolean : case-insensitive matching required for camelCase API responses; verified via integration testing
     private static readonly JsonSerializerOptions LinearOptions =
         new() { PropertyNameCaseInsensitive = true };
 

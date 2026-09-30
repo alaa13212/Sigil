@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using NpgsqlTypes;
@@ -5,6 +6,7 @@ using Sigil.Domain.Entities;
 
 namespace Sigil.Infrastructure.Persistence.Configuration;
 
+[ExcludeFromCodeCoverage]
 internal class IssueConfiguration : IEntityTypeConfiguration<Issue>
 {
     public void Configure(EntityTypeBuilder<Issue> builder)

@@ -12,8 +12,9 @@ internal class DefaultHashGenerator  : IHashGenerator
         int maxByteCount = Encoding.UTF8.GetMaxByteCount(value.Length);
         
         // Use stackalloc for input bytes if reasonable size, otherwise rent from pool
-        Span<byte> inputBytes = maxByteCount <= 1024 
-            ? stackalloc byte[maxByteCount] 
+        // Stryker disable once Conditional,Equality : stackalloc vs heap is a performance optimization; the hash output is identical either way
+        Span<byte> inputBytes = maxByteCount <= 1024
+            ? stackalloc byte[maxByteCount]
             : new byte[maxByteCount];
         
         // Get actual byte count and slice the span

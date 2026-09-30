@@ -15,6 +15,7 @@ internal class GzipCompressionService  : ICompressionService
     {
         byte[] bytes = Encoding.UTF8.GetBytes(input);
         using var output = new MemoryStream();
+        // Stryker disable once Boolean : leaveOpen:false would still allow output.ToArray() since MemoryStream.ToArray() works after Dispose
         using (var gzip = new GZipStream(output, CompressionLevel.Optimal, leaveOpen: true))
         {
             gzip.Write(bytes, 0, bytes.Length);
