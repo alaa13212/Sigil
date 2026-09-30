@@ -27,8 +27,8 @@ internal class PasskeyService(
         var origin = $"{uri.Scheme}://{uri.Authority}";
         return new Fido2(new Fido2Configuration
         {
-            ServerDomain = uri.Host,
-            ServerName = "Sigil",
+            RPID = uri.Host,
+            RPName = "Sigil",
             Origins = new HashSet<string> { origin }
         });
     }
