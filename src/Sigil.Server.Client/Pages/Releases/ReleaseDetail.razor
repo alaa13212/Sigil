@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using Sigil.Application.Models.Releases
 @using Sigil.Application.Models.SourceCode
+@using Sigil.Application.Models.Shared
 @inject IReleaseHealthService ReleaseHealthService
 @inject IIssueService IssueService
 @inject ISourceCodeService SourceCodeSvc
@@ -87,13 +88,14 @@ else
             </div>
         </div>
 
-        @if (_releaseHistogram is not null && _releaseHistogram.Points.Count > 0)
+        @if (_releaseHistogram is not null)
         {
             <div class="card bg-base-100">
                 <div class="card-body p-4">
                     <h2 class="card-title text-base mb-2">Event Activity</h2>
-                    <div class="text-xs opacity-60 mb-2">@TimeSeriesCaption.Describe(_releaseHistogram)</div>
-                    <Sparkline Data="_releaseHistogram" Width="560" Height="48" Class="w-full text-primary" />
+                    <TimeSeriesChart Data="_releaseHistogram" Width="560" Height="180"
+                                     RangeDays="ChartView.RangeDays" Granularity="ChartView.Granularity" Mode="ChartView.Mode"
+                                     ViewChanged="OnChartViewChanged" />
                 </div>
             </div>
         }
@@ -146,16 +148,43 @@ else
 @code {
     [Parameter] public int ProjectId { get; set; }
     [Parameter] public int ReleaseId { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.RangeKey)] public int? RangeParam { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.BucketsKey)] public TimeSeriesGranularity? BucketsParam { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.ChartKey)] public TimeSeriesChartMode? ChartModeParam { get; set; }
 
     [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    /// <summary>Range, bucket width and style selected on the event activity chart.</summary>
+    private TimeSeriesChartView ChartView => new(
+        RangeParam is > 0 ? RangeParam.Value : TimeSeriesChartView.DefaultRangeDays,
+        BucketsParam ?? TimeSeriesGranularity.Auto,
+        ChartModeParam ?? TimeSeriesChartMode.Bar);
 
     private ReleaseDetailResponse? release;
     private CommitInfo? commitInfo;
     private bool loading = true;
     private TimeSeries? _releaseHistogram;
+    private int _loadedReleaseId;
+    private TimeSeriesChartView? _loadedView;
 
     protected override async Task OnParametersSetAsync()
     {
+        if (release is not null && _loadedReleaseId == ReleaseId)
+        {
+            if (_loadedView != ChartView)
+            {
+                _loadedView = ChartView;
+                _releaseHistogram = null;
+                if (release.TopIssues.Count > 0)
+                    await LoadHistogramAsync(release.TopIssues.Select(i => i.IssueId).ToList());
+            }
+
+            return;
+        }
+
+        _loadedReleaseId = ReleaseId;
+        _loadedView = ChartView;
+
         loading = true;
         _releaseHistogram = null;
         commitInfo = null;
@@ -184,7 +213,7 @@ else
     {
         try
         {
-            var bulk = await IssueService.GetBulkHistogramsAsync(issueIds);
+            var bulk = await IssueService.GetBulkHistogramsAsync(issueIds, ChartView.RangeDays, ChartView.Granularity);
             if (bulk.Count == 0) return;
 
             var series = bulk.Values.ToList();
@@ -204,4 +233,7 @@ else
         }
         catch { /* silently ignore histogram load failures */ }
     }
+
+    private void OnChartViewChanged(TimeSeriesChartView view) =>
+        Navigation.NavigateTo(ChartQueryState.Apply(new Uri(Navigation.Uri), view).PathAndQuery, replace: true);
 }
