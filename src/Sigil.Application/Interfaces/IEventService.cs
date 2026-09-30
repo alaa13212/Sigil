@@ -8,12 +8,13 @@ public interface IEventService
 {
     // Entity access (internal use)
     Task<CapturedEvent?> GetEventByIdAsync(long eventId, bool includeStackFrames = false, bool includeTags = false);
-    Task<(List<CapturedEvent> Items, int TotalCount)> GetEventsForIssueAsync(int issueId, int page = 1, int pageSize = 50);
+    Task<(List<CapturedEvent> Items, int TotalCount)> GetEventsForIssueAsync(int issueId, EventQueryParams query);
     Task<byte[]?> GetRawEventJsonAsync(long eventId);
     Task<string?> GetEventMarkdownAsync(long eventId);
 
     // DTO access (UI/API)
-    Task<PagedResponse<EventSummary>> GetEventSummariesAsync(int issueId, int page = 1, int pageSize = 50);
+    Task<PagedResponse<EventSummary>> GetEventSummariesAsync(int issueId, EventQueryParams query);
+    Task<PagedResponse<EventSummary>> SearchEventsAsync(int projectId, EventQueryParams query);
     Task<EventDetailResponse?> GetEventDetailAsync(long eventId);
     Task<IssueEventDetailResponse?> GetIssueEventDetailAsync(int issueId, long eventId);
     Task<List<BreadcrumbResponse>> GetBreadcrumbsAsync(long eventId);

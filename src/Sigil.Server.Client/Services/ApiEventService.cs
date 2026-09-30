@@ -1,18 +1,46 @@
 using System.Net.Http.Json;
+using System.Web;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Application.Models.Events;
+using Sigil.Application.Models.Shared;
 using Sigil.Domain.Entities;
 
 namespace Sigil.Server.Client.Services;
 
 public class ApiEventService(HttpClient http) : IEventService
 {
-    public async Task<PagedResponse<EventSummary>> GetEventSummariesAsync(int issueId, int page = 1, int pageSize = 50)
+    public async Task<PagedResponse<EventSummary>> GetEventSummariesAsync(int issueId, EventQueryParams query)
     {
         return await http.GetFromJsonAsync<PagedResponse<EventSummary>>(
-            $"api/issues/{issueId}/events?page={page}&pageSize={pageSize}")
-            ?? new PagedResponse<EventSummary>([], 0, page, pageSize);
+            $"api/issues/{issueId}/events?{BuildQueryString(query)}")
+            ?? new PagedResponse<EventSummary>([], 0, query.Page, query.PageSize);
+    }
+
+    public async Task<PagedResponse<EventSummary>> SearchEventsAsync(int projectId, EventQueryParams query)
+    {
+        return await http.GetFromJsonAsync<PagedResponse<EventSummary>>(
+            $"api/projects/{projectId}/events?{BuildQueryString(query)}")
+            ?? new PagedResponse<EventSummary>([], 0, query.Page, query.PageSize);
+    }
+
+    private static string BuildQueryString(EventQueryParams query)
+    {
+        var qs = HttpUtility.ParseQueryString(string.Empty);
+        if (query.Since.HasValue) qs["since"] = UtcDateRangeInput.ToQueryValue(query.Since.Value);
+        if (query.Until.HasValue) qs["until"] = UtcDateRangeInput.ToQueryValue(query.Until.Value);
+        if (query.Level.HasValue) qs["level"] = query.Level.Value.ToString();
+        if (query.ReleaseId.HasValue) qs["releaseId"] = query.ReleaseId.Value.ToString();
+        if (!string.IsNullOrWhiteSpace(query.Logger)) qs["logger"] = query.Logger.Trim();
+        if (query.Platform.HasValue) qs["platform"] = query.Platform.Value.ToString();
+        if (!string.IsNullOrWhiteSpace(query.UserId)) qs["userId"] = query.UserId.Trim();
+        if (!string.IsNullOrWhiteSpace(query.Search)) qs["search"] = query.Search;
+        if (!string.IsNullOrWhiteSpace(query.EventId)) qs["eventId"] = query.EventId.Trim();
+        qs["sortBy"] = query.SortBy.ToString();
+        qs["sortDesc"] = query.SortDescending ? "true" : "false";
+        qs["page"] = query.Page.ToString();
+        qs["pageSize"] = query.PageSize.ToString();
+        return qs.ToString() ?? string.Empty;
     }
 
     public async Task<EventDetailResponse?> GetEventDetailAsync(long eventId)
@@ -64,13 +92,14 @@ public class ApiEventService(HttpClient http) : IEventService
         }
     }
 
-    public async Task<(List<CapturedEvent> Items, int TotalCount)> GetEventsForIssueAsync(int issueId, int page = 1, int pageSize = 50)
+    public async Task<(List<CapturedEvent> Items, int TotalCount)> GetEventsForIssueAsync(int issueId, EventQueryParams query)
     {
-        var response = await GetEventSummariesAsync(issueId, page, pageSize);
+        var response = await GetEventSummariesAsync(issueId, query);
         var events = response.Items.Select(s => new CapturedEvent
         {
             Id = s.Id, EventId = s.EventId ?? "", Message = s.Message,
-            Level = s.Level, Timestamp = s.Timestamp, ReceivedAt = s.Timestamp, RawCompressedJson = null,
+            Level = s.Level, Timestamp = s.Timestamp, ReceivedAt = s.Timestamp,
+            IssueId = s.IssueId ?? issueId, Platform = s.Platform, RawCompressedJson = null,
         }).ToList();
         return (events, response.TotalCount);
     }
