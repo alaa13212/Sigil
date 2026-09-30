@@ -187,6 +187,18 @@ public class SourceCodeServiceTests(TestDatabaseFixture fixture)
         response.DefaultBranch.Should().Be("main");
     }
 
+    [Fact]
+    public async Task DeleteProvider_NonExistent_ReturnsFalse()
+    {
+        // Line 50: return deleted > 0. With >= mutation: would return true even when nothing was deleted.
+        await using var ctx = Ctx();
+        var service = CreateService(ctx);
+
+        var result = await service.DeleteProviderAsync(int.MaxValue);
+
+        result.Should().BeFalse();
+    }
+
     // -----------------------------------------------------------------------
     // GetRepositoriesAsync
     // -----------------------------------------------------------------------
@@ -231,6 +243,30 @@ public class SourceCodeServiceTests(TestDatabaseFixture fixture)
 
         var repos = await service.GetRepositoriesAsync(project.Id);
         repos.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UnlinkRepository_FromWrongProject_ReturnsFalse()
+    {
+        // Line 105: r.Id == repositoryId && r.ProjectId == projectId — cross-project isolation.
+        // Without projectId check: a repo from project2 could be deleted when unlinking from project1.
+        await using var ctx = Ctx();
+        var encryption = CreateEncryption();
+        var provider = await CreateProviderAsync(ctx, encryption);
+        var project1 = await TestHelper.CreateProjectAsync(ctx);
+        var project2 = await TestHelper.CreateProjectAsync(ctx);
+        var service = CreateService(ctx, encryption);
+
+        var linked = await service.LinkRepositoryAsync(project2.Id,
+            new LinkRepositoryRequest(provider.Id, "org", "my-repo", "main"));
+
+        // Try to unlink using project1's id — must fail
+        var result = await service.UnlinkRepositoryAsync(project1.Id, linked.Id);
+
+        result.Should().BeFalse();
+        // Repo still belongs to project2
+        var repos = await service.GetRepositoriesAsync(project2.Id);
+        repos.Should().HaveCount(1);
     }
 
     // -----------------------------------------------------------------------
@@ -327,5 +363,118 @@ public class SourceCodeServiceTests(TestDatabaseFixture fixture)
             10,
             "abc123",
             Arg.Any<int>());
+    }
+
+    [Fact]
+    public async Task GetSourceContextForEvent_NullCommitSha_UsesReleaseTagAsRef()
+    {
+        // Lines 118-119/144: CommitSha is null → falls back to CleanReleaseTag(RawName).
+        // FileUrl should contain the release tag (not "abc123", not "master").
+        await using var ctx = Ctx();
+        var encryption = CreateEncryption();
+        var mockClient = Substitute.For<ISourceCodeClient>();
+        mockClient.ProviderType.Returns(ProviderType.GitHub);
+        mockClient
+            .GetSourceContextAsync(Arg.Any<ResolvedRepository>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<int>())
+            .Returns(Task.FromResult<SourceContextLines?>(new SourceContextLines(
+                [new SourceLine(5, "code")], "src/foo.js")));
+
+        var service = CreateService(ctx, encryption, mockClient);
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        // Release with no CommitSha, only RawName
+        var release = await TestHelper.CreateReleaseAsync(ctx, project.Id, "v2.0.0");
+        release.CommitSha = null;
+        await ctx.SaveChangesAsync();
+
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var evt = new CapturedEvent
+        {
+            EventId = Guid.NewGuid().ToString("N")[..32], Timestamp = DateTime.UtcNow,
+            ReceivedAt = DateTime.UtcNow, Level = Severity.Error, Platform = Platform.CSharp,
+            IssueId = issue.Id, ProjectId = project.Id, ReleaseId = release.Id, RawCompressedJson = [],
+        };
+        ctx.Events.Add(evt);
+        await ctx.SaveChangesAsync();
+
+        var provider = await CreateProviderAsync(ctx, encryption, type: ProviderType.GitHub);
+        ctx.ProjectRepositories.Add(new ProjectRepository
+        {
+            ProjectId = project.Id, ProviderId = provider.Id,
+            RepositoryOwner = "org", RepositoryName = "repo", DefaultBranch = "main",
+        });
+        await ctx.SaveChangesAsync();
+
+        var result = await service.GetSourceContextForEventAsync(evt.Id, "src/foo.js", 5);
+
+        result.Should().NotBeNull();
+        // Ref should be the release tag "v2.0.0" — FileUrl contains it, not "master" or a sha
+        result!.FileUrl.Should().Contain("v2.0.0", "release tag is used as ref when CommitSha is null");
+    }
+
+    [Fact]
+    public async Task GetSourceContextForEvent_NoDefaultBranch_UsesMasterAsFallback()
+    {
+        // Line 169: @ref = commitSha ?? resolved.DefaultBranch ?? "master"
+        // When both commitSha and DefaultBranch are null, "master" must be used in the FileUrl.
+        await using var ctx = Ctx();
+        var encryption = CreateEncryption();
+        var mockClient = Substitute.For<ISourceCodeClient>();
+        mockClient.ProviderType.Returns(ProviderType.GitHub);
+        mockClient
+            .GetSourceContextAsync(Arg.Any<ResolvedRepository>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<int>())
+            .Returns(Task.FromResult<SourceContextLines?>(new SourceContextLines(
+                [new SourceLine(3, "code")], "src/bar.js")));
+
+        var service = CreateService(ctx, encryption, mockClient);
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        // Event with no release (no commitSha, no releaseTag)
+        var evt = new CapturedEvent
+        {
+            EventId = Guid.NewGuid().ToString("N")[..32], Timestamp = DateTime.UtcNow,
+            ReceivedAt = DateTime.UtcNow, Level = Severity.Error, Platform = Platform.CSharp,
+            IssueId = issue.Id, ProjectId = project.Id, ReleaseId = null, RawCompressedJson = [],
+        };
+        ctx.Events.Add(evt);
+        await ctx.SaveChangesAsync();
+
+        var provider = await CreateProviderAsync(ctx, encryption, type: ProviderType.GitHub);
+        ctx.ProjectRepositories.Add(new ProjectRepository
+        {
+            ProjectId = project.Id, ProviderId = provider.Id,
+            RepositoryOwner = "org", RepositoryName = "repo", DefaultBranch = null, // no default branch
+        });
+        await ctx.SaveChangesAsync();
+
+        var result = await service.GetSourceContextForEventAsync(evt.Id, "src/bar.js", 3);
+
+        result.Should().NotBeNull();
+        result!.FileUrl.Should().Contain("/blob/master/", "\"master\" is the last fallback when no commitSha or DefaultBranch");
+    }
+
+    [Fact]
+    public async Task GetSourceContextForEvent_EmptyFilename_ReturnsNull()
+    {
+        // Line 126: !string.IsNullOrEmpty(filename) — empty filename skips source map resolution
+        // and goes directly to FetchSourceContext. With no repo linked, result is null.
+        await using var ctx = Ctx();
+        var service = CreateService(ctx);
+
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var release = await TestHelper.CreateReleaseAsync(ctx, project.Id, $"v1-{Guid.NewGuid():N}");
+        var evt = new CapturedEvent
+        {
+            EventId = Guid.NewGuid().ToString("N")[..32], Timestamp = DateTime.UtcNow,
+            ReceivedAt = DateTime.UtcNow, Level = Severity.Error, Platform = Platform.CSharp,
+            IssueId = issue.Id, ProjectId = project.Id, ReleaseId = release.Id, RawCompressedJson = [],
+        };
+        ctx.Events.Add(evt);
+        await ctx.SaveChangesAsync();
+
+        // Empty filename: source map resolver must NOT be called; no repo linked → null returned
+        var result = await service.GetSourceContextForEventAsync(evt.Id, "", 10);
+
+        result.Should().BeNull("no repo is linked, so FetchSourceContextAsync returns null");
     }
 }

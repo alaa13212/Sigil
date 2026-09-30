@@ -178,4 +178,41 @@ public class SentryEventParserTests
 
         result!.Type.Should().Be("B");
     }
+
+    [Fact]
+    public void SelectPrimary_MixedMechanismPresence_FindsRoot()
+    {
+        // Some exceptions have no mechanism — All(is null) = false so we proceed to root lookup.
+        // With All→Any mutation: Any(is null) = true → falls back to Last() = "Child", not "Root".
+        var exceptions = new List<SentryException>
+        {
+            new() { Type = "NoMechanism" },                                                     // no mechanism
+            new() { Type = "Root", Mechanism = new SentryMechanism { ExceptionId = 0 } },      // root
+            new() { Type = "Child", Mechanism = new SentryMechanism { ExceptionId = 1 } },     // last, not root
+        };
+
+        var result = SentryEventParser.SelectPrimaryException(exceptions);
+
+        result!.Type.Should().Be("Root");
+    }
+
+    [Fact]
+    public void SelectPrimary_ExceptionGroupWithNoChildren_ReturnsGroupItself()
+    {
+        // lastChild == null → || condition true → break → returns the group.
+        // With || → && mutation: null == null && null == current → false → doesn't break →
+        // current becomes null → next while iteration throws NullReferenceException.
+        var exceptions = new List<SentryException>
+        {
+            new()
+            {
+                Type = "EmptyGroup",
+                Mechanism = new SentryMechanism { ExceptionId = 0, IsExceptionGroup = true }
+            }
+        };
+
+        var result = SentryEventParser.SelectPrimaryException(exceptions);
+
+        result!.Type.Should().Be("EmptyGroup");
+    }
 }

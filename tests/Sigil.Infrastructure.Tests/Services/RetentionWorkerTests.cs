@@ -46,7 +46,7 @@ public class RetentionWorkerTests(TestDatabaseFixture fixture)
         return (Task)mi.Invoke(worker, fullArgs)!;
     }
 
-    private RetentionWorker CreateWorker(IAppConfigService? appConfig = null, IProjectConfigService? projectConfig = null)
+    private RetentionWorker CreateWorker(IAppConfigService? appConfig = null, IProjectConfigService? projectConfig = null, DateTime? utcNow = null)
     {
         // Provide a real DbContext via ServiceProvider so EnforceRetentionAsync can resolve it
         var services = new ServiceCollection();
@@ -54,7 +54,7 @@ public class RetentionWorkerTests(TestDatabaseFixture fixture)
         var sp = services.BuildServiceProvider();
 
         var dt = Substitute.For<IDateTime>();
-        dt.UtcNow.Returns(DateTime.UtcNow);
+        dt.UtcNow.Returns(utcNow ?? DateTime.UtcNow);
         return new RetentionWorker(
             sp,
             appConfig ?? StubAppConfig(),
@@ -111,6 +111,35 @@ public class RetentionWorkerTests(TestDatabaseFixture fixture)
 
         await using var ctx2 = Ctx();
         var worker = CreateWorker();
+        await InvokeAsync(worker, "CleanExpiredSharedLinksAsync", ctx2);
+
+        await using var verifyCtx = Ctx();
+        verifyCtx.SharedIssueLinks.Any(l => l.Token == link.Token).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CleanLinks_ExpiresAtExactlyNow_NotRemoved()
+    {
+        // Line 58: l.ExpiresAt < dateTime.UtcNow (strict less-than; exactly-now link is still valid)
+        // With <= mutation: the link would be deleted even though it hasn't expired yet.
+        var now = new DateTime(2025, 6, 1, 12, 0, 0, DateTimeKind.Utc);
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var user = await TestHelper.CreateUserAsync(ctx);
+        var link = new SharedIssueLink
+        {
+            Token = Guid.NewGuid(),
+            IssueId = issue.Id,
+            CreatedByUserId = user.Id,
+            CreatedAt = now.AddHours(-1),
+            ExpiresAt = now, // exactly now — not expired yet with strict <
+        };
+        ctx.SharedIssueLinks.Add(link);
+        await ctx.SaveChangesAsync();
+
+        await using var ctx2 = Ctx();
+        var worker = CreateWorker(utcNow: now);
         await InvokeAsync(worker, "CleanExpiredSharedLinksAsync", ctx2);
 
         await using var verifyCtx = Ctx();
@@ -182,6 +211,34 @@ public class RetentionWorkerTests(TestDatabaseFixture fixture)
 
         await using var ctx2 = Ctx();
         var worker = CreateWorker(appConfig: StubAppConfig(failedEnvelopeMaxAgeDays: 7));
+        await InvokeAsync(worker, "CleanFailedEnvelopesAsync", ctx2);
+
+        await using var verifyCtx = Ctx();
+        verifyCtx.RawEnvelopes.Any(r => r.Id == envelope.Id).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CleanEnvelopes_ReceivedAtExactlyCutoff_NotRemoved()
+    {
+        // Line 71: r.ReceivedAt < cutoff (strict less-than; envelope exactly at cutoff is NOT deleted)
+        // With <= mutation: would delete an envelope that arrived exactly at the boundary.
+        var now = new DateTime(2025, 6, 1, 12, 0, 0, DateTimeKind.Utc);
+        var maxAgeDays = 7;
+        var cutoff = now.AddDays(-maxAgeDays);
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var envelope = new RawEnvelope
+        {
+            ProjectId = project.Id,
+            RawData = "{}",
+            ReceivedAt = cutoff, // exactly at the boundary — must NOT be deleted
+            Error = "Parse error",
+        };
+        ctx.RawEnvelopes.Add(envelope);
+        await ctx.SaveChangesAsync();
+
+        await using var ctx2 = Ctx();
+        var worker = CreateWorker(appConfig: StubAppConfig(failedEnvelopeMaxAgeDays: maxAgeDays), utcNow: now);
         await InvokeAsync(worker, "CleanFailedEnvelopesAsync", ctx2);
 
         await using var verifyCtx = Ctx();
@@ -266,6 +323,27 @@ public class RetentionWorkerTests(TestDatabaseFixture fixture)
         verifyCtx.Events.Any(e => e.Id == evt.Id).Should().BeFalse("project override (10d) should delete the 20-day-old event");
     }
 
+    [Fact]
+    public async Task AgeRetention_EventAtExactCutoff_NotDeleted()
+    {
+        // Line 84: e.Timestamp < cutoff (strict less-than; event at exactly the cutoff is NOT deleted)
+        // With <= mutation: would delete an event that's right on the boundary.
+        var now = new DateTime(2025, 6, 1, 12, 0, 0, DateTimeKind.Utc);
+        var maxAgeDays = 30;
+        var cutoff = now.AddDays(-maxAgeDays);
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var boundaryEvent = await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id, timestamp: cutoff);
+
+        await using var ctx2 = Ctx();
+        var worker = CreateWorker(appConfig: StubAppConfig(maxAgeDays: maxAgeDays), utcNow: now);
+        await InvokeAsync(worker, "EnforceAgeRetentionAsync", ctx2, project.Id);
+
+        await using var verifyCtx = Ctx();
+        verifyCtx.Events.Any(e => e.Id == boundaryEvent.Id).Should().BeTrue();
+    }
+
     // ── EnforceCountRetentionAsync ────────────────────────────────────────────
 
     [Fact]
@@ -302,6 +380,47 @@ public class RetentionWorkerTests(TestDatabaseFixture fixture)
 
         await using var verifyCtx = Ctx();
         verifyCtx.Events.Count(e => e.ProjectId == project.Id).Should().Be(3);
+    }
+
+    [Fact]
+    public async Task CountRetention_ExactlyAtMaxEvents_NothingDeleted()
+    {
+        // Line 95: if (totalEvents <= maxEvents) return; — at exactly maxEvents, must return (no deletion).
+        // With < mutation: totalEvents = maxEvents → 3 < 3 = false → would attempt deletion.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        for (int i = 0; i < 3; i++)
+            await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id);
+
+        await using var ctx2 = Ctx();
+        var worker = CreateWorker(appConfig: StubAppConfig(maxEvents: 3)); // exactly at the limit
+        await InvokeAsync(worker, "EnforceCountRetentionAsync", ctx2, project.Id);
+
+        await using var verifyCtx = Ctx();
+        verifyCtx.Events.Count(e => e.ProjectId == project.Id).Should().Be(3);
+    }
+
+    [Fact]
+    public async Task CountRetention_DeletesOldestFirst_KeepsNewest()
+    {
+        // Line 99: OrderBy(e => e.Timestamp) — oldest events are deleted, not newest.
+        // With OrderByDescending mutation: would delete newest events instead.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var now = new DateTime(2025, 6, 1, 12, 0, 0, DateTimeKind.Utc);
+        var oldest = await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id, timestamp: now.AddHours(-3));
+        var middle = await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id, timestamp: now.AddHours(-2));
+        var newest = await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id, timestamp: now.AddHours(-1));
+
+        await using var ctx2 = Ctx();
+        var worker = CreateWorker(appConfig: StubAppConfig(maxEvents: 2), utcNow: now);
+        await InvokeAsync(worker, "EnforceCountRetentionAsync", ctx2, project.Id);
+
+        await using var verifyCtx = Ctx();
+        verifyCtx.Events.Any(e => e.Id == oldest.Id).Should().BeFalse("oldest event must be deleted first");
+        verifyCtx.Events.Any(e => e.Id == newest.Id).Should().BeTrue("newest event must be kept");
     }
 
     [Fact]

@@ -489,4 +489,93 @@ public class EventServiceTests(TestDatabaseFixture fixture)
         result.PreviousEventId.Should().BeNull();
         result.NextEventId.Should().BeNull();
     }
+
+    [Fact]
+    public async Task GetAdjacentEvents_SameTimestamp_TieBreaksById()
+    {
+        // Lines 353/360: compound condition for same-timestamp: (e.Timestamp == currentTimestamp && e.Id > currentEventId)
+        // If the || half is removed, tie-breaking by Id wouldn't work when timestamps collide.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var sameTime = new DateTime(2025, 6, 1, 12, 0, 0, DateTimeKind.Utc);
+
+        // Three events all at the same timestamp — ordering is by Id (auto-increment)
+        var first = await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id, timestamp: sameTime);
+        var middle = await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id, timestamp: sameTime);
+        var last = await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id, timestamp: sameTime);
+
+        // Verify IDs are ordered as expected (DB auto-increment)
+        first.Id.Should().BeLessThan(middle.Id);
+        middle.Id.Should().BeLessThan(last.Id);
+
+        var service = Create(ctx);
+        var result = await service.GetAdjacentEventIdsAsync(issue.Id, middle.Id);
+
+        result.PreviousEventId.Should().Be(first.Id, "Id < middle.Id with same timestamp = older");
+        result.NextEventId.Should().Be(last.Id, "Id > middle.Id with same timestamp = newer");
+    }
+
+    // ── GetMergeGroupEventNavigationAsync ─────────────────────────────────────
+
+    [Fact]
+    public async Task GetMergeGroupEventNavigation_MiddleEvent_ReturnsBothNeighbors()
+    {
+        // Lines 368-388: GetMergeGroupEventNavigationAsync navigates across issues in a merge set.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue1 = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var issue2 = await TestHelper.CreateIssueAsync(ctx, project.Id);
+
+        // Create a merge set
+        var mergeSet = new Domain.Entities.MergeSet
+        {
+            ProjectId = project.Id, PrimaryIssueId = issue1.Id,
+            CreatedAt = DateTime.UtcNow, FirstSeen = DateTime.UtcNow,
+            LastSeen = DateTime.UtcNow, OccurrenceCount = 2, Level = Severity.Error,
+        };
+        ctx.MergeSets.Add(mergeSet);
+        await ctx.SaveChangesAsync();
+        (await ctx.Issues.FindAsync(issue1.Id))!.MergeSetId = mergeSet.Id;
+        (await ctx.Issues.FindAsync(issue2.Id))!.MergeSetId = mergeSet.Id;
+        await ctx.SaveChangesAsync();
+
+        var now = DateTime.UtcNow;
+        var oldest = await TestHelper.CreateEventAsync(ctx, project.Id, issue1.Id, timestamp: now.AddHours(-2));
+        var middle = await TestHelper.CreateEventAsync(ctx, project.Id, issue2.Id, timestamp: now.AddHours(-1));
+        var newest = await TestHelper.CreateEventAsync(ctx, project.Id, issue1.Id, timestamp: now);
+
+        var service = Create(ctx);
+        var result = await service.GetMergeGroupEventNavigationAsync(mergeSet.Id, middle.Id);
+
+        result.PreviousEventId.Should().Be(oldest.Id);
+        result.NextEventId.Should().Be(newest.Id);
+    }
+
+    [Fact]
+    public async Task GetMergeGroupEventNavigation_OnlyEvent_BothNull()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+
+        var mergeSet = new Domain.Entities.MergeSet
+        {
+            ProjectId = project.Id, PrimaryIssueId = issue.Id,
+            CreatedAt = DateTime.UtcNow, FirstSeen = DateTime.UtcNow,
+            LastSeen = DateTime.UtcNow, OccurrenceCount = 1, Level = Severity.Error,
+        };
+        ctx.MergeSets.Add(mergeSet);
+        await ctx.SaveChangesAsync();
+        (await ctx.Issues.FindAsync(issue.Id))!.MergeSetId = mergeSet.Id;
+        await ctx.SaveChangesAsync();
+
+        var evt = await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id);
+        var service = Create(ctx);
+
+        var result = await service.GetMergeGroupEventNavigationAsync(mergeSet.Id, evt.Id);
+
+        result.PreviousEventId.Should().BeNull();
+        result.NextEventId.Should().BeNull();
+    }
 }

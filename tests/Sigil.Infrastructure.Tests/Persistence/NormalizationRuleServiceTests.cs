@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.NormalizationRules;
@@ -178,5 +179,76 @@ public class NormalizationRuleServiceTests(TestDatabaseFixture fixture)
         await service.DeleteRuleAsync(projectId, created.Id);
 
         cache.Received(1).Invalidate(projectId);
+    }
+
+    [Fact]
+    public async Task CreateDefaultRulesPreset_ReturnsAllPresetsWithValidFields()
+    {
+        await using var context = CreateContext();
+        var service = new NormalizationRuleService(context, StubCache(), StubDateTime());
+
+        var rules = service.CreateDefaultRulesPreset();
+
+        // Every preset must have a non-empty pattern, replacement, and description
+        rules.Should().NotBeEmpty();
+        rules.Should().AllSatisfy(r =>
+        {
+            r.Pattern.Should().NotBeEmpty("pattern must be set for every preset");
+            r.Replacement.Should().NotBeEmpty("replacement must be set for every preset");
+            r.Description.Should().NotBeEmpty("description must be set for every preset");
+            r.Enabled.Should().BeTrue();
+        });
+        rules.Select(r => r.Description).Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public async Task CreateDefaultRulesPreset_PatternsMatchIntendedInputs()
+    {
+        await using var context = CreateContext();
+        var service = new NormalizationRuleService(context, StubCache(), StubDateTime());
+
+        var rules = service.CreateDefaultRulesPreset().ToDictionary(r => r.Description!);
+
+        // Each pattern must match its intended sample input and produce the correct replacement token
+        AssertReplaces(rules, "IP Addresses",  "192.168.1.1",                            "{ip}");
+        AssertReplaces(rules, "UUIDs",         "550e8400-e29b-41d4-a716-446655440000",   "{uuid}");
+        AssertReplaces(rules, "Dates",         "2024-01-15",                              "{datetime}");
+        AssertReplaces(rules, "Emails",        "user@example.com",                        "{email}");
+        AssertReplaces(rules, "URLs",          "https://example.com/path",                "{url}");
+        AssertReplaces(rules, "Boolean Values","true",                                    "{bool}");
+        AssertReplaces(rules, "Numbers",       "42",                                      "{int}");
+        AssertReplaces(rules, "Hexadecimal Numbers", "deadbeef",                          "{hex}");
+        AssertReplaces(rules, "Epoch seconds", "1700000000",                              "{epoch}");
+        AssertReplaces(rules, "Epoch millis",  "1700000000000",                           "{epochms}");
+    }
+
+    [Fact]
+    public async Task GetRawRulesAsync_FiltersToProjectAndPopulatesCache()
+    {
+        var projectId = await CreateTestProjectAsync();
+        var otherProjectId = await CreateTestProjectAsync();
+        var cache = StubCache();
+        await using var context = CreateContext();
+        var service = new NormalizationRuleService(context, cache, StubDateTime());
+
+        // Create rule for the target project and one for another project
+        await service.CreateRuleAsync(projectId,      new(@"\d+", "<NUM>", 10, true, "Target"));
+        await service.CreateRuleAsync(otherProjectId, new(@"\w+", "<WORD>", 10, true, "Other"));
+        cache.ClearReceivedCalls();
+
+        var result = await service.GetRawRulesAsync(projectId);
+
+        // Must return only rules for the given project
+        result.Should().OnlyContain(r => r.ProjectId == projectId);
+        // Cache must be populated after a DB miss
+        cache.Received(1).Set(projectId, Arg.Any<List<TextNormalizationRule>>());
+    }
+
+    private static void AssertReplaces(Dictionary<string, TextNormalizationRule> rules, string description, string input, string expectedToken)
+    {
+        rules.Should().ContainKey(description);
+        var rule = rules[description];
+        var output = Regex.Replace(input, rule.Pattern, rule.Replacement);
+        output.Should().Contain(expectedToken, $"pattern '{rule.Pattern}' with replacement '{rule.Replacement}' should produce token in output for input '{input}'");
     }
 }

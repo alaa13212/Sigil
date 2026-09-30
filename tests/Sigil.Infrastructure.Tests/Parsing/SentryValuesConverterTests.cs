@@ -121,13 +121,13 @@ public class SentryValuesConverterTests
     // --- Edge cases ---
 
     [Fact]
-    public void ExceptionData_UnexpectedToken_Throws()
+    public void ExceptionData_UnexpectedToken_ThrowsWithDescriptiveMessage()
     {
         var json = "42";
 
         var act = () => JsonSerializer.Deserialize<SentryExceptionData>(json, Options);
 
-        act.Should().Throw<JsonException>();
+        act.Should().Throw<JsonException>().WithMessage("*Unexpected token type*");
     }
 
     [Fact]
@@ -147,5 +147,22 @@ public class SentryValuesConverterTests
         var json = JsonSerializer.Serialize<SentryExceptionData?>(null, Options);
 
         json.Should().Be("null");
+    }
+
+    [Fact]
+    public void ExceptionData_Serializes_AsValidWrappedObject()
+    {
+        var data = new SentryExceptionData
+        {
+            Values = [new SentryException { Type = "Error", Value = "oops" }]
+        };
+
+        var json = JsonSerializer.Serialize(data, Options);
+
+        // Must be a valid JSON object with "values" array wrapper — not just a raw array
+        using var doc = JsonDocument.Parse(json);
+        doc.RootElement.ValueKind.Should().Be(JsonValueKind.Object, "serialized form must be a wrapped object");
+        doc.RootElement.TryGetProperty("values", out var values).Should().BeTrue();
+        values.GetArrayLength().Should().Be(1);
     }
 }

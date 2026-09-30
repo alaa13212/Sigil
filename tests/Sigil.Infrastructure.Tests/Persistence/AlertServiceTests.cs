@@ -459,6 +459,126 @@ public class AlertServiceTests(TestDatabaseFixture fixture)
         verify.AlertHistory.Any(h => h.Status == AlertDeliveryStatus.Failed).Should().BeTrue();
     }
 
+    [Fact]
+    public async Task EvaluateNewIssue_InfoLevelIssue_DoesNotTriggerNewHighSeverityRule()
+    {
+        // Line 136: if (issue.Level.IsAtLeast(Severity.Error)) — Info is below Error, so NewHighSeverity rules must not fire.
+        // With negation mutation: Info.IsAtLeast(Error) = false → negated = true → would incorrectly fire.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var channel = await TestHelper.CreateAlertChannelAsync(ctx);
+        var rule = await TestHelper.CreateAlertRuleAsync(ctx, project.Id, channel.Id);
+        rule.Trigger = AlertTrigger.NewHighSeverity;
+        rule.MinSeverity = null;
+        await ctx.SaveChangesAsync();
+
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        issue.Level = Severity.Info;
+        await ctx.SaveChangesAsync();
+
+        var sender = StubSender();
+        var service = new AlertService(ctx, StubDateTime(), [sender], StubAppConfig());
+
+        await service.EvaluateNewIssueAsync(issue);
+
+        await sender.DidNotReceive().SendAsync(Arg.Any<AlertRule>(), Arg.Any<Issue>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task EvaluateThreshold_NullThresholdCount_DoesNotFire()
+    {
+        // Line 162: !ThresholdCount.HasValue || !ThresholdWindow.HasValue → continue (skip rule)
+        // With || → && mutation: only skips when BOTH are null; here Count=null, Window=set → would not skip → crashes.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var channel = await TestHelper.CreateAlertChannelAsync(ctx);
+        var rule = await TestHelper.CreateAlertRuleAsync(ctx, project.Id, channel.Id);
+        rule.Trigger = AlertTrigger.ThresholdExceeded;
+        rule.ThresholdCount = null;                    // null count — incomplete rule, must be skipped
+        rule.ThresholdWindow = TimeSpan.FromHours(1);
+        rule.MinSeverity = null;
+        await ctx.SaveChangesAsync();
+
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var sender = StubSender();
+        var service = new AlertService(ctx, StubDateTime(), [sender], StubAppConfig());
+
+        await service.EvaluateThresholdAsync(issue);
+
+        await sender.DidNotReceive().SendAsync(Arg.Any<AlertRule>(), Arg.Any<Issue>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task EvaluateThreshold_NullThresholdWindow_DoesNotFire()
+    {
+        // Line 162: same || guard — ThresholdWindow null means rule is incomplete, must be skipped.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var channel = await TestHelper.CreateAlertChannelAsync(ctx);
+        var rule = await TestHelper.CreateAlertRuleAsync(ctx, project.Id, channel.Id);
+        rule.Trigger = AlertTrigger.ThresholdExceeded;
+        rule.ThresholdCount = 5;
+        rule.ThresholdWindow = null;                   // null window — incomplete rule, must be skipped
+        rule.MinSeverity = null;
+        await ctx.SaveChangesAsync();
+
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var sender = StubSender();
+        var service = new AlertService(ctx, StubDateTime(), [sender], StubAppConfig());
+
+        await service.EvaluateThresholdAsync(issue);
+
+        await sender.DidNotReceive().SendAsync(Arg.Any<AlertRule>(), Arg.Any<Issue>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task FireAsync_IssueWithPositiveId_SendsUrlContainingIssuePath()
+    {
+        // Lines 229/249: issue.Id > 0 ? $"{baseUrl}/…/{issue.Id}" : ""
+        // Killing: > 0 → > 1 (Id=1 would produce empty URL and fail the Contains check)
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var channel = await TestHelper.CreateAlertChannelAsync(ctx);
+        var rule = await TestHelper.CreateAlertRuleAsync(ctx, project.Id, channel.Id);
+        rule.Trigger = AlertTrigger.NewIssue;
+        rule.MinSeverity = null;
+        await ctx.SaveChangesAsync();
+
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var sender = StubSender();
+        var service = new AlertService(ctx, StubDateTime(), [sender], StubAppConfig());
+
+        await service.EvaluateNewIssueAsync(issue);
+
+        await sender.Received().SendAsync(
+            Arg.Any<AlertRule>(),
+            Arg.Any<Issue>(),
+            Arg.Is<string>(url => url.Contains($"/issues/{issue.Id}")));
+    }
+
+    [Fact]
+    public async Task EvaluateNewIssue_NoMatchingSenderForChannel_ThrowsInvalidOperationException()
+    {
+        // Line 258: GetSender → FirstOrDefault ?? throw. No sender for the rule's channel type → must throw.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var channel = await TestHelper.CreateAlertChannelAsync(ctx); // Webhook channel
+        var rule = await TestHelper.CreateAlertRuleAsync(ctx, project.Id, channel.Id);
+        rule.Trigger = AlertTrigger.NewIssue;
+        rule.MinSeverity = null;
+        await ctx.SaveChangesAsync();
+
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        // Pass a Slack sender, but the channel is Webhook — no match
+        var slackSender = StubSender(AlertChannelType.Slack);
+        var service = new AlertService(ctx, StubDateTime(), [slackSender], StubAppConfig());
+
+        var act = () => service.EvaluateNewIssueAsync(issue);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*No sender registered*");
+    }
+
     // ── GetAlertHistory ───────────────────────────────────────────────────────
 
     [Fact]

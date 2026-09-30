@@ -88,6 +88,49 @@ public class ReleaseHealthServiceTests(TestDatabaseFixture fixture)
         page1.Items.Select(r => r.Id).Should().NotIntersectWith(page2.Items.Select(r => r.Id));
     }
 
+    [Fact]
+    public async Task GetReleaseHealth_OrderedByFirstSeenDescending()
+    {
+        // Line 16: OrderByDescending(r => r.FirstSeenAt) — newest release must appear first.
+        // With ascending mutation: oldest would appear first.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var now = new DateTime(2025, 6, 1, 12, 0, 0, DateTimeKind.Utc);
+        var older = await TestHelper.CreateReleaseAsync(ctx, project.Id, $"v1-{Guid.NewGuid():N}", firstSeen: now.AddDays(-2));
+        var newer = await TestHelper.CreateReleaseAsync(ctx, project.Id, $"v2-{Guid.NewGuid():N}", firstSeen: now);
+
+        await using var ctx2 = Ctx();
+        var result = await Create(ctx2).GetReleaseHealthAsync(project.Id);
+
+        var ids = result.Items.Select(r => r.Id).ToList();
+        ids.IndexOf(newer.Id).Should().BeLessThan(ids.IndexOf(older.Id), "newer release must appear first");
+    }
+
+    [Fact]
+    public async Task GetReleaseHealth_IssueFirstSeenExactlyAtRelease_CountedAsNew()
+    {
+        // Line 24: i.FirstSeen >= r.FirstSeenAt (inclusive boundary).
+        // With > mutation: issue at exactly the release date would not be counted as new.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var releaseDate = new DateTime(2025, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+        var release = await TestHelper.CreateReleaseAsync(ctx, project.Id, $"v1-{Guid.NewGuid():N}", firstSeen: releaseDate);
+
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        issue.FirstSeen = releaseDate; // exactly at the release boundary
+        await ctx.SaveChangesAsync();
+
+        var ev = await TestHelper.CreateEventAsync(ctx, project.Id, issue.Id, timestamp: releaseDate.AddDays(1));
+        ev.ReleaseId = release.Id;
+        await ctx.SaveChangesAsync();
+
+        await using var ctx2 = Ctx();
+        var result = await Create(ctx2).GetReleaseHealthAsync(project.Id);
+
+        result.Items.Should().HaveCount(1);
+        result.Items[0].NewIssues.Should().Be(1, "issue with FirstSeen == release date must count as new");
+    }
+
     // ── GetReleaseDetail ──────────────────────────────────────────────────────
 
     [Fact]
@@ -115,6 +158,106 @@ public class ReleaseHealthServiceTests(TestDatabaseFixture fixture)
         result.Should().NotBeNull();
         result!.TopIssues.Should().HaveCount(1);
         result.TopIssues[0].IssueId.Should().Be(issue.Id);
+    }
+
+    [Fact]
+    public async Task GetReleaseDetail_IssueFirstSeenExactlyAtRelease_IsNew()
+    {
+        // Line 74: issue.FirstSeen >= data.FirstSeenAt (inclusive boundary for displayed IsNew flag).
+        // With > mutation: issue with FirstSeen == release date would incorrectly show IsNew=false.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var releaseDate = new DateTime(2025, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+        var release = await TestHelper.CreateReleaseAsync(ctx, project.Id, $"v1-{Guid.NewGuid():N}", firstSeen: releaseDate);
+
+        var boundaryIssue = await TestHelper.CreateIssueAsync(ctx, project.Id, "Boundary");
+        boundaryIssue.FirstSeen = releaseDate; // exactly at release date
+        await ctx.SaveChangesAsync();
+
+        var ev = await TestHelper.CreateEventAsync(ctx, project.Id, boundaryIssue.Id, timestamp: releaseDate.AddDays(1));
+        ev.ReleaseId = release.Id;
+        await ctx.SaveChangesAsync();
+
+        await using var ctx2 = Ctx();
+        var result = await Create(ctx2).GetReleaseDetailAsync(release.Id);
+
+        result.Should().NotBeNull();
+        var entry = result!.TopIssues.Should().ContainSingle().Which;
+        entry.IsNew.Should().BeTrue("FirstSeen == release date qualifies as a new issue (>= boundary)");
+    }
+
+    [Fact]
+    public async Task GetReleaseDetail_TopIssues_NewIssuesOrderedBeforeOld()
+    {
+        // Lines 54-55: OrderByDescending(IsNew).ThenByDescending(EventCount) — new issues must come first.
+        // With ascending mutation: old issues would appear first.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var releaseDate = new DateTime(2025, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+        var release = await TestHelper.CreateReleaseAsync(ctx, project.Id, $"v1-{Guid.NewGuid():N}", firstSeen: releaseDate);
+
+        // Old issue: existed before release
+        var oldIssue = await TestHelper.CreateIssueAsync(ctx, project.Id, "Old");
+        oldIssue.FirstSeen = releaseDate.AddDays(-5);
+        // New issue: appeared after release
+        var newIssue = await TestHelper.CreateIssueAsync(ctx, project.Id, "New");
+        newIssue.FirstSeen = releaseDate.AddDays(1);
+        await ctx.SaveChangesAsync();
+
+        // oldIssue: first event at exactly release date → Min > release = false → IsNew=false in ordering
+        var ev1 = await TestHelper.CreateEventAsync(ctx, project.Id, oldIssue.Id, timestamp: releaseDate);
+        ev1.ReleaseId = release.Id;
+        // newIssue: first event strictly after release date → Min > release = true → IsNew=true in ordering
+        var ev2 = await TestHelper.CreateEventAsync(ctx, project.Id, newIssue.Id, timestamp: releaseDate.AddDays(1));
+        ev2.ReleaseId = release.Id;
+        await ctx.SaveChangesAsync();
+
+        await using var ctx2 = Ctx();
+        var result = await Create(ctx2).GetReleaseDetailAsync(release.Id);
+
+        result.Should().NotBeNull();
+        result!.TopIssues.Should().HaveCount(2);
+        result.TopIssues[0].IssueId.Should().Be(newIssue.Id, "new issue should be ordered first");
+        result.TopIssues[1].IssueId.Should().Be(oldIssue.Id);
+    }
+
+    [Fact]
+    public async Task GetReleaseDetail_FirstEventAtExactlyReleaseDate_NotCountedAsNewInOrdering()
+    {
+        // Line 53: g.Min(e => e.Timestamp) > r.FirstSeenAt (strict — event at release time is NOT new for ordering)
+        // With >= mutation: the issue would be ordered as "new" even though its first event is at release time.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var releaseDate = new DateTime(2025, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+        var release = await TestHelper.CreateReleaseAsync(ctx, project.Id, $"v1-{Guid.NewGuid():N}", firstSeen: releaseDate);
+
+        // Issue with many events but first event exactly at release date — not "new" in TopIssueStats ordering
+        var existingIssue = await TestHelper.CreateIssueAsync(ctx, project.Id, "Existing");
+        existingIssue.FirstSeen = releaseDate.AddDays(-10); // existed before release
+        // Truly new issue with first event after release date but fewer events
+        var newIssue = await TestHelper.CreateIssueAsync(ctx, project.Id, "Truly New");
+        newIssue.FirstSeen = releaseDate.AddDays(1);
+        await ctx.SaveChangesAsync();
+
+        // Existing issue: 5 events, first at exactly release date
+        for (int i = 0; i < 5; i++)
+        {
+            var ev = await TestHelper.CreateEventAsync(ctx, project.Id, existingIssue.Id,
+                timestamp: i == 0 ? releaseDate : releaseDate.AddDays(i));
+            ev.ReleaseId = release.Id;
+        }
+        // New issue: 1 event strictly after release date
+        var newEv = await TestHelper.CreateEventAsync(ctx, project.Id, newIssue.Id, timestamp: releaseDate.AddDays(1));
+        newEv.ReleaseId = release.Id;
+        await ctx.SaveChangesAsync();
+
+        await using var ctx2 = Ctx();
+        var result = await Create(ctx2).GetReleaseDetailAsync(release.Id);
+
+        result.Should().NotBeNull();
+        // newIssue has IsNew=true in ordering → appears first; existingIssue has IsNew=false → second despite 5 events
+        result!.TopIssues[0].IssueId.Should().Be(newIssue.Id, "truly new issue (first event > release date) orders first");
+        result.TopIssues[1].IssueId.Should().Be(existingIssue.Id);
     }
 
     [Fact]

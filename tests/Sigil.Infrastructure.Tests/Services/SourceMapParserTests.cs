@@ -218,18 +218,6 @@ public class SourceMapParserTests
     public void GetOriginalPosition_MultiByteVlq_DecodesCorrectly()
     {
         // Test that large column deltas using multi-char VLQ decode correctly
-        // 'g' (base64=32) followed by 'B' (base64=1):
-        // g = 32 = 0b100000: continuation=1, bits4-1=0000 → value chunk = 0
-        // B = 1 = 0b000001: continuation=0, bits4-1=0000, sign=1 → this is the sign bit of first value
-        // Combined: result = 0 | (0 << 5) = 0? That's still 0.
-        // Let me use 'yB': y = base64 50 = 0b110010: continuation=1, bits4-1=1001 → chunk = 9 (bits 0-4 of result)
-        //                   B = 1 = 0b000001: continuation=0, bits4-1=0000 → chunk extends to bits 5-9 = 0
-        //                   result = 9 | (0 << 5) = 9, value = 9>>1 = 4, sign = 1 → -4
-        // So "yBAAAA" would be: genCol delta=-4... that's invalid (first segment can't be negative)
-        // Let me just test with "AASC" (S=base64 18, value=(18>>1)=9, sign=0 → srcIdx delta=+9):
-        // AASC: genCol=0, srcIdx=+9... but there's only 1 source so it'd be out of bounds
-        // Actually the parser should still decode it and return null (srcIdx>=sources.Length)
-        // Let me make a cleaner test: just verify a specific known encoding.
         // Testing: AAKA where K = base64 10, value=10>>1=5, sign=0 → origLine=5
         var json = """{"version":3,"sources":["app.js"],"names":[],"mappings":"AAKA"}""";
         var parser = SourceMapParser.Parse(json)!;
@@ -237,5 +225,50 @@ public class SourceMapParserTests
         var result = parser.GetOriginalPosition(0, 0);
         result.Should().NotBeNull();
         result!.Value.Line.Should().Be(5);
+    }
+
+    [Fact]
+    public void GetOriginalPosition_VlqDecoderEdgeCases_ContinuationBitNegativeDeltaAndNameAccumulation()
+    {
+        // This test is designed to kill the bulk of VLQ decoder survivors by exercising:
+        // 1. Multi-byte VLQ (continuation bit '& 0x20'): 'g'=32 sets bit5, 'B'=1 follows → decodes +16
+        //    Kills mutations: '& 0x20' → '& 0x1F', 'shift += 5' arithmetic, 'offset + consumed' indexing
+        // 2. Negative delta ('D'=3, sign bit=1 → -1): tests the sign bit branch '(result & 1) != 0 ? -(result >> 1)'
+        //    Kills mutations: negate sign check, always-positive return
+        // 3. Name index accumulation across segments: second named segment must use += not =
+        //    Kills mutations: 'nameIdx += fields[4]' → 'nameIdx = fields[4]'
+        //
+        // Mapping: "AAgBAA;AADA,KAAAC"
+        //   Line 0, seg 1: "AAgBAA"
+        //     A(0)=genCol 0, A(0)=srcIdx 0, gB(+16)=origLine 16 [multi-byte], A(0)=origCol 0, A(0)=nameIdx 0 → "myFunc"
+        //   Line 1, seg 1: "AADA"
+        //     A(0)=genCol 0, A(0)=srcIdx 0, D(-1)=origLine 15 [negative delta], A(0)=origCol 0
+        //   Line 1, seg 2: "KAAAC"
+        //     K(+5)=genCol 5, A(0)=srcIdx 0, A(0)=origLine 15, A(0)=origCol 0, C(+1)=nameIdx 1 → "otherFunc"
+        //
+        // VLQ alphabet: 'g'=32 (continuation set, lower 5 bits=0), 'B'=1 (no continuation, lower 5 bits=1)
+        //   → result = 0 | (1<<5) = 32, value = 32>>1 = 16, sign = 0 → +16 ✓
+        // VLQ 'D'=3: lower 5 bits=3, result=3, value=3>>1=1, sign=3&1=1 → -1 ✓
+        // VLQ 'K'=10: lower 5 bits=10, result=10, value=10>>1=5, sign=0 → +5 ✓
+        // VLQ 'C'=2: lower 5 bits=2, result=2, value=2>>1=1, sign=0 → +1 ✓
+        var json = """{"version":3,"sources":["src/a.js"],"names":["myFunc","otherFunc"],"mappings":"AAgBAA;AADA,KAAAC"}""";
+        var parser = SourceMapParser.Parse(json)!;
+
+        // Line 0, col 0: multi-byte VLQ, origLine=16, function="myFunc"
+        var pos0 = parser.GetOriginalPosition(0, 0);
+        pos0.Should().NotBeNull();
+        pos0!.Value.Line.Should().Be(16, "gB encodes +16 via continuation byte");
+        pos0.Value.Function.Should().Be("myFunc");
+
+        // Line 1, col 0: negative origLine delta (-1) → cumulative origLine=15
+        var pos1 = parser.GetOriginalPosition(1, 0);
+        pos1.Should().NotBeNull();
+        pos1!.Value.Line.Should().Be(15, "D encodes -1 delta; cumulative origLine = 16 - 1 = 15");
+
+        // Line 1, col 5: nameIdx accumulated to 1 → "otherFunc"
+        var pos2 = parser.GetOriginalPosition(1, 5);
+        pos2.Should().NotBeNull();
+        pos2!.Value.Line.Should().Be(15);
+        pos2.Value.Function.Should().Be("otherFunc", "C encodes nameIdx delta +1; nameIdx was 0 → now 1");
     }
 }

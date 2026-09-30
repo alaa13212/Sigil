@@ -596,6 +596,155 @@ public class IssueServiceTests(TestDatabaseFixture fixture)
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
+    [Fact]
+    public async Task GetSummaries_SortedByLastSeenAscending()
+    {
+        // Line 166-167: SortDescending conditional — ascending must sort oldest first.
+        // With negation mutation: ascending becomes descending → newest would be first → test fails.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var now = DateTime.UtcNow;
+        var older = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var newer = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        (await ctx.Issues.FindAsync(older.Id))!.LastSeen = now.AddHours(-2);
+        (await ctx.Issues.FindAsync(newer.Id))!.LastSeen = now;
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        var result = await service.GetIssueSummariesAsync(project.Id,
+            new IssueQueryParams { SortBy = IssueSortBy.LastSeen, SortDescending = false });
+
+        result.Items[0].Id.Should().Be(older.Id);
+        result.Items[1].Id.Should().Be(newer.Id);
+    }
+
+    [Fact]
+    public async Task GetSummaries_Page2_ReturnsCorrectItems()
+    {
+        // Line 175: Skip((page - 1) * pageSize). Page 2 must skip first pageSize items.
+        // With (page) * pageSize mutation: page 2 would skip 6 items → returns nothing (only 5 total).
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        for (int i = 0; i < 5; i++)
+            await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var service = Create(ctx);
+
+        var page1 = await service.GetIssueSummariesAsync(project.Id, new IssueQueryParams { Page = 1, PageSize = 3 });
+        var page2 = await service.GetIssueSummariesAsync(project.Id, new IssueQueryParams { Page = 2, PageSize = 3 });
+
+        page1.Items.Should().HaveCount(3);
+        page2.Items.Should().HaveCount(2);
+        page1.Items.Select(i => i.Id).Should().NotIntersectWith(page2.Items.Select(i => i.Id));
+    }
+
+    [Fact]
+    public async Task GetSummaries_MergeSet_ExcludesNonPrimaryMembers()
+    {
+        // Line 116: MergeSetId == null || MergeSet!.PrimaryIssueId == i.Id
+        // Non-primary merge-set members must be excluded.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var primary = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var secondary = await TestHelper.CreateIssueAsync(ctx, project.Id);
+
+        // Create a merge set (mirrors MergeSetService.CreateAsync order)
+        var mergeSet = new MergeSet
+        {
+            ProjectId = project.Id,
+            PrimaryIssueId = primary.Id,
+            CreatedAt = DateTime.UtcNow,
+            FirstSeen = primary.FirstSeen,
+            LastSeen = primary.LastSeen,
+            OccurrenceCount = 2,
+            Level = Severity.Error,
+        };
+        ctx.MergeSets.Add(mergeSet);
+        await ctx.SaveChangesAsync();
+
+        (await ctx.Issues.FindAsync(primary.Id))!.MergeSetId = mergeSet.Id;
+        (await ctx.Issues.FindAsync(secondary.Id))!.MergeSetId = mergeSet.Id;
+        await ctx.SaveChangesAsync();
+
+        await using var ctx2 = Ctx();
+        var service = Create(ctx2);
+        var result = await service.GetIssueSummariesAsync(project.Id, new IssueQueryParams());
+
+        result.Items.Should().ContainSingle(i => i.Id == primary.Id);
+        result.Items.Should().NotContain(i => i.Id == secondary.Id);
+    }
+
+    [Fact]
+    public async Task UpdateStatus_ResolvedInFuture_SetsResolvedReleaseId()
+    {
+        // Lines 195-203: ResolvedInFuture branch — assigns ResolvedInReleaseId from latest release.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var release = await TestHelper.CreateReleaseAsync(ctx, project.Id, $"rel-{Guid.NewGuid():N}");
+        var service = Create(ctx);
+
+        await service.UpdateIssueStatusAsync(issue.Id, IssueStatus.ResolvedInFuture);
+
+        await using var verifyCtx = Ctx();
+        var updated = await verifyCtx.Issues.FindAsync(issue.Id);
+        updated!.Status.Should().Be(IssueStatus.ResolvedInFuture);
+        updated.ResolvedAt.Should().NotBeNull();
+        updated.ResolvedInReleaseId.Should().Be(release.Id);
+    }
+
+    [Fact]
+    public async Task UpdateStatus_Reopen_ClearsResolvedFields()
+    {
+        // Lines 205-217: Open/reopen branch — must clear ResolvedAt, ResolvedById, ResolvedInReleaseId.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var user = await TestHelper.CreateUserAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var service = Create(ctx);
+
+        await service.UpdateIssueStatusAsync(issue.Id, IssueStatus.Resolved, user.Id);
+
+        await using var ctx2 = Ctx();
+        var service2 = Create(ctx2);
+        await service2.UpdateIssueStatusAsync(issue.Id, IssueStatus.Open, user.Id);
+
+        await using var verifyCtx = Ctx();
+        var updated = await verifyCtx.Issues.FindAsync(issue.Id);
+        updated!.Status.Should().Be(IssueStatus.Open);
+        updated.ResolvedAt.Should().BeNull();
+        updated.ResolvedById.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateStatus_MergeSetMember_PropagatesStatusToAllMembers()
+    {
+        // Line 233: if (issue.MergeSetId.HasValue) → propagate status to other merge-set members.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var primary = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var secondary = await TestHelper.CreateIssueAsync(ctx, project.Id);
+
+        var mergeSet = new MergeSet
+        {
+            ProjectId = project.Id, PrimaryIssueId = primary.Id,
+            CreatedAt = DateTime.UtcNow, FirstSeen = primary.FirstSeen,
+            LastSeen = primary.LastSeen, OccurrenceCount = 2, Level = Severity.Error,
+        };
+        ctx.MergeSets.Add(mergeSet);
+        await ctx.SaveChangesAsync();
+        (await ctx.Issues.FindAsync(primary.Id))!.MergeSetId = mergeSet.Id;
+        (await ctx.Issues.FindAsync(secondary.Id))!.MergeSetId = mergeSet.Id;
+        await ctx.SaveChangesAsync();
+
+        await using var ctx2 = Ctx();
+        var service = Create(ctx2);
+        await service.UpdateIssueStatusAsync(primary.Id, IssueStatus.Resolved);
+
+        await using var verifyCtx = Ctx();
+        var secondaryUpdated = await verifyCtx.Issues.FindAsync(secondary.Id);
+        secondaryUpdated!.Status.Should().Be(IssueStatus.Resolved);
+    }
+
     // ── UpdateStatus ignoreFutureEvents ──────────────────────────────────────
 
     [Fact]

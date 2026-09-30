@@ -1,4 +1,5 @@
 using Sigil.Application.Interfaces;
+using Sigil.Domain.Enums;
 using Sigil.Infrastructure.Persistence;
 using Sigil.Infrastructure.Tests.Fixtures;
 
@@ -166,6 +167,77 @@ public class MergeSetServiceTests(TestDatabaseFixture fixture)
         set!.PrimaryIssueId.Should().Be(issue2.Id);
     }
 
+    [Fact]
+    public async Task Create_SelectsPrimaryByHighestOccurrenceCount()
+    {
+        // Line 33: PrimaryIssueId = issues.MaxBy(i => i.OccurrenceCount)!.Id
+        // With MinBy mutation: issue with LOWEST count would be chosen as primary.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var user = await TestHelper.CreateUserAsync(ctx);
+        var lowCount = await TestHelper.CreateIssueAsync(ctx, project.Id, "Low");
+        var highCount = await TestHelper.CreateIssueAsync(ctx, project.Id, "High");
+        lowCount.OccurrenceCount = 1;
+        highCount.OccurrenceCount = 100;
+        await ctx.SaveChangesAsync();
+
+        var service = new MergeSetService(ctx, StubActivityLogger(), StubIssueCache(), StubDateTime());
+        var result = await service.CreateAsync(project.Id, [lowCount.Id, highCount.Id], user.Id);
+
+        result.PrimaryIssueId.Should().Be(highCount.Id);
+    }
+
+    [Fact]
+    public async Task Create_PropagatesStatusToNonPrimaryMembers()
+    {
+        // Lines 51-56: ExecuteUpdateAsync propagates primary's Status/Priority to non-primary members.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var user = await TestHelper.CreateUserAsync(ctx);
+        var primary = await TestHelper.CreateIssueAsync(ctx, project.Id, "Primary");
+        var secondary = await TestHelper.CreateIssueAsync(ctx, project.Id, "Secondary");
+
+        // Set primary to Resolved before merging
+        primary.Status = IssueStatus.Resolved;
+        primary.OccurrenceCount = 100; // ensure it's chosen as primary
+        await ctx.SaveChangesAsync();
+
+        var service = new MergeSetService(ctx, StubActivityLogger(), StubIssueCache(), StubDateTime());
+        await service.CreateAsync(project.Id, [primary.Id, secondary.Id], user.Id);
+
+        await using var verifyCtx = Ctx();
+        var secondaryInDb = await verifyCtx.Issues.FindAsync(secondary.Id);
+        secondaryInDb!.Status.Should().Be(IssueStatus.Resolved, "non-primary member should inherit primary's status");
+    }
+
+    [Fact]
+    public async Task RemoveIssue_PrimaryRemoved_AssignsNewPrimaryByEarliestFirstSeen()
+    {
+        // Lines 126-131: when the primary is removed, the remaining issue with earliest FirstSeen becomes new primary.
+        // With mutation removing this block: PrimaryIssueId would not be updated.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var user = await TestHelper.CreateUserAsync(ctx);
+        var now = DateTime.UtcNow;
+        var primary = await TestHelper.CreateIssueAsync(ctx, project.Id, "Primary");
+        var older = await TestHelper.CreateIssueAsync(ctx, project.Id, "Older");
+        var newer = await TestHelper.CreateIssueAsync(ctx, project.Id, "Newer");
+        primary.OccurrenceCount = 100; // ensure it's initially the primary
+        older.FirstSeen = now.AddDays(-10);
+        newer.FirstSeen = now.AddDays(-1);
+        await ctx.SaveChangesAsync();
+
+        var service = new MergeSetService(ctx, StubActivityLogger(), StubIssueCache(), StubDateTime());
+        var created = await service.CreateAsync(project.Id, [primary.Id, older.Id, newer.Id], user.Id);
+        created.PrimaryIssueId.Should().Be(primary.Id); // confirm primary before removal
+
+        await service.RemoveIssueAsync(created.Id, primary.Id, user.Id);
+
+        await using var verifyCtx = Ctx();
+        var mergeSet = await verifyCtx.MergeSets.FindAsync(created.Id);
+        mergeSet!.PrimaryIssueId.Should().Be(older.Id, "oldest FirstSeen becomes new primary");
+    }
+
     // ── BulkAddIssuesAsync ────────────────────────────────────────────────────
 
     [Fact]
@@ -255,6 +327,29 @@ public class MergeSetServiceTests(TestDatabaseFixture fixture)
         await using var verify = Ctx();
         var mergeSet = await verify.MergeSets.FindAsync(created.Id);
         mergeSet!.OccurrenceCount.Should().Be(25, "20 + 5");
+    }
+
+    [Fact]
+    public async Task RefreshAggregates_RecalculatesMaxLevel()
+    {
+        // Line 177: mergeSet.Level = issues.Max(i => i.Level) — highest severity wins.
+        // With Min mutation: Info would be chosen instead of Fatal.
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var user = await TestHelper.CreateUserAsync(ctx);
+        var lowSev = await TestHelper.CreateIssueAsync(ctx, project.Id, "Low");
+        var highSev = await TestHelper.CreateIssueAsync(ctx, project.Id, "High");
+        lowSev.Level = Severity.Info;
+        highSev.Level = Severity.Fatal;
+        await ctx.SaveChangesAsync();
+
+        var service = new MergeSetService(ctx, StubActivityLogger(), StubIssueCache(), StubDateTime());
+        var created = await service.CreateAsync(project.Id, [lowSev.Id, highSev.Id], user.Id);
+        await service.RefreshAggregatesAsync([created.Id]);
+
+        await using var verifyCtx = Ctx();
+        var mergeSet = await verifyCtx.MergeSets.FindAsync(created.Id);
+        mergeSet!.Level.Should().Be(Severity.Fatal, "highest severity across members should win");
     }
 
     [Fact]

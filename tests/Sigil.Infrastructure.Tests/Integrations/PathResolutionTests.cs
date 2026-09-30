@@ -100,4 +100,35 @@ public class PathResolutionTests
         var lines = SourceCodeClientHelper.ExtractContext(code, lineNumber: 5, contextLines: 5);
         lines[^1].LineNumber.Should().Be(5); // clamped at end
     }
+
+    [Fact]
+    public void SuffixMatch_TakesPrecedenceOverShorterFilenameOnlyMatch()
+    {
+        // suffix match finds "src/app/utils/Helper.cs"; filename match (if used instead) would prefer shorter "a/Helper.cs"
+        var paths = new[] { "src/app/utils/Helper.cs", "a/Helper.cs" };
+
+        // With the correct '==' null check, suffix match wins and we get the sub-path match
+        SourceCodeClientHelper.FindBestMatch(paths, "utils/Helper.cs")
+            .Should().Be("src/app/utils/Helper.cs");
+    }
+
+    [Fact]
+    public void FilenameOnlyMatch_PrefersShortestPath_WhenNoSuffixMatch()
+    {
+        // No suffix match (candidate is not a subpath of either tree path); filename match uses MinBy
+        var paths = new[] { "long/deeply/nested/Foo.cs", "src/Foo.cs" };
+
+        // "Services/Foo.cs" — neither path ends with "/services/foo.cs" or equals it
+        SourceCodeClientHelper.FindBestMatch(paths, "Services/Foo.cs")
+            .Should().Be("src/Foo.cs"); // MinBy(Length), not MaxBy
+    }
+
+    [Fact]
+    public void SuffixMatchDoesNotFalselyMatchSubstring()
+    {
+        // Without the leading "/" separator, "Foo.cs" would incorrectly match candidate "oo.cs"
+        var paths = new[] { "src/Foo.cs" };
+
+        SourceCodeClientHelper.FindBestMatch(paths, "oo.cs").Should().BeNull();
+    }
 }
