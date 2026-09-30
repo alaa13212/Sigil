@@ -109,8 +109,12 @@ internal class IssueService(
             .FirstOrDefaultAsync(i => i.Id == issueId);
     }
 
+    private const int MaxDateRangeDays = 365;
+
     public async Task<(List<Issue> Items, int TotalCount)> GetIssuesAsync(int projectId, IssueQueryParams query)
     {
+        ValidateDateRange(query);
+
         IQueryable<Issue> q = dbContext.Issues
             .Where(i => i.ProjectId == projectId)
             .Where(i => i.MergeSetId == null || i.MergeSet!.PrimaryIssueId == i.Id);
@@ -129,6 +133,12 @@ internal class IssueService(
 
         if (query.BookmarkedByUserId.HasValue)
             q = q.Where(i => dbContext.UserIssueStates.Any(s => s.IssueId == i.Id && s.UserId == query.BookmarkedByUserId.Value && s.IsBookmarked));
+
+        if (query.Since.HasValue)
+            q = q.Where(i => i.LastSeen >= query.Since.Value.UtcDateTime);
+
+        if (query.Until.HasValue)
+            q = q.Where(i => i.LastSeen <= query.Until.Value.UtcDateTime);
 
         var (freeText, tagFilters) = IssueSearchParser.Parse(query.Search);
         bool hasFullTextSearch = !string.IsNullOrEmpty(freeText);
@@ -177,6 +187,18 @@ internal class IssueService(
             .ToListAsync();
 
         return (items, totalCount);
+    }
+
+    private static void ValidateDateRange(IssueQueryParams query)
+    {
+        if (query.Since is not { } since || query.Until is not { } until)
+            return;
+
+        if (since > until)
+            throw new ArgumentException("Since must be the same instant as or earlier than Until.", nameof(query));
+
+        if (until - since > TimeSpan.FromDays(MaxDateRangeDays))
+            throw new ArgumentException($"The date range cannot span more than {MaxDateRangeDays} days.", nameof(query));
     }
 
     public async Task<Issue> UpdateIssueStatusAsync(int issueId, IssueStatus status, Guid? userId = null, bool ignoreFutureEvents = false)

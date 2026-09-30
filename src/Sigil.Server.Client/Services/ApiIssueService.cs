@@ -3,6 +3,7 @@ using System.Web;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
 using Sigil.Application.Models.Issues;
+using Sigil.Application.Models.Shared;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 
@@ -18,6 +19,8 @@ public class ApiIssueService(HttpClient http) : IIssueService
         if (query.Level.HasValue) qs["level"] = query.Level.Value.ToString();
         if (!string.IsNullOrWhiteSpace(query.Search)) qs["search"] = query.Search;
         if (query.AssignedToId.HasValue) qs["assignedToId"] = query.AssignedToId.Value.ToString();
+        if (query.Since.HasValue) qs["since"] = UtcDateRangeInput.ToQueryValue(query.Since.Value);
+        if (query.Until.HasValue) qs["until"] = UtcDateRangeInput.ToQueryValue(query.Until.Value);
         qs["sortBy"] = query.SortBy.ToString();
         qs["sortDesc"] = query.SortDescending.ToString().ToLower();
         qs["page"] = query.Page.ToString();
