@@ -18,6 +18,8 @@ public record IssueQueryParams
     public bool SortDescending { get; init; } = true;
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 50;
+
+    /// <summary>Viewer whose bookmarks the listing is restricted to.</summary>
     public Guid? BookmarkedByUserId { get; init; }
 
     /// <summary>Inclusive lower bound on <c>Issue.LastSeen</c>, as a UTC instant.</summary>
@@ -29,6 +31,6 @@ public record IssueQueryParams
     // Client-side only: when true, server uses the current user's ID as BookmarkedByUserId
     public bool Bookmarked { get; init; }
 
-    // Server-side: viewer user ID for unviewed status computation
+    /// <summary>Viewer whose unviewed state the listing is restricted to.</summary>
     public Guid? ViewerUserId { get; init; }
 }

@@ -142,16 +142,39 @@ internal class IssueService(
         if (query.Until.HasValue)
             q = q.Where(i => i.LastSeen <= query.Until.Value.UtcDateTime);
 
-        var (freeText, tagFilters) = IssueSearchParser.Parse(query.Search);
-        bool hasFullTextSearch = !string.IsNullOrEmpty(freeText);
+        var criteria = IssueSearchParser.ParseCriteria(query.Search);
+        bool hasFullTextSearch = !string.IsNullOrEmpty(criteria.FreeText);
+        string? prefixQuery = null;
         if (hasFullTextSearch)
         {
-            freeText = SearchService.BuildPrefixQuery(freeText!);
-            q = q.Where(i => EF.Property<NpgsqlTsVector>(i, "SearchVector").Matches(EF.Functions.ToTsQuery("simple", freeText!)));
+            prefixQuery = SearchService.BuildPrefixQuery(criteria.FreeText!);
+            q = q.Where(i => EF.Property<NpgsqlTsVector>(i, "SearchVector").Matches(EF.Functions.ToTsQuery("simple", prefixQuery)));
         }
-        foreach (var (tagKey, tagValue) in tagFilters)
+        foreach (var (tagKey, tagValue) in criteria.TagFilters)
         {
             q = q.Where(i => i.Tags.Any(t => EF.Functions.ILike(t.TagValue!.TagKey!.Key, tagKey) && EF.Functions.ILike(t.TagValue.Value, tagValue)));
+        }
+        foreach (var release in criteria.Releases)
+        {
+            q = q.Where(i => i.Events.Any(e => e.Release != null && EF.Functions.ILike(e.Release!.RawName, release)));
+        }
+        q = criteria.Assignment switch
+        {
+            IssueAssignmentFilter.Assigned => q.Where(i => i.AssignedToId != null),
+            IssueAssignmentFilter.Unassigned => q.Where(i => i.AssignedToId == null),
+            _ => q,
+        };
+        if (criteria.Bookmarked)
+        {
+            q = query.BookmarkedByUserId is { } bookmarkUserId
+                ? q.Where(i => dbContext.UserIssueStates.Any(s => s.IssueId == i.Id && s.UserId == bookmarkUserId && s.IsBookmarked))
+                : q.Where(_ => false);
+        }
+        if (criteria.Unviewed)
+        {
+            q = query.ViewerUserId is { } viewerUserId
+                ? q.Where(i => !dbContext.UserIssueStates.Any(s => s.IssueId == i.Id && s.UserId == viewerUserId && s.LastViewedAt >= i.LastChangedAt))
+                : q.Where(_ => false);
         }
 
         int totalCount = await q.CountAsync();
@@ -159,7 +182,7 @@ internal class IssueService(
         if (hasFullTextSearch)
         {
             // ReSharper disable EntityFramework.ClientSideDbFunctionCall
-            q = q.OrderByDescending(i => EF.Property<NpgsqlTsVector>(i, "SearchVector").Rank(EF.Functions.ToTsQuery("simple", freeText!)));
+            q = q.OrderByDescending(i => EF.Property<NpgsqlTsVector>(i, "SearchVector").Rank(EF.Functions.ToTsQuery("simple", prefixQuery!)));
             // ReSharper enable EntityFramework.ClientSideDbFunctionCall
         }
         else
