@@ -1,5 +1,6 @@
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
+using Sigil.Application.Models.Common;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 using Sigil.Domain.Ingestion;
@@ -512,8 +513,9 @@ public class IssueServiceTests(TestDatabaseFixture fixture)
 
         var result = await service.GetHistogramAsync(issue.Id, days: 7);
 
-        result.Should().HaveCount(7);
-        result.Should().AllBeEquivalentTo(0);
+        result.Interval.Should().Be(TimeSpan.FromHours(6));
+        result.Points.Should().HaveCount(28);
+        result.Points.Should().AllSatisfy(p => p.Count.Should().Be(0));
     }
 
     [Fact]
@@ -534,8 +536,9 @@ public class IssueServiceTests(TestDatabaseFixture fixture)
 
         var result = await service.GetHistogramAsync(issue.Id, days: 7);
 
-        result.Should().HaveCount(7);
-        result.Last().Should().Be(5); // today is the last bucket
+        result.Points.Should().HaveCount(28);
+        // today is the last day of the window
+        result.Points.TakeLast(4).Sum(p => p.Count).Should().Be(5);
     }
 
     // ── GetIssueByIdAsync ─────────────────────────────────────────────────────
@@ -689,8 +692,159 @@ public class IssueServiceTests(TestDatabaseFixture fixture)
 
         result.Should().ContainKey(issue1.Id);
         result.Should().ContainKey(issue2.Id);
-        result[issue1.Id].Last().Should().Be(3);
-        result[issue2.Id].Last().Should().Be(7);
+        result[issue1.Id].Points.TakeLast(4).Sum(p => p.Count).Should().Be(3);
+        result[issue2.Id].Points.TakeLast(4).Sum(p => p.Count).Should().Be(7);
+    }
+
+    [Fact]
+    public async Task GetHistogram_SevenDays_CoversWindowAndCarriesInterval()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var service = Create(ctx);
+
+        var result = await service.GetHistogramAsync(issue.Id, days: 7);
+
+        result.From.Should().Be(new DateTimeOffset(2025, 5, 26, 0, 0, 0, TimeSpan.Zero));
+        result.To.Should().Be(new DateTimeOffset(2025, 6, 2, 0, 0, 0, TimeSpan.Zero));
+        result.Interval.Should().Be(TimeSpan.FromHours(6));
+        result.Points.Should().HaveCount(28);
+        result.Points.Select(p => p.Start).Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public async Task GetHistogram_ExplicitHourGranularity_ReturnsHourlyBuckets()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        ctx.EventBuckets.Add(new EventBucket
+        {
+            IssueId = issue.Id,
+            BucketStart = new DateTime(2025, 5, 31, 22, 0, 0, DateTimeKind.Utc),
+            Count = 4,
+        });
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        var result = await service.GetHistogramAsync(issue.Id, days: 2, TimeSeriesGranularity.Hour);
+
+        result.Interval.Should().Be(TimeSpan.FromHours(1));
+        result.Points.Should().HaveCount(48);
+        result.Points
+            .Single(p => p.Start == new DateTimeOffset(2025, 5, 31, 22, 0, 0, TimeSpan.Zero))
+            .Count.Should().Be(4);
+    }
+
+    [Fact]
+    public async Task GetHistogram_SparseBuckets_StillCoversEveryDay()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        ctx.EventBuckets.AddRange(
+            new EventBucket { IssueId = issue.Id, BucketStart = new DateTime(2025, 5, 20, 0, 0, 0, DateTimeKind.Utc), Count = 2 },
+            new EventBucket { IssueId = issue.Id, BucketStart = new DateTime(2025, 5, 31, 0, 0, 0, DateTimeKind.Utc), Count = 6 }
+        );
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        var result = await service.GetHistogramAsync(issue.Id, days: 14);
+
+        result.Points.Should().HaveCount(14);
+        result.Points.Select(p => p.Start).Should().BeInAscendingOrder();
+        result.Points.Should().Contain(p => p.Count == 0);
+        result.Points.Sum(p => p.Count).Should().Be(8);
+    }
+
+    [Fact]
+    public async Task GetHistogram_DefaultFourteenDays_MatchesPreviousDailyNumbers()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        ctx.EventBuckets.AddRange(
+            new EventBucket { IssueId = issue.Id, BucketStart = new DateTime(2025, 5, 19, 0, 0, 0, DateTimeKind.Utc), Count = 11 },
+            new EventBucket { IssueId = issue.Id, BucketStart = new DateTime(2025, 5, 19, 9, 0, 0, DateTimeKind.Utc), Count = 4 },
+            new EventBucket { IssueId = issue.Id, BucketStart = new DateTime(2025, 5, 30, 0, 0, 0, DateTimeKind.Utc), Count = 1 }
+        );
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        var result = await service.GetHistogramAsync(issue.Id);
+
+        result.Points.Should().HaveCount(14);
+        result.Points.Select(p => p.Count).Should().Equal(15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0);
+    }
+
+    [Fact]
+    public async Task GetHistogram_NinetyDays_DoesNotScaleWithDaysTimesBuckets()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        for (int d = 0; d < 90; d++)
+        {
+            for (int h = 0; h < 24; h += 6)
+            {
+                ctx.EventBuckets.Add(new EventBucket
+                {
+                    IssueId = issue.Id,
+                    BucketStart = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc).AddDays(-d).AddHours(h),
+                    Count = 1,
+                });
+            }
+        }
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        var result = await service.GetHistogramAsync(issue.Id, days: 90);
+
+        result.Points.Should().HaveCount(90);
+        result.Points.Should().AllSatisfy(p => p.Count.Should().Be(4));
+    }
+
+    [Fact]
+    public async Task GetBulkHistograms_IssueWithNoBuckets_GetsZeroFilledSeries()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var withData = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var withoutData = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        ctx.EventBuckets.Add(new EventBucket
+        {
+            IssueId = withData.Id,
+            BucketStart = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            Count = 9,
+        });
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        var result = await service.GetBulkHistogramsAsync([withData.Id, withoutData.Id], days: 7);
+
+        result.Should().HaveCount(2);
+        result[withData.Id].Points.Should().HaveCount(28);
+        result[withData.Id].Points.TakeLast(4).Sum(p => p.Count).Should().Be(9);
+        result[withoutData.Id].Points.Should().HaveCount(28);
+        result[withoutData.Id].Points.Should().AllSatisfy(p => p.Count.Should().Be(0));
+    }
+
+    [Fact]
+    public async Task GetBulkHistograms_AllIssuesShareTheSameWindow()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue1 = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var issue2 = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var service = Create(ctx);
+
+        var result = await service.GetBulkHistogramsAsync([issue1.Id, issue2.Id], days: 30);
+
+        result[issue1.Id].From.Should().Be(result[issue2.Id].From);
+        result[issue1.Id].To.Should().Be(result[issue2.Id].To);
+        result[issue1.Id].Points.Select(p => p.Start)
+            .Should().Equal(result[issue2.Id].Points.Select(p => p.Start));
     }
 
     // ── UpdateStatus / UpdatePriority — missing issue throws ─────────────────

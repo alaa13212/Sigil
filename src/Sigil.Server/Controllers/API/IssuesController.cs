@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
+using Sigil.Application.Models.Common;
 using Sigil.Application.Models.Issues;
 using Sigil.Domain.Enums;
 using Sigil.Server.Framework;
@@ -149,16 +150,16 @@ public class IssuesController(
     }
 
     [HttpGet("api/issues/{id:int}/histogram")]
-    public async Task<IActionResult> GetHistogram(int id, [FromQuery] int days = 14)
+    public async Task<IActionResult> GetHistogram(int id, [FromQuery] int days = 14, [FromQuery] TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto)
     {
-        return Ok(await issueService.GetHistogramAsync(id, Math.Clamp(days, 1, 90)));
+        return Ok(await issueService.GetHistogramAsync(id, Math.Clamp(days, 1, 90), granularity));
     }
 
     [HttpPost("api/issues/histogram/bulk")]
-    public async Task<IActionResult> GetBulkHistograms([FromBody] List<int> issueIds, [FromQuery] int days = 14)
+    public async Task<IActionResult> GetBulkHistograms([FromBody] List<int> issueIds, [FromQuery] int days = 14, [FromQuery] TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto)
     {
-        if (issueIds.Count == 0) return Ok(new Dictionary<int, List<int>>());
-        return Ok(await issueService.GetBulkHistogramsAsync(issueIds, Math.Clamp(days, 1, 90)));
+        if (issueIds.Count == 0) return Ok(new Dictionary<int, TimeSeries>());
+        return Ok(await issueService.GetBulkHistogramsAsync(issueIds, Math.Clamp(days, 1, 90), granularity));
     }
 
 }

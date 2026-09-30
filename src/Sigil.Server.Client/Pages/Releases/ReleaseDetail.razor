@@ -87,11 +87,12 @@ else
             </div>
         </div>
 
-        @if (_releaseHistogram.Count > 0)
+        @if (_releaseHistogram is not null && _releaseHistogram.Points.Count > 0)
         {
             <div class="card bg-base-100">
                 <div class="card-body p-4">
-                    <h2 class="card-title text-base mb-2">Event Activity (14 days)</h2>
+                    <h2 class="card-title text-base mb-2">Event Activity</h2>
+                    <div class="text-xs opacity-60 mb-2">@TimeSeriesCaption.Describe(_releaseHistogram)</div>
                     <Sparkline Data="_releaseHistogram" Width="560" Height="48" Class="w-full text-primary" />
                 </div>
             </div>
@@ -151,12 +152,12 @@ else
     private ReleaseDetailResponse? release;
     private CommitInfo? commitInfo;
     private bool loading = true;
-    private List<int> _releaseHistogram = [];
+    private TimeSeries? _releaseHistogram;
 
     protected override async Task OnParametersSetAsync()
     {
         loading = true;
-        _releaseHistogram = [];
+        _releaseHistogram = null;
         commitInfo = null;
         try { release = await ReleaseHealthService.GetReleaseDetailAsync(ReleaseId); }
         catch { release = null; }
@@ -185,12 +186,20 @@ else
         {
             var bulk = await IssueService.GetBulkHistogramsAsync(issueIds);
             if (bulk.Count == 0) return;
-            var len = bulk.Values.Max(v => v.Count);
-            var combined = new int[len];
-            foreach (var counts in bulk.Values)
-                for (var i = 0; i < counts.Count; i++)
-                    combined[i] += counts[i];
-            _releaseHistogram = [.. combined];
+
+            var series = bulk.Values.ToList();
+            var combined = series
+                .SelectMany(s => s.Points)
+                .GroupBy(p => p.Start)
+                .OrderBy(g => g.Key)
+                .Select(g => new TimeSeriesPoint(g.Key, g.Sum(p => p.Count)))
+                .ToList();
+
+            _releaseHistogram = new TimeSeries(
+                series.Min(s => s.From),
+                series.Max(s => s.To),
+                series[0].Interval,
+                combined);
             StateHasChanged();
         }
         catch { /* silently ignore histogram load failures */ }

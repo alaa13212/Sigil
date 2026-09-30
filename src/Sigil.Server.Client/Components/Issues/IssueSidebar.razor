@@ -117,10 +117,10 @@
                 <span class="opacity-60">Events</span>
                 <span class="font-mono">@Issue.OccurrenceCount</span>
             </div>
-            @if (_histogram is not null && _histogram.Any(v => v > 0))
+            @if (_histogram is not null && _histogram.Points.Any(p => p.Count > 0))
             {
                 <div class="pt-1">
-                    <div class="text-xs opacity-60 mb-1">Last 14 days</div>
+                    <div class="text-xs opacity-60 mb-1">@TimeSeriesCaption.Describe(_histogram)</div>
                     <Sparkline Data="_histogram" Width="248" Height="32" Class="w-full text-primary"/>
                 </div>
             }
@@ -281,7 +281,7 @@
 
     private bool _loading;
     private bool _reingesting;
-    private List<int>? _histogram;
+    private TimeSeries? _histogram;
 
     private bool _showShareModal;
     private bool _showReingestionConfirm;

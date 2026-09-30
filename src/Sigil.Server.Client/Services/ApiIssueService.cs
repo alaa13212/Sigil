@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Web;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
+using Sigil.Application.Models.Common;
 using Sigil.Application.Models.Issues;
 using Sigil.Application.Models.Shared;
 using Sigil.Domain.Entities;
@@ -107,14 +108,15 @@ public class ApiIssueService(HttpClient http) : IIssueService
         catch { return 0; }
     }
 
-    public async Task<List<int>> GetHistogramAsync(int issueId, int days = 14)
+    public async Task<TimeSeries> GetHistogramAsync(int issueId, int days = 14, TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto)
     {
-        return await http.GetFromJsonAsync<List<int>>($"api/issues/{issueId}/histogram?days={days}") ?? [];
+        return await http.GetFromJsonAsync<TimeSeries>($"api/issues/{issueId}/histogram?days={days}&granularity={granularity}")
+            ?? TimeSeries.Empty;
     }
 
-    public async Task<Dictionary<int, List<int>>> GetBulkHistogramsAsync(List<int> issueIds, int days = 14)
+    public async Task<Dictionary<int, TimeSeries>> GetBulkHistogramsAsync(List<int> issueIds, int days = 14, TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto)
     {
-        var response = await http.PostAsJsonAsync($"api/issues/histogram/bulk?days={days}", issueIds);
-        return await response.Content.ReadFromJsonAsync<Dictionary<int, List<int>>>() ?? [];
+        var response = await http.PostAsJsonAsync($"api/issues/histogram/bulk?days={days}&granularity={granularity}", issueIds);
+        return await response.Content.ReadFromJsonAsync<Dictionary<int, TimeSeries>>() ?? [];
     }
 }
