@@ -1,0 +1,137 @@
+@using Sigil.Application.Models.Shared
+
+<fieldset class="fieldset">
+    <legend class="fieldset-legend">Date range (UTC)</legend>
+    <div class="flex flex-wrap items-center gap-2">
+        <div class="join">
+            @foreach (var preset in Presets)
+            {
+                <button type="button" class="join-item btn btn-sm @(activePreset == preset.Key ? "btn-primary" : "")"
+                        @onclick="() => SelectPresetAsync(preset.Key)">@preset.Label</button>
+            }
+        </div>
+        @if (activePreset == PresetKey.Custom)
+        {
+            <div class="join">
+                <input type="date" class="input input-sm join-item w-40" aria-label="From date (UTC)"
+                       value="@sinceDate" @onchange="OnSinceDateChanged" />
+                <input type="date" class="input input-sm join-item w-40" aria-label="To date (UTC)"
+                       value="@untilDate" @onchange="OnUntilDateChanged" />
+            </div>
+        }
+        @if (IsSet)
+        {
+            <button type="button" class="btn btn-ghost btn-xs" @onclick="ClearAsync" title="Clear date range">Clear</button>
+        }
+    </div>
+</fieldset>
+
+@code {
+    [Parameter] public DateTimeOffset? Since { get; set; }
+    [Parameter] public DateTimeOffset? Until { get; set; }
+    [Parameter] public EventCallback<DateRange> RangeChanged { get; set; }
+
+    private enum PresetKey { None, Last24Hours, Last7Days, Last30Days, Last90Days, Custom }
+
+    private static readonly (PresetKey Key, string Label, TimeSpan Length)[] Presets =
+    [
+        (PresetKey.Last24Hours, "24h", TimeSpan.FromHours(24)),
+        (PresetKey.Last7Days, "7d", TimeSpan.FromDays(7)),
+        (PresetKey.Last30Days, "30d", TimeSpan.FromDays(30)),
+        (PresetKey.Last90Days, "90d", TimeSpan.FromDays(90)),
+        (PresetKey.Custom, "Custom", TimeSpan.Zero),
+    ];
+
+    private static readonly TimeSpan PresetTolerance = TimeSpan.FromSeconds(1);
+
+    private DateRange range = DateRange.Empty;
+    private PresetKey activePreset = PresetKey.None;
+    private string sinceDate = "";
+    private string untilDate = "";
+
+    private bool IsSet => Since.HasValue || Until.HasValue;
+
+    protected override void OnParametersSet()
+    {
+        var incoming = new DateRange(Since, Until);
+        if (incoming == range) return;
+
+        range = incoming;
+        activePreset = ResolvePreset(incoming);
+        sinceDate = incoming.Since is { } since ? UtcDateRangeInput.ToDateString(since) : "";
+        untilDate = incoming.Until is { } until ? UtcDateRangeInput.ToDateString(until) : "";
+    }
+
+    private static PresetKey ResolvePreset(DateRange range)
+    {
+        if (range.IsEmpty) return PresetKey.None;
+        if (range.Until is { } until && UtcDateRangeInput.IsEndOfUtcDay(until)) return PresetKey.Custom;
+        if (range.Since is not { } since || range.Until is not { } upper) return PresetKey.Custom;
+
+        var length = upper - since;
+        foreach (var (key, _, presetLength) in Presets)
+        {
+            if (key != PresetKey.Custom && (length - presetLength).Duration() <= PresetTolerance)
+                return key;
+        }
+
+        return PresetKey.Custom;
+    }
+
+    private async Task SelectPresetAsync(PresetKey key)
+    {
+        if (key == PresetKey.Custom)
+        {
+            if (!UtcDateRangeInput.TryParseDate(sinceDate, out _) || !UtcDateRangeInput.TryParseDate(untilDate, out _))
+            {
+                var today = UtcDateRangeInput.StartOfUtcDay(DateTimeOffset.UtcNow.UtcDateTime);
+                sinceDate = UtcDateRangeInput.ToDateString(today.UtcDateTime.AddDays(-6));
+                untilDate = UtcDateRangeInput.ToDateString(today);
+            }
+        }
+        else
+        {
+            var now = DateTimeOffset.UtcNow;
+            var length = Presets.First(p => p.Key == key).Length;
+            activePreset = key;
+            await RangeChanged.InvokeAsync(new DateRange(now - length, now));
+            return;
+        }
+
+        activePreset = PresetKey.Custom;
+        await EmitCustomRangeAsync();
+    }
+
+    private Task OnSinceDateChanged(ChangeEventArgs e)
+    {
+        sinceDate = e.Value?.ToString() ?? "";
+        return EmitCustomRangeAsync();
+    }
+
+    private Task OnUntilDateChanged(ChangeEventArgs e)
+    {
+        untilDate = e.Value?.ToString() ?? "";
+        return EmitCustomRangeAsync();
+    }
+
+    private async Task EmitCustomRangeAsync()
+    {
+        if (!UtcDateRangeInput.TryParseDate(sinceDate, out var from) ||
+            !UtcDateRangeInput.TryParseDate(untilDate, out var to) ||
+            from > to)
+            return;
+
+        activePreset = PresetKey.Custom;
+        await RangeChanged.InvokeAsync(new DateRange(
+            UtcDateRangeInput.StartOfUtcDay(from),
+            UtcDateRangeInput.EndOfUtcDay(to)));
+    }
+
+    private async Task ClearAsync()
+    {
+        sinceDate = "";
+        untilDate = "";
+        activePreset = PresetKey.None;
+        await RangeChanged.InvokeAsync(DateRange.Empty);
+    }
+}

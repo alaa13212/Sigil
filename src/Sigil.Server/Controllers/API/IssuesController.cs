@@ -28,6 +28,8 @@ public class IssuesController(
         [FromQuery] Priority? priority,
         [FromQuery] string? search,
         [FromQuery] Guid? assignedToId,
+        [FromQuery] DateTimeOffset? since,
+        [FromQuery] DateTimeOffset? until,
         [FromQuery] IssueSortBy sortBy = IssueSortBy.LastSeen,
         [FromQuery] bool sortDesc = true,
         [FromQuery] int page = 1,
@@ -48,13 +50,23 @@ public class IssuesController(
             AssignedToId = assignedToId,
             SortBy = sortBy,
             SortDescending = sortDesc,
+            Since = since,
+            Until = until,
             Page = page,
             PageSize = Math.Clamp(pageSize, 1, 100),
             BookmarkedByUserId = bookmarked ? userId : null,
             ViewerUserId = includeViewedInfo ? userId : null
         };
 
-        var summaries = await issueService.GetIssueSummariesAsync(projectId, query);
+        PagedResponse<IssueSummary> summaries;
+        try
+        {
+            summaries = await issueService.GetIssueSummariesAsync(projectId, query);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
 
         if (userId.HasValue)
             await issueService.RecordPageViewAsync(userId.Value, projectId, PageType.Issues);

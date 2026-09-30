@@ -379,6 +379,127 @@ public class IssueServiceTests(TestDatabaseFixture fixture)
         result.Items[1].Id.Should().Be(older.Id);
     }
 
+    [Fact]
+    public async Task GetSummaries_Since_ExcludesOlderIssues_IncludesBoundary()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var boundary = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+        var older = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var atBoundary = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var newer = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        (await ctx.Issues.FindAsync(older.Id))!.LastSeen = boundary.AddDays(-5);
+        (await ctx.Issues.FindAsync(atBoundary.Id))!.LastSeen = boundary;
+        (await ctx.Issues.FindAsync(newer.Id))!.LastSeen = boundary.AddDays(5);
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        var result = await service.GetIssueSummariesAsync(project.Id,
+            new IssueQueryParams { Since = new DateTimeOffset(boundary, TimeSpan.Zero) });
+
+        result.Items.Select(i => i.Id).Should().BeEquivalentTo([atBoundary.Id, newer.Id]);
+    }
+
+    [Fact]
+    public async Task GetSummaries_Until_ExcludesNewerIssues_IncludesBoundary()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var boundary = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+        var older = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var atBoundary = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var newer = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        (await ctx.Issues.FindAsync(older.Id))!.LastSeen = boundary.AddDays(-5);
+        (await ctx.Issues.FindAsync(atBoundary.Id))!.LastSeen = boundary;
+        (await ctx.Issues.FindAsync(newer.Id))!.LastSeen = boundary.AddMinutes(1);
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        var result = await service.GetIssueSummariesAsync(project.Id,
+            new IssueQueryParams { Until = new DateTimeOffset(boundary, TimeSpan.Zero) });
+
+        result.Items.Select(i => i.Id).Should().BeEquivalentTo([older.Id, atBoundary.Id]);
+    }
+
+    [Fact]
+    public async Task GetSummaries_SinceInPlusThreeOffset_MatchesSameUtcInstant()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var boundary = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+        var inRange = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var outOfRange = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        (await ctx.Issues.FindAsync(inRange.Id))!.LastSeen = boundary.AddHours(1);
+        (await ctx.Issues.FindAsync(outOfRange.Id))!.LastSeen = boundary.AddHours(-1);
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        // 01:00+03:00 and 22:00Z on the previous day are the same instant
+        var result = await service.GetIssueSummariesAsync(project.Id,
+            new IssueQueryParams { Since = new DateTimeOffset(2026, 1, 10, 4, 0, 0, TimeSpan.FromHours(3)) });
+
+        result.Items.Should().ContainSingle(i => i.Id == inRange.Id);
+    }
+
+    [Fact]
+    public async Task GetSummaries_WithoutDateRange_ReturnsAllIssues()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        for (int i = 0; i < 3; i++)
+            await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var service = Create(ctx);
+
+        var result = await service.GetIssueSummariesAsync(project.Id, new IssueQueryParams());
+
+        result.Items.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public async Task GetSummaries_SinceAfterUntil_Throws()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var service = Create(ctx);
+        var since = new DateTimeOffset(2026, 1, 10, 0, 0, 0, TimeSpan.Zero);
+
+        var act = () => service.GetIssueSummariesAsync(project.Id,
+            new IssueQueryParams { Since = since, Until = since.AddDays(-1) });
+
+        await act.Should().ThrowAsync<ArgumentException>().WithMessage("*Since*Until*");
+    }
+
+    [Fact]
+    public async Task GetSummaries_RangeWiderThanMaxDays_Throws()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var service = Create(ctx);
+        var since = new DateTimeOffset(2026, 1, 10, 0, 0, 0, TimeSpan.Zero);
+
+        var act = () => service.GetIssueSummariesAsync(project.Id,
+            new IssueQueryParams { Since = since, Until = since.AddDays(366) });
+
+        await act.Should().ThrowAsync<ArgumentException>().WithMessage("*365*");
+    }
+
+    [Fact]
+    public async Task GetSummaries_RangeOfExactlyMaxDays_IsAllowed()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var service = Create(ctx);
+        var since = new DateTimeOffset(2026, 1, 10, 0, 0, 0, TimeSpan.Zero);
+
+        var result = await service.GetIssueSummariesAsync(project.Id,
+            new IssueQueryParams { Since = since, Until = since.AddDays(365) });
+
+        result.Items.Should().HaveCount(1);
+    }
+
     // ── GetHistogramAsync ─────────────────────────────────────────────────────
 
     [Fact]

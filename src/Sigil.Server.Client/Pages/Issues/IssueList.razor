@@ -1,5 +1,7 @@
 @page "/projects/{ProjectId:int}/issues"
 @attribute [Authorize]
+@using System.Web
+@using Sigil.Application.Models.Shared
 @using Sigil.Application.Models.Issues
 @using Sigil.Domain
 @inject IIssueService IssueService
@@ -42,17 +44,17 @@
     <div class="flex flex-wrap gap-2 items-center">
         <!-- Status tabs -->
         <form >
-            <input class="btn btn-sm btn-square @(statusFilter == null ? "bg-primary" : "")" type="reset" value="All" @onclick="() => SetStatusFilter(null)"/>
+            <input class="btn btn-sm btn-square @(StatusFilter == null ? "bg-primary" : "")" type="reset" value="All" @onclick="() => SetStatusFilter(null)"/>
             @foreach (var s in statusOptions)
             {
-                <input class="btn btn-sm" type="radio" name="status" checked="@(statusFilter == s.Value)" @onclick="() => SetStatusFilter(s.Value)" aria-label="@s.Label"/>
+                <input class="btn btn-sm" type="radio" name="status" checked="@(StatusFilter == s.Value)" @onclick="() => SetStatusFilter(s.Value)" aria-label="@s.Label"/>
             }
         </form>
         
         <!-- Bookmarked filter -->
-        <button class="btn btn-sm @(bookmarkedFilter ? "btn-warning" : "")"
-                @onclick="ToggleBookmarkedFilter" title="@(bookmarkedFilter ? "Showing bookmarked" : "Show bookmarked")">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="@(bookmarkedFilter ? "currentColor" : "none")" viewBox="0 0 24 24" stroke="currentColor">
+        <button class="btn btn-sm @(BookmarkedParam is true ? "btn-warning" : "")"
+                @onclick="ToggleBookmarkedFilter" title="@(BookmarkedParam is true ? "Showing bookmarked" : "Show bookmarked")">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="@(BookmarkedParam is true ? "currentColor" : "none")" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
             </svg>
         </button>
@@ -60,7 +62,7 @@
         <!-- Severity filter -->
         <label class="select select-sm w-48">
             <span class="label">Severity</span>
-            <select value="@severityFilter" @onchange="OnSeverityChanged">
+            <select value="@(LevelParam?.ToString() ?? "")" @onchange="OnLevelChanged">
                 <option value="">All</option>
                 @foreach (Severity sev in Enum.GetValues<Severity>())
                 {
@@ -72,7 +74,7 @@
         <!-- Sort -->
         <label class="select select-sm w-48">
             <span class="label">Sort</span>
-            <select value="@sortBy" @onchange="OnSortChanged">
+            <select value="@Sort" @onchange="OnSortChanged">
                 @foreach (var opt in sortOptions)
                 {
                     <option value="@opt.Value">@opt.Label</option>
@@ -86,6 +88,9 @@
                    @bind="searchText" @bind:event="oninput" />
         </form>
     </div>
+
+    <!-- Date range -->
+    <DateRangePicker Since="SinceParam" Until="UntilParam" RangeChanged="OnRangeChanged" />
 
     <!-- Active tag filter chips -->
     @{
@@ -224,20 +229,37 @@
     [Parameter] public int ProjectId { get; set; }
     [SupplyParameterFromQuery(Name = "page")] public int PageParam { get; set; } = 1;
     [SupplyParameterFromQuery(Name = "q")] public string? SearchParam { get; set; }
+    [SupplyParameterFromQuery(Name = "status")] public string? StatusParam { get; set; }
+    [SupplyParameterFromQuery(Name = "level")] public Severity? LevelParam { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")] public IssueSortBy? SortParam { get; set; }
+    [SupplyParameterFromQuery(Name = "bookmarked")] public bool? BookmarkedParam { get; set; }
+    [SupplyParameterFromQuery(Name = "since")] public DateTimeOffset? SinceParam { get; set; }
+    [SupplyParameterFromQuery(Name = "until")] public DateTimeOffset? UntilParam { get; set; }
 
     private const int PageSize = 50;
+    private const string AllStatuses = "all";
+    private const IssueStatus DefaultStatus = IssueStatus.Open;
+
     [PersistentState] public PagedResponse<IssueSummary>? Response { get; set; }
     private bool loading = true;
     private bool projectNotFound;
     private int currentPage = 1;
+    private string _lastQueryState = ""; // track URL filter state to detect changes
     private string? _lastSearchParam; // track URL search to detect changes
 
     // Filters
-    private IssueStatus? statusFilter = IssueStatus.Open;
-    private string severityFilter = "";
-    private IssueSortBy sortBy = IssueSortBy.LastSeen;
     private string searchText = "";
-    private bool bookmarkedFilter;
+    
+    /// <summary>Status filter: a missing parameter means the default, "all" means no status filter.</summary>
+    private IssueStatus? StatusFilter => StatusParam switch
+    {
+        null => DefaultStatus,
+        _ when string.Equals(StatusParam, AllStatuses, StringComparison.OrdinalIgnoreCase) => null,
+        _ when Enum.TryParse<IssueStatus>(StatusParam, out var parsed) => parsed,
+        _ => DefaultStatus,
+    };
+
+    private IssueSortBy Sort => SortParam ?? IssueSortBy.LastSeen;
 
     // Bookmark state: IDs of bookmarked issues in the current page
     private HashSet<int> bookmarkedIssueIds = [];
@@ -272,22 +294,23 @@
         var userIdStr = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         currentUserId = userIdStr is not null ? Guid.Parse(userIdStr) : Guid.Empty;
 
-        var targetPage = Math.Max(1, PageParam);
-        var searchChanged = SearchParam != _lastSearchParam;
-        _lastSearchParam = SearchParam;
+        currentPage = Math.Max(1, PageParam);
 
         // Sync searchText from URL on navigation (e.g. from a TagLink click)
-        if (searchChanged)
-            searchText = SearchParam ?? "";
-
-        if (Response is not null && Response.Page == targetPage && !searchChanged)
+        if (SearchParam != _lastSearchParam)
         {
-            currentPage = targetPage;
+            _lastSearchParam = SearchParam;
+            searchText = SearchParam ?? "";
+        }
+
+        var queryState = BuildFilterUrl();
+        if (Response is not null && queryState == _lastQueryState)
+        {
             loading = false;
             return;
         }
+        _lastQueryState = queryState;
 
-        currentPage = targetPage;
         await LoadIssues();
         StateHasChanged();
         recommendationCount = await RecommendationService.GetRecommendationCountAsync(ProjectId);
@@ -298,20 +321,18 @@
         loading = true;
         try
         {
-            Severity? level = null;
-            if (!string.IsNullOrEmpty(severityFilter) && Enum.TryParse(severityFilter, out Severity parsed))
-                level = parsed;
-
             var query = new IssueQueryParams
             {
-                Status = statusFilter,
-                Level = level,
-                SortBy = sortBy,
+                Status = StatusFilter,
+                Level = LevelParam,
+                SortBy = Sort,
                 SortDescending = true,
-                Search = string.IsNullOrWhiteSpace(searchText) ? null : searchText,
+                Search = string.IsNullOrWhiteSpace(SearchParam) ? null : SearchParam,
+                Since = SinceParam,
+                Until = UntilParam,
                 Page = currentPage,
                 PageSize = PageSize,
-                Bookmarked = bookmarkedFilter
+                Bookmarked = BookmarkedParam is true
             };
 
             Response = await IssueService.GetIssueSummariesAsync(ProjectId, query);
@@ -339,51 +360,72 @@
         }
     }
 
-    private async Task SetStatusFilter(IssueStatus? status)
+    private void SetStatusFilter(IssueStatus? status)
     {
-        statusFilter = status;
-        currentPage = 1;
-        await LoadIssues();
+        StatusParam = status?.ToString() ?? AllStatuses;
+        NavigateToFilters();
     }
 
-    private async Task OnSeverityChanged(ChangeEventArgs e)
+    private void OnLevelChanged(ChangeEventArgs e)
     {
-        severityFilter = e.Value?.ToString() ?? "";
-        currentPage = 1;
-        await LoadIssues();
+        LevelParam = Enum.TryParse<Severity>(e.Value?.ToString(), out var level) ? level : null;
+        NavigateToFilters();
     }
 
-    private async Task OnSortChanged(ChangeEventArgs e)
+    private void OnSortChanged(ChangeEventArgs e)
     {
         if (Enum.TryParse<IssueSortBy>(e.Value?.ToString(), out var sort))
         {
-            sortBy = sort;
-            currentPage = 1;
-            await LoadIssues();
+            SortParam = sort == IssueSortBy.LastSeen ? null : sort;
+            NavigateToFilters();
         }
+    }
+
+    private void OnRangeChanged(DateRange range)
+    {
+        SinceParam = range.Since;
+        UntilParam = range.Until;
+        NavigateToFilters();
     }
 
     private void ApplySearch()
     {
-        var q = string.IsNullOrWhiteSpace(searchText) ? "" : $"&q={Uri.EscapeDataString(searchText)}";
-        Navigation.NavigateTo($"/projects/{ProjectId}/issues?page=1{q}", forceLoad: false);
+        SearchParam = string.IsNullOrWhiteSpace(searchText) ? null : searchText;
+        NavigateToFilters();
     }
 
-    private async Task ToggleBookmarkedFilter()
+    private void ToggleBookmarkedFilter()
     {
-        bookmarkedFilter = !bookmarkedFilter;
-        currentPage = 1;
-        await LoadIssues();
+        BookmarkedParam = BookmarkedParam is not true;
+        NavigateToFilters();
     }
 
     private void RemoveTagFilter(string key, string value)
     {
         var (freeText, tags) = IssueSearchParser.Parse(SearchParam);
         var remaining = tags.Where(t => !(t.Key == key && t.Value == value)).ToList();
-        var newSearch = IssueSearchParser.Serialize(freeText, remaining);
-        searchText = newSearch;
-        var q = string.IsNullOrEmpty(newSearch) ? "" : $"&q={Uri.EscapeDataString(newSearch)}";
-        Navigation.NavigateTo($"/projects/{ProjectId}/issues?page=1{q}", forceLoad: false);
+        SearchParam = IssueSearchParser.Serialize(freeText, remaining);
+        NavigateToFilters();
+    }
+
+    private void NavigateToFilters()
+    {
+        PageParam = 1;
+        Navigation.NavigateTo(BuildFilterUrl(), forceLoad: false);
+    }
+
+    private string BuildFilterUrl()
+    {
+        var qs = HttpUtility.ParseQueryString(string.Empty);
+        qs["page"] = Math.Max(1, PageParam).ToString();
+        if (!string.IsNullOrWhiteSpace(SearchParam)) qs["q"] = SearchParam;
+        if (StatusFilter is { } status) qs["status"] = status.ToString();
+        if (LevelParam is { } level) qs["level"] = level.ToString();
+        if (SortParam is { } sort) qs["sort"] = sort.ToString();
+        if (BookmarkedParam is true) qs["bookmarked"] = "true";
+        if (SinceParam is { } since) qs["since"] = UtcDateRangeInput.ToQueryValue(since);
+        if (UntilParam is { } until) qs["until"] = UtcDateRangeInput.ToQueryValue(until);
+        return $"/projects/{ProjectId}/issues?{qs}";
     }
 
     private async Task LoadHistogramsAsync(List<int> issueIds)
@@ -404,7 +446,7 @@
         else
         {
             bookmarkedIssueIds.Remove(issueId);
-            if (bookmarkedFilter)
+            if (BookmarkedParam is true)
                 await LoadIssues();
         }
     }
