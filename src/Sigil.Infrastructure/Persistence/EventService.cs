@@ -163,7 +163,7 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         if (!string.IsNullOrWhiteSpace(query.Logger))
         {
             var logger = query.Logger.Trim();
-            q = q.Where(e => EF.Functions.ILike(e.Logger, logger));
+            q = q.Where(e => e.Logger != null && EF.Functions.ILike(e.Logger, logger));
         }
 
         if (query.Platform.HasValue)

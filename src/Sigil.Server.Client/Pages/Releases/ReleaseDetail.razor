@@ -15,6 +15,13 @@
 {
     <div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>
 }
+else if (loadError is not null)
+{
+    <div class="alert alert-error">
+        <span>@loadError</span>
+        <button class="btn btn-sm" @onclick="LoadReleaseAsync">Retry</button>
+    </div>
+}
 else if (release is null)
 {
     <EmptyState Title="Release not found" Description="This release may have been removed or the link is invalid." />
@@ -163,6 +170,7 @@ else
     private ReleaseDetailResponse? release;
     private CommitInfo? commitInfo;
     private bool loading = true;
+    private string? loadError;
     private TimeSeries? _releaseHistogram;
     private int _loadedReleaseId;
     private TimeSeriesChartView? _loadedView;
@@ -185,11 +193,25 @@ else
         _loadedReleaseId = ReleaseId;
         _loadedView = ChartView;
 
+        await LoadReleaseAsync();
+    }
+
+    private async Task LoadReleaseAsync()
+    {
         loading = true;
+        loadError = null;
         _releaseHistogram = null;
         commitInfo = null;
+
         try { release = await ReleaseHealthService.GetReleaseDetailAsync(ReleaseId); }
-        catch { release = null; }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException)
+        {
+            release = null;
+            loadError = ex is ArgumentException ? ex.Message : "Could not load this release. The request failed.";
+            loading = false;
+            return;
+        }
+
         loading = false;
 
         if (release?.CommitSha != null)
@@ -206,7 +228,10 @@ else
             commitInfo = await SourceCodeSvc.GetCommitInfoAsync(ProjectId, commitSha);
             StateHasChanged();
         }
-        catch { /* ignore — commit info is best-effort */ }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException)
+        {
+            // commit info is best-effort; the release itself is already loaded
+        }
     }
 
     private async Task LoadHistogramAsync(List<int> issueIds)
@@ -231,7 +256,10 @@ else
                 combined);
             StateHasChanged();
         }
-        catch { /* silently ignore histogram load failures */ }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException)
+        {
+            // the chart is best-effort; the release itself is already loaded
+        }
     }
 
     private void OnChartViewChanged(TimeSeriesChartView view) =>

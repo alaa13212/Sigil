@@ -42,6 +42,7 @@ public class IssuesController(
             return NotFound();
 
         var userId = GetUserId();
+        var criteria = IssueSearchParser.ParseCriteria(search);
         var query = new IssueQueryParams
         {
             Status = status,
@@ -55,8 +56,8 @@ public class IssuesController(
             Until = until,
             Page = page,
             PageSize = Math.Clamp(pageSize, 1, 100),
-            BookmarkedByUserId = bookmarked ? userId : null,
-            ViewerUserId = includeViewedInfo ? userId : null
+            BookmarkedByUserId = bookmarked || criteria.Bookmarked ? userId : null,
+            ViewerUserId = includeViewedInfo || criteria.Unviewed ? userId : null
         };
 
         PagedResponse<IssueSummary> summaries;

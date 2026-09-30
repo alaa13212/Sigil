@@ -92,28 +92,21 @@
     <!-- Date range -->
     <DateRangePicker Since="SinceParam" Until="UntilParam" RangeChanged="OnRangeChanged" />
 
-    <!-- Active tag filter chips -->
-    @{
-        var (_, activeTagFilters) = IssueSearchParser.Parse(SearchParam);
-    }
-    @if (activeTagFilters.Count > 0)
-    {
-        <div class="flex flex-wrap gap-2">
-            @foreach (var (key, value) in activeTagFilters)
-            {
-                <div class="badge badge-lg badge-outline gap-2">
-                    <span class="font-mono">@key: @value</span>
-                    <button class="btn btn-xs btn-circle btn-ghost" @onclick="() => RemoveTagFilter(key, value)" title="Remove filter">×</button>
-                </div>
-            }
-        </div>
-    }
+    <!-- Active filter chips -->
+    <ActiveFilterChips Chips="ActiveChips" Dismissed="DismissChip" />
 
     <!-- Content -->
     @if (loading)
     {
         <div class="flex justify-center py-16">
             <span class="loading loading-spinner loading-lg"></span>
+        </div>
+    }
+    else if (loadError is not null)
+    {
+        <div class="alert alert-error">
+            <span>@loadError</span>
+            <button class="btn btn-sm" @onclick="LoadIssues">Retry</button>
         </div>
     }
     else if (projectNotFound)
@@ -242,6 +235,7 @@
 
     [PersistentState] public PagedResponse<IssueSummary>? Response { get; set; }
     private bool loading = true;
+    private string? loadError;
     private bool projectNotFound;
     private int currentPage = 1;
     private string _lastQueryState = ""; // track URL filter state to detect changes
@@ -260,6 +254,13 @@
     };
 
     private IssueSortBy Sort => SortParam ?? IssueSortBy.LastSeen;
+
+    /// <summary>One chip per filter the listing is showing.</summary>
+    private IReadOnlyList<ActiveFilterChip> ActiveChips => IssueFilterChips.Describe(
+        new IssueFilterState(StatusFilter, LevelParam, SortParam, BookmarkedParam is true,
+            SinceParam, UntilParam, SearchParam),
+        DefaultStatus,
+        DateTimeOffset.UtcNow);
 
     // Bookmark state: IDs of bookmarked issues in the current page
     private HashSet<int> bookmarkedIssueIds = [];
@@ -319,6 +320,7 @@
     private async Task LoadIssues()
     {
         loading = true;
+        loadError = null;
         try
         {
             var query = new IssueQueryParams
@@ -350,9 +352,10 @@
             projectNotFound = true;
             Response = null;
         }
-        catch
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException)
         {
             Response = null;
+            loadError = ex is ArgumentException ? ex.Message : "Could not load issues. The request failed.";
         }
         finally
         {
@@ -402,10 +405,37 @@
 
     private void RemoveTagFilter(string key, string value)
     {
-        var (freeText, tags) = IssueSearchParser.Parse(SearchParam);
-        var remaining = tags.Where(t => !(t.Key == key && t.Value == value)).ToList();
-        SearchParam = IssueSearchParser.Serialize(freeText, remaining);
+        var next = IssueSearchParser.RemoveToken(SearchParam, key, value);
+        SearchParam = string.IsNullOrWhiteSpace(next) ? null : next;
         NavigateToFilters();
+    }
+
+    private void DismissChip(ActiveFilterChip chip)
+    {
+        switch (chip.Kind)
+        {
+            case ActiveFilterKind.Status:
+                SetStatusFilter(null);
+                break;
+            case ActiveFilterKind.Level:
+                LevelParam = null;
+                NavigateToFilters();
+                break;
+            case ActiveFilterKind.Sort:
+                SortParam = null;
+                NavigateToFilters();
+                break;
+            case ActiveFilterKind.Bookmarked:
+                BookmarkedParam = null;
+                NavigateToFilters();
+                break;
+            case ActiveFilterKind.DateRange:
+                OnRangeChanged(DateRange.Empty);
+                break;
+            case ActiveFilterKind.SearchToken:
+                RemoveTagFilter(chip.Key!, chip.Value!);
+                break;
+        }
     }
 
     private void NavigateToFilters()
@@ -435,7 +465,10 @@
             _histograms = await IssueService.GetBulkHistogramsAsync(issueIds);
             StateHasChanged();
         }
-        catch { /* silently ignore histogram load failures */ }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException)
+        {
+            // the sparkline column stays empty
+        }
     }
 
     private async Task ToggleIssueBookmark(int issueId)

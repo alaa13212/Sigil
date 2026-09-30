@@ -52,22 +52,7 @@
 
 <DateRangePicker Since="Query.Since" Until="Query.Until" RangeChanged="OnRangeChanged" />
 
-@{
-    var (_, activeTagFilters) = IssueSearchParser.Parse(Query.Search);
-}
-@if (activeTagFilters.Count > 0)
-{
-    <div class="flex flex-wrap gap-2">
-        @foreach (var (key, value) in activeTagFilters)
-        {
-            <div class="badge badge-lg badge-outline gap-2">
-                <span class="font-mono">@key: @value</span>
-                <button class="btn btn-xs btn-circle btn-ghost" @onclick="() => RemoveTagFilter(key, value)"
-                        title="Remove filter">×</button>
-            </div>
-        }
-    </div>
-}
+<ActiveFilterChips Chips="SearchChips" Dismissed="RemoveTagFilter" />
 
 <!-- Content -->
 @if (Loading)
@@ -179,6 +164,8 @@ else
     private static string SortKey((string Label, EventSortBy SortBy, bool Descending) option) =>
         $"{option.SortBy}:{(option.Descending ? "desc" : "asc")}";
 
+    private IReadOnlyList<ActiveFilterChip> SearchChips => SearchTokenChips.FromSearch(Query.Search);
+
     protected override async Task OnParametersSetAsync()
     {
         if (Query.Search != _lastSearch)
@@ -250,11 +237,10 @@ else
     private Task ApplyEventId() =>
         Emit(Query with { EventId = string.IsNullOrWhiteSpace(eventIdText) ? null : eventIdText.Trim() });
 
-    private Task RemoveTagFilter(string key, string value)
+    private Task RemoveTagFilter(ActiveFilterChip chip)
     {
-        var (freeText, tags) = IssueSearchParser.Parse(Query.Search);
-        var remaining = tags.Where(t => !(t.Key == key && t.Value == value)).ToList();
-        return Emit(Query with { Search = IssueSearchParser.Serialize(freeText, remaining) });
+        var next = IssueSearchParser.RemoveToken(Query.Search, chip.Key!, chip.Value!);
+        return Emit(Query with { Search = string.IsNullOrWhiteSpace(next) ? null : next });
     }
 
     private string EventUrl(EventSummary evt)
