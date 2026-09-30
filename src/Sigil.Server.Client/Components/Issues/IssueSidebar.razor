@@ -117,11 +117,12 @@
                 <span class="opacity-60">Events</span>
                 <span class="font-mono">@Issue.OccurrenceCount</span>
             </div>
-            @if (_histogram is not null && _histogram.Points.Any(p => p.Count > 0))
+            @if (_histogram is not null)
             {
                 <div class="pt-1">
-                    <div class="text-xs opacity-60 mb-1">@TimeSeriesCaption.Describe(_histogram)</div>
-                    <Sparkline Data="_histogram" Width="248" Height="32" Class="w-full text-primary"/>
+                    <TimeSeriesChart Data="_histogram" Width="248" Height="140"
+                                     RangeDays="RangeDays" Granularity="Granularity" Mode="Mode"
+                                     StyledHover="false" ViewChanged="OnViewChanged" />
                 </div>
             }
             @if (Issue.MergeSet is not null)
@@ -279,9 +280,21 @@
     [Parameter] public EventCallback OnReingestionStarted { get; set; }
     [Parameter] public EventCallback OnLinksChanged { get; set; }
 
+    /// <summary>Window the event activity chart shows, in days back from now.</summary>
+    [Parameter] public int RangeDays { get; set; } = TimeSeriesChartView.DefaultRangeDays;
+
+    /// <summary>Bucket width the chart requests; <c>Auto</c> derives it from <see cref="RangeDays"/>.</summary>
+    [Parameter] public TimeSeriesGranularity Granularity { get; set; } = TimeSeriesGranularity.Auto;
+
+    /// <summary>Bar or line + area.</summary>
+    [Parameter] public TimeSeriesChartMode Mode { get; set; } = TimeSeriesChartMode.Bar;
+
+    [Parameter] public EventCallback<TimeSeriesChartView> ViewChanged { get; set; }
+
     private bool _loading;
     private bool _reingesting;
     private TimeSeries? _histogram;
+    private (int IssueId, int RangeDays, TimeSeriesGranularity Granularity)? _histogramKey;
 
     private bool _showShareModal;
     private bool _showReingestionConfirm;
@@ -291,12 +304,19 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        try { _histogram = await IssueService.GetHistogramAsync(Issue.Id); }
-        catch { _histogram = null; }
+        var key = (Issue.Id, RangeDays, Granularity);
+        if (_histogram is null || _histogramKey != key)
+        {
+            _histogramKey = key;
+            try { _histogram = await IssueService.GetHistogramAsync(Issue.Id, RangeDays, Granularity); }
+            catch { _histogram = null; }
+        }
 
         try { _trackerConfigs = await IssueTrackerService.GetConfigsAsync(Issue.ProjectId); }
         catch { _trackerConfigs = []; }
     }
+
+    private Task OnViewChanged(TimeSeriesChartView view) => ViewChanged.InvokeAsync(view);
 
     private void OpenCreateTaskModal(IssueTrackerConfigResponse cfg)
     {
