@@ -15,4 +15,8 @@ public static class AppConfigKeys
     public const string RetentionDefaultMaxEvents = "retention_default_max_events";
     public const string RetentionCheckIntervalMinutes = "retention_check_interval_minutes";
     public const string RetentionFailedEnvelopeMaxAgeDays = "retention_failed_envelope_max_age_days";
+
+    // Metrics endpoint access control
+    public const string MetricsToken = "metrics_token";
+    public const string MetricsAllowedCidrs = "metrics_allowed_cidrs";
 }

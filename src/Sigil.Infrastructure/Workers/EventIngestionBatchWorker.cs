@@ -11,6 +11,7 @@ internal class EventIngestionWorker(
     IServiceProvider services,
     IDigestionSignal signal,
     IOptions<BatchWorkersConfig> options,
+    ISigilMetrics metrics,
     ILogger<EventIngestionWorker> logger)
     : BatchWorker<IngestionJobItem>(options.Value.GetOptions("EventIngestion"), logger), IEventIngestionWorker
 {
@@ -21,6 +22,10 @@ internal class EventIngestionWorker(
 
         await rawEnvelopeService.BulkStoreAsync(
             batch.Select(item => (item.ProjectId, item.RawEnvelope, item.ReceivedAt)));
+
+        metrics.RecordEventsIngested(batch.Count);
+        foreach (var item in batch)
+            metrics.RecordLastIngestion(item.ReceivedAt);
 
         signal.Signal();
     }

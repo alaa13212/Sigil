@@ -18,6 +18,9 @@ public interface IAppConfigService
     int RetentionCheckIntervalMinutes { get; }
     int RetentionFailedEnvelopeMaxAgeDays { get; }
 
+    string? MetricsToken { get; }
+    string? MetricsAllowedCidrs { get; }
+
     string? Get(string key);
     T Get<T>(string key, T defaultValue) where T : IParsable<T>;
 }
