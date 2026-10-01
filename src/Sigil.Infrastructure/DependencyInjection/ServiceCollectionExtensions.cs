@@ -108,6 +108,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISharedLinkService, SharedLinkService>();
         services.AddScoped<IReingestionService, ReingestionService>();
         services.AddSingleton<IRateLimiter, SlidingWindowRateLimiter>();
+        services.AddSingleton<ISigilMetrics, SigilMetrics>();
+        services.AddScoped<IMetricsQueryService, MetricsQueryService>();
         
         services.AddScoped<TokenEncryptionService>();
         services.AddScoped<ISourceCodeService, SourceCodeService>();

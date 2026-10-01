@@ -88,6 +88,7 @@ All four are per-project, rule-based, and applied during digestion.
 
 - **Ingestion rate limits**: a sliding-window limiter with a global cap, a default per-project cap, and a per-project override. Over-limit traffic is rejected rather than allowed to degrade the database.
 - **Retention**: a background worker enforces a maximum event age and a maximum event count, with global defaults and per-project overrides. Failed raw envelopes have their own, shorter, retention window.
+- **Prometheus metrics**: a `/metrics` endpoint exports issue counts, ingestion counters, digestion backlog, alert deliveries and build info, gated by a dedicated token or a CIDR allow-list.
 
 ### Web UI
 
@@ -201,7 +202,61 @@ from the admin settings page and overridable per project. Defaults shown are wha
 | Endpoint | Purpose |
 |---|---|
 | `/health` | Health check, mapped for container orchestrators |
+| `/metrics` | Prometheus metrics, token- or CIDR-gated (see [Metrics](#metrics)) |
 | `/api/*` | REST API consumed by the Blazor client and available for scripting |
+
+### Metrics
+
+`GET /metrics` returns metrics in the Prometheus text exposition format. Metrics cover issue
+counts, event volumes, ingestion health, digestion backlog, alert delivery outcomes and build
+information:
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `sigil_issues` | gauge | `project`, `status`, `level` | Current issue count |
+| `sigil_events_total` | counter | `project`, `level` | Events received in the last 24 hours |
+| `sigil_events_ingested_total` | counter | — | Events accepted into the ingestion pipeline since process start |
+| `sigil_events_dropped_total` | counter | — | Events discarded during digestion since process start |
+| `sigil_digestion_backlog` | gauge | — | Envelopes awaiting digestion |
+| `sigil_alert_deliveries_total` | counter | `channel`, `status` | Alert deliveries recorded |
+| `sigil_last_ingestion_timestamp_seconds` | gauge | — | Unix time of the last ingested event, for staleness alerts |
+| `sigil_build_info` | gauge | `version` | Running build version, always `1` |
+
+Label cardinality is bounded by design: only project names and enum values are ever used as
+labels. Issue identifiers, fingerprints and tag values are never exported.
+
+#### Access control
+
+The endpoint is closed by default. It does **not** use UI sessions, so a scraper never needs a
+cookie. Configure at least one of these two database-backed settings, editable from the admin
+settings page:
+
+| Setting | Purpose |
+|---|---|
+| `metrics_token` | Shared secret. Send it as `Authorization: Bearer <token>` or `?token=<token>`. Compared in constant time. |
+| `metrics_allowed_cidrs` | Comma-separated CIDR ranges allowed to scrape without a token, e.g. `10.0.0.0/8,192.168.0.0/16`. |
+
+With neither configured, `/metrics` returns `403` — an unauthenticated scrape is rejected rather
+than served. A presented token that does not match returns `403`; a request with no token at all
+returns `401`.
+
+#### Prometheus scrape config
+
+```yaml
+scrape_configs:
+  - job_name: sigil
+    metrics_path: /metrics
+    scheme: https
+    static_configs:
+      - targets: ['sigil.example.com']
+    authorization:
+      # Sent as 'Authorization: Bearer <token>'
+      credentials: <metrics_token>
+      type: Bearer
+```
+
+When Sigil runs behind a reverse proxy, the CIDR allow-list matches against the forwarded
+client address (`X-Forwarded-For`) rather than the proxy's own address.
 
 ---
 
