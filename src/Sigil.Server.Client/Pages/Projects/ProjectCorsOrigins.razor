@@ -1,0 +1,107 @@
+@page "/projects/{ProjectId:int}/settings/cors"
+@attribute [Authorize]
+@using Sigil.Application.Models.Projects
+@inject IProjectCorsService ProjectCorsService
+
+@layout ProjectSettingsLayout
+
+<PageTitle>CORS Origins — Sigil</PageTitle>
+
+@if (_loading)
+{
+    <div class="flex justify-center py-16">
+        <span class="loading loading-spinner loading-lg"></span>
+    </div>
+}
+else
+{
+    <div class="max-w-2xl space-y-6">
+        <h2 class="text-lg font-bold">CORS Origins</h2>
+        <p class="text-sm opacity-60">
+            Browser SDKs submit events from your application's own origin. List the origins allowed to post
+            envelopes to <code>POST /api/@ProjectId/envelope</code>. A request from any other origin is rejected
+            with <code>403</code>.
+        </p>
+
+        <div class="card bg-base-100">
+            <div class="card-body p-5 space-y-3">
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Allowed origins</legend>
+                    <textarea class="textarea textarea-sm w-full font-mono"
+                              rows="6"
+                              placeholder="https://app.example.com&#10;https://admin.example.com"
+                              @bind="_origins"></textarea>
+                    <p class="fieldset-label text-xs block">
+                        One origin per line, written as <code>scheme://host[:port]</code> using <code>http</code>
+                        or <code>https</code>. Use <code>*</code> to allow every origin. Requests without an
+                        <code>Origin</code> header — server-side SDKs, native apps, curl — are never blocked.
+                    </p>
+                </fieldset>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <div class="alert alert-error text-sm py-2">@_error</div>
+                }
+                else if (!string.IsNullOrEmpty(_success))
+                {
+                    <div class="alert alert-success text-sm py-2">@_success</div>
+                }
+
+                <div class="flex justify-end">
+                    <button class="btn btn-primary btn-sm" disabled="@_saving" @onclick="Save">
+                        @(_saving ? "Saving…" : "Save")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+
+    private string _origins = "";
+    private bool _loading = true;
+    private bool _saving;
+    private string _error = "";
+    private string _success = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = "";
+        _success = "";
+
+        var origins = await ProjectCorsService.GetOriginsAsync(ProjectId);
+        _origins = string.Join("\n", origins);
+
+        _loading = false;
+    }
+
+    private async Task Save()
+    {
+        _saving = true;
+        _error = "";
+        _success = "";
+
+        try
+        {
+            var lines = _origins.Split(
+                ['\n', '\r', ','],
+                StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+            var saved = await ProjectCorsService.SetOriginsAsync(ProjectId, new SetCorsOriginsRequest { Origins = lines });
+
+            _origins = string.Join("\n", saved);
+            _success = "Origins saved.";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

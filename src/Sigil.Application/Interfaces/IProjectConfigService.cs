@@ -9,6 +9,7 @@ public interface IProjectConfigService
     int? RateLimitMaxEventsPerWindow(int projectId);
     int? RetentionMaxAgeDays(int projectId);
     int? RetentionMaxEventCount(int projectId);
+    IReadOnlyList<string> AllowedCorsOrigins(int projectId);
 
     string? Get(int projectId, string key);
     T Get<T>(int projectId, string key, T defaultValue) where T : IParsable<T>;

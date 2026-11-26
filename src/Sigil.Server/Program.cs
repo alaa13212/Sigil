@@ -13,6 +13,7 @@ using Sigil.Infrastructure.DependencyInjection;
 using Sigil.Server.Auth;
 using Sigil.Server.Authorization;
 using Sigil.Server.Components;
+using Sigil.Server.Middleware;
 
 // Force invariant culture to ensure Gregorian calendar and consistent date formatting
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
@@ -161,6 +162,7 @@ else
     
 }
 
+app.UseMiddleware<ProjectCorsMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();

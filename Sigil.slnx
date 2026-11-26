@@ -10,5 +10,6 @@
     <Project Path="tests/Sigil.Application.Tests/Sigil.Application.Tests.csproj" />
     <Project Path="tests/Sigil.Domain.Tests/Sigil.Domain.Tests.csproj" />
     <Project Path="tests/Sigil.Infrastructure.Tests/Sigil.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Sigil.Server.Tests/Sigil.Server.Tests.csproj" />
   </Folder>
 </Solution>

@@ -165,4 +165,47 @@ public class ProjectConfigServiceTests(TestDatabaseFixture fixture)
 
         service.HighVolumeThreshold(project.Id).Should().Be(200);
     }
+
+    [Fact]
+    public async Task AllowedCorsOrigins_MissingConfig_ReturnsEmpty()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        await DeleteProjectConfigAsync(project.Id, ProjectConfigKeys.AllowedCorsOrigins);
+
+        var service = CreateService();
+        await service.LoadAsync();
+
+        service.AllowedCorsOrigins(project.Id).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AllowedCorsOrigins_ReturnsNormalizedValues()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        await SetProjectConfigAsync(project.Id, ProjectConfigKeys.AllowedCorsOrigins, "HTTPS://Example.com,http://localhost:3000");
+
+        var service = CreateService();
+        await service.LoadAsync();
+
+        service.AllowedCorsOrigins(project.Id).Should().Equal("https://example.com", "http://localhost:3000");
+    }
+
+    [Fact]
+    public async Task AllowedCorsOrigins_AfterLoadAsyncProject_ReflectsChangedValue()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        await SetProjectConfigAsync(project.Id, ProjectConfigKeys.AllowedCorsOrigins, "https://a.com");
+
+        var service = CreateService();
+        await service.LoadAsync();
+        service.AllowedCorsOrigins(project.Id).Should().Equal("https://a.com");
+
+        await SetProjectConfigAsync(project.Id, ProjectConfigKeys.AllowedCorsOrigins, "https://b.com");
+        await service.LoadAsync(project.Id);
+
+        service.AllowedCorsOrigins(project.Id).Should().Equal("https://b.com");
+    }
 }
