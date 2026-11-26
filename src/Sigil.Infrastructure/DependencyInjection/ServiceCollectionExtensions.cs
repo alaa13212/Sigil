@@ -100,6 +100,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IProjectConfigService, ProjectConfigService>();
         services.AddSingleton<IAsyncStartupInitializer>(sp => (IAsyncStartupInitializer) sp.GetRequiredService<IProjectConfigService>());
         services.AddScoped<IProjectConfigEditorService, ProjectConfigEditorService>();
+        services.AddScoped<IProjectCorsService, ProjectCorsService>();
         services.AddScoped<ISearchService, SearchService>();
         services.AddScoped<IBadgeService, BadgeService>();
         services.AddScoped<StackTraceFilterService>();

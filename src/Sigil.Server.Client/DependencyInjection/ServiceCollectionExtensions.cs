@@ -34,6 +34,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserPreferenceService, LocalStoragePreferenceService>();
         services.AddScoped<IAppConfigEditorService, ApiAppConfigEditorService>();
         services.AddScoped<IProjectConfigEditorService, ApiProjectConfigEditorService>();
+        services.AddScoped<IProjectCorsService, ApiProjectCorsService>();
         services.AddScoped<ISharedLinkService, ApiSharedLinkService>();
         services.AddScoped<ISourceCodeService, ApiSourceCodeService>();
         services.AddScoped<IReingestionService, ApiReingestionService>();
