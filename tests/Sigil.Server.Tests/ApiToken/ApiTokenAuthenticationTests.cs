@@ -40,13 +40,62 @@ public class ApiTokenAuthenticationTests
     public async Task GetApiRequest_WithValidBearerToken_CarriesTheOwnerRoles()
     {
         var harness = CreateHarness();
+        harness.TokenService.AddRole(OwnerId, "User");
+        var context = harness.CreateContext("GET", "/api/projects", ValidToken);
+
+        var result = await context.AuthenticateAsync();
+
+        result.Succeeded.Should().BeTrue();
+        result.Principal!.IsInRole("User").Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetApiRequest_WithValidBearerToken_DoesNotCarryTheAdminRole()
+    {
+        // A token is handed to scripts and CI, so it must not reach the endpoints an
+        // administrator sees, such as the application configuration.
+        var harness = CreateHarness();
         harness.TokenService.AddRole(OwnerId, "Admin");
         var context = harness.CreateContext("GET", "/api/projects", ValidToken);
 
         var result = await context.AuthenticateAsync();
 
         result.Succeeded.Should().BeTrue();
-        result.Principal!.IsInRole("Admin").Should().BeTrue();
+        result.Principal!.IsInRole("Admin").Should().BeFalse();
+        result.Principal.FindFirstValue(ClaimTypes.NameIdentifier).Should().Be(OwnerId.ToString());
+    }
+
+    [Fact]
+    public async Task GetApiRequest_WithCookieOnlyEndpoint_IsNotAuthenticatedByTheToken()
+    {
+        var harness = CreateHarness();
+        var context = harness.CreateContext("GET", "/api/alert-channels", ValidToken, cookieOnly: true);
+
+        var result = await context.AuthenticateAsync();
+
+        result.Succeeded.Should().BeFalse();
+        context.User.FindFirstValue(ClaimTypes.NameIdentifier).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetApiRequest_WithCookieOnlyEndpoint_IsRejectedWith401()
+    {
+        var harness = CreateHarness();
+        var context = harness.CreateContext("GET", "/api/alert-channels", ValidToken, cookieOnly: true);
+
+        await context.AuthenticateAsync();
+        await context.ChallengeAsync();
+
+        context.Response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
+    }
+
+    [Fact]
+    public void Policy_SkipsTheTokenSchemeForACookieOnlyEndpoint()
+    {
+        var harness = CreateHarness();
+        var context = harness.CreateContext("GET", "/api/alert-channels", ValidToken, cookieOnly: true);
+
+        ApiTokenAuthenticationPolicy.UsesApiToken(context).Should().BeFalse();
     }
 
     [Fact]
@@ -211,7 +260,7 @@ public class ApiTokenAuthenticationTests
     {
         public FakeApiTokenService TokenService { get; } = tokenService;
 
-        public DefaultHttpContext CreateContext(string method, string path, string? bearer = null, string? cookie = null)
+        public DefaultHttpContext CreateContext(string method, string path, string? bearer = null, string? cookie = null, bool cookieOnly = false)
         {
             var scope = provider.CreateScope();
             var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
@@ -223,6 +272,12 @@ public class ApiTokenAuthenticationTests
 
             if (cookie is not null)
                 context.Request.Headers["Cookie"] = cookie;
+
+            if (cookieOnly)
+                context.SetEndpoint(new Endpoint(
+                    _ => Task.CompletedTask,
+                    new EndpointMetadataCollection(new CookieOnlyAttribute()),
+                    "cookie-only"));
 
             return context;
         }

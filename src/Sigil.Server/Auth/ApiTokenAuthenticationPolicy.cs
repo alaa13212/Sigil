@@ -25,8 +25,15 @@ public static class ApiTokenAuthenticationPolicy
         if (!context.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase))
             return false;
 
+        if (IsCookieOnly(context))
+            return false;
+
         return ReadBearerToken(context.Request) is not null;
     }
+
+    /// <summary>Returns true when the endpoint that handles the request is reserved for the interface session.</summary>
+    public static bool IsCookieOnly(HttpContext context) =>
+        context.GetEndpoint()?.Metadata.GetMetadata<CookieOnlyAttribute>() is not null;
 
     /// <summary>Reads the bearer token from the authorization header, or null when there is none.</summary>
     public static string? ReadBearerToken(HttpRequest request)

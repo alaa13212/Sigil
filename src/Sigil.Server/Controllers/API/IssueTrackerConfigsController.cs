@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.IssueTrackers;
+using Sigil.Server.Auth;
 using Sigil.Server.Framework;
 
 namespace Sigil.Server.Controllers.API;
@@ -13,6 +14,7 @@ namespace Sigil.Server.Controllers.API;
 public class IssueTrackerConfigsController(IIssueTrackerService issueTrackerService) : SigilController
 {
     [Authorize(Policy = SigilPermissions.CanViewProject)]
+    [CookieOnly]
     [HttpGet]
     public async Task<IActionResult> List(int projectId) =>
         Ok(await issueTrackerService.GetConfigsAsync(projectId));

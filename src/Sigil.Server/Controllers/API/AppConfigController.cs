@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
+using Sigil.Server.Auth;
 using Sigil.Server.Framework;
 
 namespace Sigil.Server.Controllers.API;
@@ -11,6 +12,7 @@ namespace Sigil.Server.Controllers.API;
 [Authorize(Policy = SigilPermissions.CanAccessAdmin)]
 public class AppConfigController(IAppConfigEditorService appConfigEditorService) : SigilController
 {
+    [CookieOnly]
     [HttpGet]
     public async Task<IActionResult> GetAll()
         => Ok(await appConfigEditorService.GetAllAsync());

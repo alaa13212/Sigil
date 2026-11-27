@@ -18,11 +18,18 @@ public class ApiTokenAuthenticationHandler(
     /// <summary>Name of the authentication scheme that resolves API tokens.</summary>
     public const string SchemeName = "ApiToken";
 
+    /// <summary>Role that grants every permission in the interface.</summary>
+    private const string AdminRole = "Admin";
+
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         string? presented = ApiTokenAuthenticationPolicy.ReadBearerToken(Request);
         if (presented is null)
             return AuthenticateResult.NoResult();
+
+        // An endpoint that returns a secret is reserved for the interface session.
+        if (ApiTokenAuthenticationPolicy.IsCookieOnly(Context))
+            return AuthenticateResult.Fail("The API token cannot call this endpoint.");
 
         IApiTokenService tokenService = Context.RequestServices.GetRequiredService<IApiTokenService>();
         ApiTokenIdentity? identity = await tokenService.AuthenticateAsync(presented);
@@ -35,7 +42,12 @@ public class ApiTokenAuthenticationHandler(
             new(ClaimTypes.Name, identity.Email),
             new(ClaimTypes.Email, identity.Email)
         };
-        claims.AddRange(identity.Roles.Select(role => new Claim(ClaimTypes.Role, role)));
+
+        // A token carries the read access of its owner but never the admin role, so it cannot
+        // reach the endpoints an administrator sees, such as the application configuration.
+        claims.AddRange(identity.Roles
+            .Where(role => !string.Equals(role, AdminRole, StringComparison.OrdinalIgnoreCase))
+            .Select(role => new Claim(ClaimTypes.Role, role)));
 
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name, ClaimTypes.Name, ClaimTypes.Role));
         return AuthenticateResult.Success(new AuthenticationTicket(principal, Scheme.Name));
