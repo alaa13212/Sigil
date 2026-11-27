@@ -11,6 +11,7 @@ public static class ServiceCollectionExtensions
     public static void AddInfrastructure(this IServiceCollection services)
     {
         services.AddScoped<IAuthService, ApiAuthService>();
+        services.AddScoped<ICurrentUserService, ApiCurrentUserService>();
         services.AddScoped<ITeamService, ApiTeamService>();
         services.AddScoped<ISetupService, ApiSetupService>();
         services.AddScoped<IProjectService, ApiProjectService>();

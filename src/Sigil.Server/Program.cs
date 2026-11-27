@@ -45,12 +45,13 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 // Authentication & Authorization (must come after AddInfrastructure which registers Identity)
+int sessionDays = builder.Configuration.GetValue("Auth:SessionDays", 30);
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.Cookie.HttpOnly = true;
     options.Cookie.SameSite = SameSiteMode.Strict;
     options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-    options.ExpireTimeSpan = TimeSpan.FromDays(14);
+    options.ExpireTimeSpan = TimeSpan.FromDays(sessionDays);
     options.SlidingExpiration = true;
     options.LoginPath = "/login";
     options.LogoutPath = "/logout";

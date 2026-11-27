@@ -25,7 +25,7 @@ internal class AuthService(
         if (!user.EmailConfirmed)
             return AuthResult.Failure("Account is not activated. Use the invitation link to set your password.");
 
-        var result = await signInManager.PasswordSignInAsync(user, request.Password, false, lockoutOnFailure: false);
+        var result = await signInManager.PasswordSignInAsync(user, request.Password, isPersistent: true, lockoutOnFailure: false);
         if (!result.Succeeded)
             return AuthResult.Failure("Invalid email or password.");
 

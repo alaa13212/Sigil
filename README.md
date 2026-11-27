@@ -184,6 +184,19 @@ Batch worker tuning in `appsettings.json`:
 }
 ```
 
+Sign-in session lifetime in `appsettings.json`:
+
+```json
+{
+  "Auth": {
+    "SessionDays": 30
+  }
+}
+```
+
+The sign-in cookie is persistent and slides on every authenticated request, so a session stays alive for
+`SessionDays` days of inactivity.
+
 Runtime limits are stored in the database rather than in configuration files, so they are editable
 from the admin settings page and overridable per project. Defaults shown are what a fresh install uses:
 

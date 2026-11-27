@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
+using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Auth;
 
 namespace Sigil.Server.Client.Auth;
@@ -9,35 +10,39 @@ public class CookieAuthenticationStateProvider : AuthenticationStateProvider
 {
     private static readonly AuthenticationState Anonymous = new(new ClaimsPrincipal(new ClaimsIdentity()));
 
-    private Task<AuthenticationState> _initialState;
+    private readonly PersistentComponentState _state;
+    private readonly ICurrentUserService _currentUserService;
+    private Task<AuthenticationState>? _authState;
 
-    public CookieAuthenticationStateProvider(PersistentComponentState state)
+    public CookieAuthenticationStateProvider(PersistentComponentState state, ICurrentUserService currentUserService)
     {
-        // Try to read persisted auth state from server prerender
-        if (state.TryTakeFromJson<UserInfo>(nameof(UserInfo), out var userInfo) && userInfo is not null)
-        {
-            _initialState = Task.FromResult(BuildAuthState(userInfo));
-        }
-        else
-        {
-            _initialState = Task.FromResult(Anonymous);
-        }
+        _state = state;
+        _currentUserService = currentUserService;
     }
 
-    public override async Task<AuthenticationState> GetAuthenticationStateAsync()
-    {
-        // On first call, return persisted state (avoids /api round-trip)
-        var initial = await _initialState;
-        if (initial.User.Identity?.IsAuthenticated == true)
-            return initial;
+    public override Task<AuthenticationState> GetAuthenticationStateAsync() =>
+        _authState ??= ResolveAsync();
 
-        return Anonymous;
+    private async Task<AuthenticationState> ResolveAsync()
+    {
+        try
+        {
+            if (_state.TryTakeFromJson<UserInfo>(nameof(UserInfo), out var userInfo) && userInfo is not null)
+                return BuildAuthState(userInfo);
+
+            var currentUser = await _currentUserService.GetCurrentUserAsync();
+            return currentUser is null ? Anonymous : BuildAuthState(currentUser);
+        }
+        catch
+        {
+            return Anonymous;
+        }
     }
 
     public void NotifyAuthStateChanged(UserInfo? user = null)
     {
-        _initialState = Task.FromResult(user is not null ? BuildAuthState(user) : Anonymous);
-        NotifyAuthenticationStateChanged(_initialState);
+        _authState = Task.FromResult(user is not null ? BuildAuthState(user) : Anonymous);
+        NotifyAuthenticationStateChanged(_authState);
     }
 
     private static AuthenticationState BuildAuthState(UserInfo user)
