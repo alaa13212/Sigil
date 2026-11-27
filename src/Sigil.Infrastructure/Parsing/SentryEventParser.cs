@@ -140,7 +140,7 @@ internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSeri
             Username = eventDataUser.Username,
             Email = eventDataUser.Email,
             IpAddress = eventDataUser.IpAddress,
-            Data = eventDataUser.Data?.ToDictionary(pair => pair.Key, pair => pair.Value.GetString()!),
+            Data = eventDataUser.Data?.ToDictionary(pair => pair.Key, pair => ToStringValue(pair.Value)),
         };
     }
 
@@ -165,19 +165,38 @@ internal class SentryEventParser(IEnumerable<IEventEnricher> enrichers, JsonSeri
 
     private static Runtime? GetRuntime(SentryEvent sentryEvent)
     {
-        var pair = sentryEvent.Contexts?.FirstOrDefault(pair => pair.Key == "runtime");
-        if(pair == null) return null;
+        if (sentryEvent.Contexts is null
+            || !sentryEvent.Contexts.TryGetValue("runtime", out JsonElement runtime)
+            || runtime.ValueKind != JsonValueKind.Object)
+            return null;
 
-        string? name = pair.Value.Value.GetProperty("name").GetString();
-        string? version = pair.Value.Value.GetProperty("version").GetString();
-        if(name == null || version == null) return null;
-        return new Runtime(name,version);
+        string? name = ReadString(runtime, "name");
+        if (name is null) return null;
+
+        return new Runtime(name, ReadString(runtime, "version") ?? "");
     }
-    
+
     private static Dictionary<string, string>? GetExtra(SentryEvent sentryEvent)
     {
-        return sentryEvent.Extra?.ToDictionary(pair => pair.Key, pair => pair.Value.GetString()!);
+        return sentryEvent.Extra?.ToDictionary(pair => pair.Key, pair => ToStringValue(pair.Value));
     }
+
+    /// <summary>Reads a property as text, returning null when it is absent or not a scalar.</summary>
+    private static string? ReadString(JsonElement obj, string property)
+    {
+        if (!obj.TryGetProperty(property, out JsonElement value)) return null;
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False => value.GetRawText(),
+            _ => null,
+        };
+    }
+
+    /// <summary>Renders any JSON value as text, using compact JSON for non-strings.</summary>
+    private static string ToStringValue(JsonElement value) =>
+        value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : JsonSerializer.Serialize(value);
 
     private static string? GetCulprit(SentryEvent sentryEvent, SentryException? primary)
     {
