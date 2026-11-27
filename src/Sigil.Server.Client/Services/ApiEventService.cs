@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Web;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
+using Sigil.Application.Models.Common;
 using Sigil.Application.Models.Events;
 using Sigil.Application.Models.Shared;
 using Sigil.Domain.Entities;
@@ -22,6 +23,13 @@ public class ApiEventService(HttpClient http) : IEventService
         return await http.GetFromJsonAsync<PagedResponse<EventSummary>>(
             $"api/projects/{projectId}/events?{BuildQueryString(query)}")
             ?? new PagedResponse<EventSummary>([], 0, query.Page, query.PageSize);
+    }
+
+    public async Task<TimeSeries> GetProjectEventSeriesAsync(int projectId, int days = 7, TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto)
+    {
+        return await http.GetFromJsonAsync<TimeSeries>(
+            $"api/projects/{projectId}/events/activity?days={days}&granularity={granularity}")
+            ?? TimeSeries.Empty;
     }
 
     private static string BuildQueryString(EventQueryParams query)

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
+using Sigil.Application.Models.Common;
 using Sigil.Application.Models.Events;
 using Sigil.Application.Models.Issues;
 using Sigil.Domain.Entities;
@@ -11,6 +12,7 @@ using Sigil.Domain.Extensions;
 using Sigil.Domain.Ingestion;
 using Sigil.Infrastructure.Parsing;
 using Sigil.Infrastructure.Parsing.Models;
+using Sigil.Infrastructure.Services;
 
 namespace Sigil.Infrastructure.Persistence;
 
@@ -99,6 +101,22 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
     public async Task<PagedResponse<EventSummary>> SearchEventsAsync(int projectId, EventQueryParams query)
     {
         return await QueryEventSummariesAsync(dbContext.Events.Where(e => e.ProjectId == projectId), query);
+    }
+
+    public async Task<TimeSeries> GetProjectEventSeriesAsync(int projectId, int days = 7, TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto)
+    {
+        var (from, to) = TimeSeriesWindow.Trailing(dateTime.UtcNow, days);
+        var interval = TimeSeriesAggregator.IntervalFor(
+            TimeSeriesAggregator.ResolveGranularity(granularity, to - from));
+
+        var query = dbContext.EventBuckets
+            .Where(b => b.Issue!.ProjectId == projectId
+                     && b.BucketStart >= from.UtcDateTime
+                     && b.BucketStart < to.UtcDateTime);
+
+        var points = await EventBucketQuery.ReadAsync(query, interval);
+
+        return TimeSeriesAggregator.Build(points, from, to, granularity);
     }
 
     private async Task<(List<CapturedEvent> Items, int TotalCount)> QueryEventsAsync(

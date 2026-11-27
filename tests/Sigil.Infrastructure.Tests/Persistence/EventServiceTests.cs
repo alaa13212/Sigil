@@ -1,4 +1,5 @@
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models.Common;
 using Sigil.Application.Models.Events;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
@@ -46,6 +47,104 @@ public class EventServiceTests(TestDatabaseFixture fixture)
         Tags = tags,
         Stacktrace = frames ?? [],
     };
+
+    // ── GetProjectEventSeriesAsync ───────────────────────────────────────────
+
+    private static readonly DateTime SeriesNow = new(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public async Task ProjectSeries_CountsBucketsAcrossEveryIssueOfTheProject()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var first = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var second = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        ctx.EventBuckets.Add(new EventBucket { IssueId = first.Id, BucketStart = new DateTime(2025, 5, 31, 22, 0, 0, DateTimeKind.Utc), Count = 3 });
+        ctx.EventBuckets.Add(new EventBucket { IssueId = second.Id, BucketStart = new DateTime(2025, 5, 31, 22, 0, 0, DateTimeKind.Utc), Count = 4 });
+        ctx.EventBuckets.Add(new EventBucket { IssueId = first.Id, BucketStart = new DateTime(2025, 5, 31, 23, 0, 0, DateTimeKind.Utc), Count = 5 });
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        var series = await service.GetProjectEventSeriesAsync(project.Id, 7);
+
+        series.Points.Sum(p => p.Count).Should().Be(12);
+    }
+
+    [Fact]
+    public async Task ProjectSeries_ExcludesTheBucketsOfAnotherProject()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var other = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var otherIssue = await TestHelper.CreateIssueAsync(ctx, other.Id);
+        ctx.EventBuckets.Add(new EventBucket { IssueId = issue.Id, BucketStart = new DateTime(2025, 5, 31, 22, 0, 0, DateTimeKind.Utc), Count = 3 });
+        ctx.EventBuckets.Add(new EventBucket { IssueId = otherIssue.Id, BucketStart = new DateTime(2025, 5, 31, 22, 0, 0, DateTimeKind.Utc), Count = 9 });
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        var series = await service.GetProjectEventSeriesAsync(project.Id, 7);
+
+        series.Points.Sum(p => p.Count).Should().Be(3);
+    }
+
+    [Fact]
+    public async Task ProjectSeries_ExcludesBucketsOutsideTheWindow()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        ctx.EventBuckets.Add(new EventBucket { IssueId = issue.Id, BucketStart = new DateTime(2025, 5, 20, 22, 0, 0, DateTimeKind.Utc), Count = 7 });
+        ctx.EventBuckets.Add(new EventBucket { IssueId = issue.Id, BucketStart = new DateTime(2025, 5, 31, 22, 0, 0, DateTimeKind.Utc), Count = 3 });
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        var series = await service.GetProjectEventSeriesAsync(project.Id, 7);
+
+        series.Points.Sum(p => p.Count).Should().Be(3);
+    }
+
+    [Fact]
+    public async Task ProjectSeries_WithoutEvents_ReturnsAGapFreeSeriesOfZeroes()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var service = Create(ctx);
+
+        var series = await service.GetProjectEventSeriesAsync(project.Id, 1);
+
+        series.Points.Should().NotBeEmpty();
+        series.Points.Should().OnlyContain(p => p.Count == 0);
+    }
+
+    [Fact]
+    public async Task ProjectSeries_DailyGranularity_SumsTheHourlyBucketsIntoOneDay()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        ctx.EventBuckets.Add(new EventBucket { IssueId = issue.Id, BucketStart = new DateTime(2025, 5, 31, 10, 0, 0, DateTimeKind.Utc), Count = 2 });
+        ctx.EventBuckets.Add(new EventBucket { IssueId = issue.Id, BucketStart = new DateTime(2025, 5, 31, 11, 0, 0, DateTimeKind.Utc), Count = 3 });
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        var series = await service.GetProjectEventSeriesAsync(project.Id, 7, TimeSeriesGranularity.Day);
+
+        var day = series.Points.Single(p => p.Start == new DateTimeOffset(new DateTime(2025, 5, 31, 0, 0, 0, DateTimeKind.Utc), TimeSpan.Zero));
+        day.Count.Should().Be(5);
+    }
+
+    [Fact]
+    public async Task ProjectSeries_EndsAtNow()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var service = Create(ctx);
+
+        var series = await service.GetProjectEventSeriesAsync(project.Id, 1);
+
+        series.To.Should().Be(new DateTimeOffset(SeriesNow, TimeSpan.Zero));
+    }
 
     // ── FindExistingEventIdsAsync ─────────────────────────────────────────────
 

@@ -527,7 +527,7 @@ internal class IssueService(
         var query = dbContext.EventBuckets
             .Where(b => b.IssueId == issueId && b.BucketStart >= from.UtcDateTime && b.BucketStart < to.UtcDateTime);
 
-        var points = await BucketQuery
+        var points = await EventBucketQuery
             .ReadAsync(query, interval);
 
         return TimeSeriesAggregator.Build(points, from, to, granularity);
@@ -543,7 +543,7 @@ internal class IssueService(
         var query = dbContext.EventBuckets
             .Where(b => issueIds.Contains(b.IssueId) && b.BucketStart >= from.UtcDateTime && b.BucketStart < to.UtcDateTime);
 
-        var raw = await BucketQuery
+        var raw = await EventBucketQuery
             .ReadBulkAsync(query, interval);
 
         return issueIds.ToDictionary(id => id, id =>
@@ -553,63 +553,8 @@ internal class IssueService(
     }
 
     /// <summary>Half-open UTC window covering the trailing <paramref name="days"/> calendar days, today included.</summary>
-    private (DateTimeOffset From, DateTimeOffset To) HistogramWindow(int days)
-    {
-        var today = dateTime.UtcNow.Date;
-        var from = new DateTimeOffset(today.AddDays(-days + 1), TimeSpan.Zero);
-        return (from, from.AddDays(days));
-    }
-
-    /// <summary>Reads stored hourly buckets, pre-aggregated in the database when whole-day buckets suffice.</summary>
-    private static class BucketQuery
-    {
-        public static async Task<List<TimeSeriesPoint>> ReadAsync(IQueryable<EventBucket> query, TimeSpan interval)
-        {
-            var rows = SpansWholeDays(interval)
-                ? await query
-                    .GroupBy(b => b.BucketStart.Date)
-                    .Select(g => new { Start = g.Key, Count = g.Sum(b => b.Count) })
-                    .ToListAsync()
-                : await query
-                    .Select(b => new { Start = b.BucketStart, Count = b.Count })
-                    .ToListAsync();
-
-            return [.. rows.Select(r => new TimeSeriesPoint(ToUtc(r.Start), r.Count))];
-        }
-
-        public static async Task<Dictionary<int, List<TimeSeriesPoint>>> ReadBulkAsync(IQueryable<EventBucket> query, TimeSpan interval)
-        {
-            if (SpansWholeDays(interval))
-            {
-                var daily = await query
-                    .GroupBy(b => new { b.IssueId, Day = b.BucketStart.Date })
-                    .Select(g => new { g.Key.IssueId, Start = g.Key.Day, Count = g.Sum(b => b.Count) })
-                    .ToListAsync();
-
-                return daily
-                    .GroupBy(r => r.IssueId)
-                    .ToDictionary(
-                        g => g.Key,
-                        g => (List<TimeSeriesPoint>)[.. g.Select(r => new TimeSeriesPoint(ToUtc(r.Start), r.Count))]);
-            }
-
-            var hourly = await query
-                .Select(b => new { b.IssueId, Start = b.BucketStart, Count = b.Count })
-                .ToListAsync();
-
-            return hourly
-                .GroupBy(r => r.IssueId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => (List<TimeSeriesPoint>)[.. g.Select(r => new TimeSeriesPoint(ToUtc(r.Start), r.Count))]);
-        }
-
-        private static bool SpansWholeDays(TimeSpan interval) =>
-            interval.Ticks % TimeSpan.FromDays(1).Ticks == 0;
-
-        private static DateTimeOffset ToUtc(DateTime value) =>
-            new(DateTime.SpecifyKind(value, DateTimeKind.Utc), TimeSpan.Zero);
-    }
+    private (DateTimeOffset From, DateTimeOffset To) HistogramWindow(int days) =>
+        TimeSeriesWindow.CalendarDays(dateTime.UtcNow, days);
 
     public async Task RecordPageViewAsync(Guid userId, int projectId, PageType pageType)
     {

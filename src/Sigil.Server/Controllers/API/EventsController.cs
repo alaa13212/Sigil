@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models.Common;
 using Sigil.Application.Models.Events;
 using Sigil.Domain.Enums;
 using Sigil.Server.Framework;
@@ -77,6 +78,19 @@ public class EventsController(
         {
             return BadRequest(new { error = ex.Message });
         }
+    }
+
+    [Authorize(Policy = SigilPermissions.CanViewProject)]
+    [HttpGet("api/projects/{projectId:int}/events/activity")]
+    public async Task<IActionResult> Activity(
+        int projectId,
+        [FromQuery] int days = 7,
+        [FromQuery] TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto)
+    {
+        if (await projectEntityAccess.GetProjectByIdAsync(projectId) is null)
+            return NotFound();
+
+        return Ok(await eventService.GetProjectEventSeriesAsync(projectId, Math.Clamp(days, 1, 90), granularity));
     }
 
     private static EventQueryParams BuildQuery(
