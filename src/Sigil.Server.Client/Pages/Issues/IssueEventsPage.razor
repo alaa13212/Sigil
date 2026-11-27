@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using Sigil.Application.Models.Events
 @using Sigil.Application.Models.Shared
+@using Sigil.Server.Client.Services
 @inject IEventService EventService
 @inject NavigationManager NavigationManager
 
@@ -26,13 +27,31 @@
     [Parameter] public int ProjectId { get; set; }
 
     [SupplyParameterFromQuery(Name = EventQueryState.PageKey)] public int Page { get; set; } = 1;
-    [SupplyParameterFromQuery(Name = EventQueryState.LevelKey)] public Severity? Level { get; set; }
-    [SupplyParameterFromQuery(Name = EventQueryState.SinceKey)] public DateTimeOffset? Since { get; set; }
-    [SupplyParameterFromQuery(Name = EventQueryState.UntilKey)] public DateTimeOffset? Until { get; set; }
     [SupplyParameterFromQuery(Name = EventQueryState.SearchKey)] public string? Search { get; set; }
     [SupplyParameterFromQuery(Name = EventQueryState.SortKey)] public string? Sort { get; set; }
     [SupplyParameterFromQuery(Name = EventQueryState.ReleaseKey)] public int? ReleaseId { get; set; }
     [SupplyParameterFromQuery(Name = EventQueryState.EventIdKey)] public string? EventId { get; set; }
+    [SupplyParameterFromQuery(Name = EventQueryState.LevelKey)] public string? LevelQuery { get; set; }
+    [SupplyParameterFromQuery(Name = EventQueryState.SinceKey)] public string? SinceQuery { get; set; }
+    [SupplyParameterFromQuery(Name = EventQueryState.UntilKey)] public string? UntilQuery { get; set; }
+
+    private Severity? Level
+    {
+        get => QueryValue.Enum<Severity>(LevelQuery);
+        set => LevelQuery = value?.ToString();
+    }
+
+    private DateTimeOffset? Since
+    {
+        get => QueryValue.Instant(SinceQuery);
+        set => SinceQuery = QueryValue.Format(value);
+    }
+
+    private DateTimeOffset? Until
+    {
+        get => QueryValue.Instant(UntilQuery);
+        set => UntilQuery = QueryValue.Format(value);
+    }
 
     private const int PageSize = 50;
 

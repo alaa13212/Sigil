@@ -3,6 +3,7 @@
 @using Sigil.Application.Models.Issues
 @using Sigil.Application.Models.Events
 @using Sigil.Application.Models.Shared
+@using Sigil.Server.Client.Services
 @inject IIssueService IssueService
 @inject IBookmarkService BookmarkService
 @inject IEventService EventService
@@ -107,8 +108,21 @@ else
     [SupplyParameterFromQuery(Name = "etab")] public string? EventTabParam { get; set; }
     [SupplyParameterFromQuery(Name = "no-redirect")] public bool NoRedirect { get; set; }
     [SupplyParameterFromQuery(Name = ChartQueryState.RangeKey)] public int? RangeParam { get; set; }
-    [SupplyParameterFromQuery(Name = ChartQueryState.BucketsKey)] public TimeSeriesGranularity? BucketsParam { get; set; }
-    [SupplyParameterFromQuery(Name = ChartQueryState.ChartKey)] public TimeSeriesChartMode? ChartModeParam { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.BucketsKey)] public string? BucketsQuery { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.ChartKey)] public string? ChartModeQuery { get; set; }
+
+    private TimeSeriesGranularity? BucketsParam
+    {
+        get => QueryValue.Enum<TimeSeriesGranularity>(BucketsQuery);
+        set => BucketsQuery = value?.ToString();
+    }
+
+    private TimeSeriesChartMode? ChartModeParam
+    {
+        get => QueryValue.Enum<TimeSeriesChartMode>(ChartModeQuery);
+        set => ChartModeQuery = value?.ToString();
+    }
+
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
 
     /// <summary>Range, bucket width and style selected on the event activity chart.</summary>

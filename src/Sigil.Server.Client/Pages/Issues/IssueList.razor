@@ -4,6 +4,7 @@
 @using Sigil.Application.Models.Shared
 @using Sigil.Application.Models.Issues
 @using Sigil.Domain
+@using Sigil.Server.Client.Services
 @inject IIssueService IssueService
 @inject IBookmarkService BookmarkService
 @inject IRecommendationService RecommendationService
@@ -223,11 +224,35 @@
     [SupplyParameterFromQuery(Name = "page")] public int PageParam { get; set; } = 1;
     [SupplyParameterFromQuery(Name = "q")] public string? SearchParam { get; set; }
     [SupplyParameterFromQuery(Name = "status")] public string? StatusParam { get; set; }
-    [SupplyParameterFromQuery(Name = "level")] public Severity? LevelParam { get; set; }
-    [SupplyParameterFromQuery(Name = "sort")] public IssueSortBy? SortParam { get; set; }
     [SupplyParameterFromQuery(Name = "bookmarked")] public bool? BookmarkedParam { get; set; }
-    [SupplyParameterFromQuery(Name = "since")] public DateTimeOffset? SinceParam { get; set; }
-    [SupplyParameterFromQuery(Name = "until")] public DateTimeOffset? UntilParam { get; set; }
+    [SupplyParameterFromQuery(Name = "level")] public string? LevelQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")] public string? SortQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "since")] public string? SinceQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "until")] public string? UntilQuery { get; set; }
+
+    private Severity? LevelParam
+    {
+        get => QueryValue.Enum<Severity>(LevelQuery);
+        set => LevelQuery = value?.ToString();
+    }
+
+    private IssueSortBy? SortParam
+    {
+        get => QueryValue.Enum<IssueSortBy>(SortQuery);
+        set => SortQuery = value?.ToString();
+    }
+
+    private DateTimeOffset? SinceParam
+    {
+        get => QueryValue.Instant(SinceQuery);
+        set => SinceQuery = QueryValue.Format(value);
+    }
+
+    private DateTimeOffset? UntilParam
+    {
+        get => QueryValue.Instant(UntilQuery);
+        set => UntilQuery = QueryValue.Format(value);
+    }
 
     private const int PageSize = 50;
     private const string AllStatuses = "all";

@@ -3,6 +3,7 @@
 @using Sigil.Application.Models.Releases
 @using Sigil.Application.Models.SourceCode
 @using Sigil.Application.Models.Shared
+@using Sigil.Server.Client.Services
 @inject IReleaseHealthService ReleaseHealthService
 @inject IIssueService IssueService
 @inject ISourceCodeService SourceCodeSvc
@@ -156,8 +157,20 @@ else
     [Parameter] public int ProjectId { get; set; }
     [Parameter] public int ReleaseId { get; set; }
     [SupplyParameterFromQuery(Name = ChartQueryState.RangeKey)] public int? RangeParam { get; set; }
-    [SupplyParameterFromQuery(Name = ChartQueryState.BucketsKey)] public TimeSeriesGranularity? BucketsParam { get; set; }
-    [SupplyParameterFromQuery(Name = ChartQueryState.ChartKey)] public TimeSeriesChartMode? ChartModeParam { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.BucketsKey)] public string? BucketsQuery { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.ChartKey)] public string? ChartModeQuery { get; set; }
+
+    private TimeSeriesGranularity? BucketsParam
+    {
+        get => QueryValue.Enum<TimeSeriesGranularity>(BucketsQuery);
+        set => BucketsQuery = value?.ToString();
+    }
+
+    private TimeSeriesChartMode? ChartModeParam
+    {
+        get => QueryValue.Enum<TimeSeriesChartMode>(ChartModeQuery);
+        set => ChartModeQuery = value?.ToString();
+    }
 
     [Inject] private NavigationManager Navigation { get; set; } = default!;
 
