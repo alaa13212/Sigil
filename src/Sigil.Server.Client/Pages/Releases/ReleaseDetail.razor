@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using Sigil.Application.Models.Releases
 @using Sigil.Application.Models.SourceCode
+@using Sigil.Application.Models.Shared
 @inject IReleaseHealthService ReleaseHealthService
 @inject IIssueService IssueService
 @inject ISourceCodeService SourceCodeSvc
@@ -13,6 +14,13 @@
 @if (loading)
 {
     <div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>
+}
+else if (loadError is not null)
+{
+    <div class="alert alert-error">
+        <span>@loadError</span>
+        <button class="btn btn-sm" @onclick="LoadReleaseAsync">Retry</button>
+    </div>
 }
 else if (release is null)
 {
@@ -87,12 +95,14 @@ else
             </div>
         </div>
 
-        @if (_releaseHistogram.Count > 0)
+        @if (_releaseHistogram is not null)
         {
             <div class="card bg-base-100">
                 <div class="card-body p-4">
-                    <h2 class="card-title text-base mb-2">Event Activity (14 days)</h2>
-                    <Sparkline Data="_releaseHistogram" Width="560" Height="48" Class="w-full text-primary" />
+                    <h2 class="card-title text-base mb-2">Event Activity</h2>
+                    <TimeSeriesChart Data="_releaseHistogram" Width="560" Height="180"
+                                     RangeDays="ChartView.RangeDays" Granularity="ChartView.Granularity" Mode="ChartView.Mode"
+                                     ViewChanged="OnChartViewChanged" />
                 </div>
             </div>
         }
@@ -145,21 +155,63 @@ else
 @code {
     [Parameter] public int ProjectId { get; set; }
     [Parameter] public int ReleaseId { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.RangeKey)] public int? RangeParam { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.BucketsKey)] public TimeSeriesGranularity? BucketsParam { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.ChartKey)] public TimeSeriesChartMode? ChartModeParam { get; set; }
 
     [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    /// <summary>Range, bucket width and style selected on the event activity chart.</summary>
+    private TimeSeriesChartView ChartView => new(
+        RangeParam is > 0 ? RangeParam.Value : TimeSeriesChartView.DefaultRangeDays,
+        BucketsParam ?? TimeSeriesGranularity.Auto,
+        ChartModeParam ?? TimeSeriesChartMode.Bar);
 
     private ReleaseDetailResponse? release;
     private CommitInfo? commitInfo;
     private bool loading = true;
-    private List<int> _releaseHistogram = [];
+    private string? loadError;
+    private TimeSeries? _releaseHistogram;
+    private int _loadedReleaseId;
+    private TimeSeriesChartView? _loadedView;
 
     protected override async Task OnParametersSetAsync()
     {
+        if (release is not null && _loadedReleaseId == ReleaseId)
+        {
+            if (_loadedView != ChartView)
+            {
+                _loadedView = ChartView;
+                _releaseHistogram = null;
+                if (release.TopIssues.Count > 0)
+                    await LoadHistogramAsync(release.TopIssues.Select(i => i.IssueId).ToList());
+            }
+
+            return;
+        }
+
+        _loadedReleaseId = ReleaseId;
+        _loadedView = ChartView;
+
+        await LoadReleaseAsync();
+    }
+
+    private async Task LoadReleaseAsync()
+    {
         loading = true;
-        _releaseHistogram = [];
+        loadError = null;
+        _releaseHistogram = null;
         commitInfo = null;
+
         try { release = await ReleaseHealthService.GetReleaseDetailAsync(ReleaseId); }
-        catch { release = null; }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException)
+        {
+            release = null;
+            loadError = ex is ArgumentException ? ex.Message : "Could not load this release. The request failed.";
+            loading = false;
+            return;
+        }
+
         loading = false;
 
         if (release?.CommitSha != null)
@@ -176,23 +228,40 @@ else
             commitInfo = await SourceCodeSvc.GetCommitInfoAsync(ProjectId, commitSha);
             StateHasChanged();
         }
-        catch { /* ignore — commit info is best-effort */ }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException)
+        {
+            // commit info is best-effort; the release itself is already loaded
+        }
     }
 
     private async Task LoadHistogramAsync(List<int> issueIds)
     {
         try
         {
-            var bulk = await IssueService.GetBulkHistogramsAsync(issueIds);
+            var bulk = await IssueService.GetBulkHistogramsAsync(issueIds, ChartView.RangeDays, ChartView.Granularity);
             if (bulk.Count == 0) return;
-            var len = bulk.Values.Max(v => v.Count);
-            var combined = new int[len];
-            foreach (var counts in bulk.Values)
-                for (var i = 0; i < counts.Count; i++)
-                    combined[i] += counts[i];
-            _releaseHistogram = [.. combined];
+
+            var series = bulk.Values.ToList();
+            var combined = series
+                .SelectMany(s => s.Points)
+                .GroupBy(p => p.Start)
+                .OrderBy(g => g.Key)
+                .Select(g => new TimeSeriesPoint(g.Key, g.Sum(p => p.Count)))
+                .ToList();
+
+            _releaseHistogram = new TimeSeries(
+                series.Min(s => s.From),
+                series.Max(s => s.To),
+                series[0].Interval,
+                combined);
             StateHasChanged();
         }
-        catch { /* silently ignore histogram load failures */ }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException)
+        {
+            // the chart is best-effort; the release itself is already loaded
+        }
     }
+
+    private void OnChartViewChanged(TimeSeriesChartView view) =>
+        Navigation.NavigateTo(ChartQueryState.Apply(new Uri(Navigation.Uri), view).PathAndQuery, replace: true);
 }

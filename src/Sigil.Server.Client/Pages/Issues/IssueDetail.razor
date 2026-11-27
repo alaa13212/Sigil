@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using Sigil.Application.Models.Issues
 @using Sigil.Application.Models.Events
+@using Sigil.Application.Models.Shared
 @inject IIssueService IssueService
 @inject IBookmarkService BookmarkService
 @inject IEventService EventService
@@ -92,7 +93,9 @@ else
         </div>
 
         <!-- Right sidebar -->
-        <IssueSidebar Issue="issue" OnStatusChanged="OnIssueChanged" OnPriorityChanged="OnIssueChanged" OnLinksChanged="LoadIssue" />
+        <IssueSidebar Issue="issue" OnStatusChanged="OnIssueChanged" OnPriorityChanged="OnIssueChanged" OnLinksChanged="LoadIssue"
+                      RangeDays="ChartView.RangeDays" Granularity="ChartView.Granularity" Mode="ChartView.Mode"
+                      ViewChanged="OnChartViewChanged" />
     </div>
 }
 
@@ -103,7 +106,16 @@ else
     [SupplyParameterFromQuery(Name = "event")] public long? EventParam { get; set; }
     [SupplyParameterFromQuery(Name = "etab")] public string? EventTabParam { get; set; }
     [SupplyParameterFromQuery(Name = "no-redirect")] public bool NoRedirect { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.RangeKey)] public int? RangeParam { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.BucketsKey)] public TimeSeriesGranularity? BucketsParam { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.ChartKey)] public TimeSeriesChartMode? ChartModeParam { get; set; }
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
+
+    /// <summary>Range, bucket width and style selected on the event activity chart.</summary>
+    private TimeSeriesChartView ChartView => new(
+        RangeParam is > 0 ? RangeParam.Value : TimeSeriesChartView.DefaultRangeDays,
+        BucketsParam ?? TimeSeriesGranularity.Auto,
+        ChartModeParam ?? TimeSeriesChartMode.Bar);
 
     private IssueDetailResponse? issue;
     private EventDetailResponse? eventDetail;
@@ -244,6 +256,9 @@ else
     }
 
     private async Task OnIssueChanged<T>(T _) => await LoadIssue();
+
+    private void OnChartViewChanged(TimeSeriesChartView view) =>
+        Navigation.NavigateTo(ChartQueryState.Apply(new Uri(Navigation.Uri), view).PathAndQuery, replace: true);
 
     private static string GetTabLabel(Tab tab) => tab switch
     {

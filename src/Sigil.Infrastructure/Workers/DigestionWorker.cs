@@ -16,6 +16,7 @@ internal class DigestionWorker(
     IDigestionSignal signal,
     IOptions<BatchWorkersConfig> options,
     IDateTime dateTime,
+    ISigilMetrics metrics,
     ILogger<DigestionWorker> logger) : IWorker
 {
     private readonly int _batchSize = options.Value.GetOptions(nameof(DigestionWorker)).BatchSize;
@@ -96,7 +97,10 @@ internal class DigestionWorker(
             var parseElapsedMs = (int)sw.ElapsedMilliseconds;
 
             if (failures.Count > 0)
+            {
                 await rawEnvelopeService.BulkMarkFailedAsync(failures);
+                metrics.RecordEventsDropped(failures.Count);
+            }
 
             if (parsedEvents.Count > 0)
             {
@@ -126,6 +130,7 @@ internal class DigestionWorker(
 
                     dbContext.ChangeTracker.Clear();
                     await rawEnvelopeService.BulkMarkFailedAsync(successIds.Select(id => (id, ex.Message)));
+                    metrics.RecordEventsDropped(successIds.Count);
                 }
                 finally
                 {

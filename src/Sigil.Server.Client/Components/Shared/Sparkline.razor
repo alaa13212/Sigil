@@ -1,4 +1,4 @@
-@if (Data is not null && Data.Count > 0)
+@if (Data is not null && Data.Points.Count > 0)
 {
     <svg viewBox="0 0 @Width @Height" class="@Class" preserveAspectRatio="none">
         <polyline points="@_points" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
@@ -6,7 +6,7 @@
 }
 
 @code {
-    [Parameter, EditorRequired] public IReadOnlyList<int>? Data { get; set; }
+    [Parameter, EditorRequired] public TimeSeries? Data { get; set; }
     [Parameter] public int Width { get; set; } = 100;
     [Parameter] public int Height { get; set; } = 24;
     [Parameter] public string? Class { get; set; }
@@ -15,20 +15,22 @@
 
     protected override void OnParametersSet()
     {
-        if (Data is null || Data.Count == 0)
+        var values = Data?.Points.Select(p => p.Count).ToList();
+
+        if (values is null || values.Count == 0)
         {
             _points = string.Empty;
             return;
         }
 
-        var max = Data.Max();
+        var max = values.Max();
         if (max == 0) max = 1;
 
-        var step = (double)Width / (Data.Count - 1 > 0 ? Data.Count - 1 : 1);
+        var step = (double)Width / (values.Count - 1 > 0 ? values.Count - 1 : 1);
         var padding = 2;
         var drawHeight = Height - padding * 2;
 
-        var points = Data.Select((v, i) =>
+        var points = values.Select((v, i) =>
         {
             var x = i * step;
             var y = padding + drawHeight - (double)v / max * drawHeight;

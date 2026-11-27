@@ -19,7 +19,7 @@ namespace Sigil.infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.2")
+                .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -404,13 +404,16 @@ namespace Sigil.infrastructure.Migrations
                     b.HasIndex("EventId")
                         .IsUnique();
 
-                    b.HasIndex("ProjectId");
-
                     b.HasIndex("ReleaseId");
 
                     b.HasIndex("UserId");
 
                     b.HasIndex("IssueId", "Timestamp");
+
+                    b.HasIndex("ProjectId", "Timestamp");
+
+                    b.HasIndex("ProjectId", "Level", "Timestamp")
+                        .IsDescending(false, false, true);
 
                     b.ToTable("Events");
                 });

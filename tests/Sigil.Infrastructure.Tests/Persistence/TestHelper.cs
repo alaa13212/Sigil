@@ -93,7 +93,9 @@ internal static class TestHelper
     }
 
     public static async Task<CapturedEvent> CreateEventAsync(SigilDbContext context, int projectId, int issueId,
-        DateTime? timestamp = null, Severity level = Severity.Error, string? userId = null)
+        DateTime? timestamp = null, Severity level = Severity.Error, string? userId = null,
+        string? message = null, string? exceptionType = null, string? culprit = null, string? logger = null,
+        Platform platform = Platform.CSharp, int? releaseId = null)
     {
         var evt = new CapturedEvent
         {
@@ -101,7 +103,12 @@ internal static class TestHelper
             Timestamp = timestamp ?? DateTime.UtcNow,
             ReceivedAt = DateTime.UtcNow,
             Level = level,
-            Platform = Platform.CSharp,
+            Platform = platform,
+            Message = message,
+            ExceptionType = exceptionType,
+            Culprit = culprit,
+            Logger = logger,
+            ReleaseId = releaseId,
             IssueId = issueId,
             ProjectId = projectId,
             UserId = userId,
@@ -110,6 +117,21 @@ internal static class TestHelper
         context.Events.Add(evt);
         await context.SaveChangesAsync();
         return evt;
+    }
+
+    public static async Task TagEventAsync(SigilDbContext context, long eventId, string key, string value)
+    {
+        var tagKey = await context.TagKeys.FirstOrDefaultAsync(t => t.Key == key) ?? await CreateTagKeyAsync(context, key);
+        var tagValue = await context.TagValues.FirstOrDefaultAsync(v => v.TagKeyId == tagKey.Id && v.Value == value);
+        if (tagValue is null)
+        {
+            tagValue = new TagValue { TagKeyId = tagKey.Id, Value = value };
+            context.TagValues.Add(tagValue);
+            await context.SaveChangesAsync();
+        }
+
+        context.EventTags.Add(new EventTag { EventId = eventId, TagValueId = tagValue.Id });
+        await context.SaveChangesAsync();
     }
 
     public static async Task<Release> CreateReleaseAsync(SigilDbContext context, int projectId,

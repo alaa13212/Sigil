@@ -1,6 +1,6 @@
 ﻿<Project>
     <!-- Make sure Tailwind CLI exists -->
-    <Target Name="EnsureTailwind" BeforeTargets="Build">
+    <Target Name="EnsureTailwind">
         <Message Text="Checking Tailwind CLI..." Importance="high" />
 
         <!-- Windows -->
@@ -13,7 +13,7 @@
     </Target>
 
     <!-- Build Tailwind when building the project -->
-    <Target Name="BuildTailwind" AfterTargets="EnsureTailwind" BeforeTargets="BeforeBuild">
+    <Target Name="BuildTailwind" DependsOnTargets="EnsureTailwind" BeforeTargets="BeforeBuild">
         <Message Text="Running Tailwind production build..." Importance="high" />
 
         <!-- Windows -->

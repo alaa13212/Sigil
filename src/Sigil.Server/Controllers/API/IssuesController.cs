@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
+using Sigil.Application.Models.Common;
 using Sigil.Application.Models.Issues;
 using Sigil.Domain.Enums;
 using Sigil.Server.Framework;
@@ -28,6 +29,8 @@ public class IssuesController(
         [FromQuery] Priority? priority,
         [FromQuery] string? search,
         [FromQuery] Guid? assignedToId,
+        [FromQuery] DateTimeOffset? since,
+        [FromQuery] DateTimeOffset? until,
         [FromQuery] IssueSortBy sortBy = IssueSortBy.LastSeen,
         [FromQuery] bool sortDesc = true,
         [FromQuery] int page = 1,
@@ -39,6 +42,7 @@ public class IssuesController(
             return NotFound();
 
         var userId = GetUserId();
+        var criteria = IssueSearchParser.ParseCriteria(search);
         var query = new IssueQueryParams
         {
             Status = status,
@@ -48,13 +52,23 @@ public class IssuesController(
             AssignedToId = assignedToId,
             SortBy = sortBy,
             SortDescending = sortDesc,
+            Since = since,
+            Until = until,
             Page = page,
             PageSize = Math.Clamp(pageSize, 1, 100),
-            BookmarkedByUserId = bookmarked ? userId : null,
-            ViewerUserId = includeViewedInfo ? userId : null
+            BookmarkedByUserId = bookmarked || criteria.Bookmarked ? userId : null,
+            ViewerUserId = includeViewedInfo || criteria.Unviewed ? userId : null
         };
 
-        var summaries = await issueService.GetIssueSummariesAsync(projectId, query);
+        PagedResponse<IssueSummary> summaries;
+        try
+        {
+            summaries = await issueService.GetIssueSummariesAsync(projectId, query);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
 
         if (userId.HasValue)
             await issueService.RecordPageViewAsync(userId.Value, projectId, PageType.Issues);
@@ -137,16 +151,16 @@ public class IssuesController(
     }
 
     [HttpGet("api/issues/{id:int}/histogram")]
-    public async Task<IActionResult> GetHistogram(int id, [FromQuery] int days = 14)
+    public async Task<IActionResult> GetHistogram(int id, [FromQuery] int days = 14, [FromQuery] TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto)
     {
-        return Ok(await issueService.GetHistogramAsync(id, Math.Clamp(days, 1, 90)));
+        return Ok(await issueService.GetHistogramAsync(id, Math.Clamp(days, 1, 90), granularity));
     }
 
     [HttpPost("api/issues/histogram/bulk")]
-    public async Task<IActionResult> GetBulkHistograms([FromBody] List<int> issueIds, [FromQuery] int days = 14)
+    public async Task<IActionResult> GetBulkHistograms([FromBody] List<int> issueIds, [FromQuery] int days = 14, [FromQuery] TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto)
     {
-        if (issueIds.Count == 0) return Ok(new Dictionary<int, List<int>>());
-        return Ok(await issueService.GetBulkHistogramsAsync(issueIds, Math.Clamp(days, 1, 90)));
+        if (issueIds.Count == 0) return Ok(new Dictionary<int, TimeSeries>());
+        return Ok(await issueService.GetBulkHistogramsAsync(issueIds, Math.Clamp(days, 1, 90), granularity));
     }
 
 }
