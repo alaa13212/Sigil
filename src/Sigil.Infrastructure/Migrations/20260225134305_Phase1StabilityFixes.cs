@@ -26,7 +26,7 @@ namespace Sigil.infrastructure.Migrations
                 type: "integer",
                 nullable: true);
 
-            migrationBuilder.Sql("UPDATE \"Issues\" SET \"Title\" = NULL WHERE \"Title\" = '{no message}'");
+            migrationBuilder.Sql("UPDATE \"Issues\" SET \"Title\" = NULL WHERE \"Title\" = '{no message}';");
         }
 
         /// <inheritdoc />
