@@ -35,11 +35,21 @@ export function scrollElementIntoView(id) {
     if (el) el.scrollIntoView({ block: 'nearest' });
 }
 
+const TYPING_INPUT_TYPES = new Set([
+    'color', 'date', 'datetime-local', 'email', 'file', 'month', 'number',
+    'password', 'range', 'search', 'tel', 'text', 'time', 'url', 'week'
+]);
+
 function isTypingTarget(target) {
     if (!target) return false;
 
     const tag = (target.tagName || '').toLowerCase();
-    if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+    if (tag === 'textarea' || tag === 'select') return true;
+
+    if (tag === 'input') {
+        const type = (target.type || 'text').toLowerCase();
+        return TYPING_INPUT_TYPES.has(type);
+    }
 
     return target.isContentEditable === true;
 }
