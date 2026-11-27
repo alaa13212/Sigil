@@ -1,0 +1,25 @@
+@using Sigil.Application.Models.Shared
+
+@if (Chips.Count > 0)
+{
+    <div class="flex flex-wrap gap-2">
+        @foreach (var chip in Chips)
+        {
+            <div class="badge badge-lg badge-outline gap-2">
+                <span class="@(chip.Kind == ActiveFilterKind.SearchToken ? "font-mono" : "")">@chip.Label</span>
+                <button class="btn btn-xs btn-circle btn-ghost" @onclick="() => DismissAsync(chip)"
+                        title="Remove filter" aria-label="@($"Remove the {chip.Label} filter")">×</button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>Active filters, in display order.</summary>
+    [Parameter] public IReadOnlyList<ActiveFilterChip> Chips { get; set; } = [];
+
+    /// <summary>Raised with the chip that was dismissed.</summary>
+    [Parameter] public EventCallback<ActiveFilterChip> Dismissed { get; set; }
+
+    private Task DismissAsync(ActiveFilterChip chip) => Dismissed.InvokeAsync(chip);
+}

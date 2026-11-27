@@ -2,6 +2,8 @@
 @attribute [Authorize]
 @using Sigil.Application.Models.Issues
 @using Sigil.Application.Models.Events
+@using Sigil.Application.Models.Shared
+@using Sigil.Server.Client.Services
 @inject IIssueService IssueService
 @inject IBookmarkService BookmarkService
 @inject IEventService EventService
@@ -72,11 +74,12 @@ else
                     <IssueEventPanel ProjectId="ProjectId" IssueId="IssueId"
                                      EventDetail="eventDetail" Navigation="navigation"
                                      Breadcrumbs="breadcrumbs" Navigating="eventNavigating"
+                                     EventTabParam="@EventTabParam"
                                      OnNavigateEvent="NavigateEvent" />
                 }
                 @if (_activeTab == Tab.Events)
                 {
-                    <IssueEventsTab ProjectId="ProjectId" IssueId="IssueId" />
+                    <IssueEventsTab ProjectId="ProjectId" IssueId="IssueId" Query="EventsQuery" />
                 }
                 @if (_activeTab == Tab.Activity)
                 {
@@ -92,7 +95,9 @@ else
         </div>
 
         <!-- Right sidebar -->
-        <IssueSidebar Issue="issue" OnStatusChanged="OnIssueChanged" OnPriorityChanged="OnIssueChanged" OnLinksChanged="LoadIssue" />
+        <IssueSidebar Issue="issue" OnStatusChanged="OnIssueChanged" OnPriorityChanged="OnIssueChanged" OnLinksChanged="LoadIssue"
+                      RangeDays="ChartView.RangeDays" Granularity="ChartView.Granularity" Mode="ChartView.Mode"
+                      ViewChanged="OnChartViewChanged" />
     </div>
 }
 
@@ -103,7 +108,42 @@ else
     [SupplyParameterFromQuery(Name = "event")] public long? EventParam { get; set; }
     [SupplyParameterFromQuery(Name = "etab")] public string? EventTabParam { get; set; }
     [SupplyParameterFromQuery(Name = "no-redirect")] public bool NoRedirect { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.RangeKey)] public int? RangeParam { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.BucketsKey)] public string? BucketsQuery { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.ChartKey)] public string? ChartModeQuery { get; set; }
+    [SupplyParameterFromQuery(Name = EventQueryState.PageKey)] public int EventsPage { get; set; } = 1;
+    [SupplyParameterFromQuery(Name = EventQueryState.SearchKey)] public string? EventsSearch { get; set; }
+    [SupplyParameterFromQuery(Name = EventQueryState.SortKey)] public string? EventsSort { get; set; }
+    [SupplyParameterFromQuery(Name = EventQueryState.ReleaseKey)] public int? EventsReleaseId { get; set; }
+    [SupplyParameterFromQuery(Name = EventQueryState.EventIdKey)] public string? EventsEventId { get; set; }
+    [SupplyParameterFromQuery(Name = EventQueryState.LevelKey)] public string? EventsLevelQuery { get; set; }
+    [SupplyParameterFromQuery(Name = EventQueryState.SinceKey)] public string? EventsSinceQuery { get; set; }
+    [SupplyParameterFromQuery(Name = EventQueryState.UntilKey)] public string? EventsUntilQuery { get; set; }
+
+    private TimeSeriesGranularity? BucketsParam
+    {
+        get => QueryValue.Enum<TimeSeriesGranularity>(BucketsQuery);
+        set => BucketsQuery = value?.ToString();
+    }
+
+    private TimeSeriesChartMode? ChartModeParam
+    {
+        get => QueryValue.Enum<TimeSeriesChartMode>(ChartModeQuery);
+        set => ChartModeQuery = value?.ToString();
+    }
+
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
+
+    /// <summary>Range, bucket width and style selected on the event activity chart.</summary>
+    private TimeSeriesChartView ChartView => new(
+        RangeParam is > 0 ? RangeParam.Value : TimeSeriesChartView.DefaultRangeDays,
+        BucketsParam ?? TimeSeriesGranularity.Auto,
+        ChartModeParam ?? TimeSeriesChartMode.Bar);
+
+    /// <summary>Filters and paging of the event listing shown on the events tab.</summary>
+    private EventQueryParams EventsQuery => EventQueryParamsFactory.Create(
+        EventsPage, EventsSearch, EventsSort, EventsLevelQuery, EventsReleaseId,
+        EventsEventId, EventsSinceQuery, EventsUntilQuery);
 
     private IssueDetailResponse? issue;
     private EventDetailResponse? eventDetail;
@@ -244,6 +284,9 @@ else
     }
 
     private async Task OnIssueChanged<T>(T _) => await LoadIssue();
+
+    private void OnChartViewChanged(TimeSeriesChartView view) =>
+        Navigation.NavigateTo(ChartQueryState.Apply(new Uri(Navigation.Uri), view).PathAndQuery, replace: true);
 
     private static string GetTabLabel(Tab tab) => tab switch
     {

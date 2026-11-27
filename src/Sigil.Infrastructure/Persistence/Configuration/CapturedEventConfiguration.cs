@@ -10,7 +10,10 @@ internal class CapturedEventConfiguration : IEntityTypeConfiguration<CapturedEve
     {
         builder.HasIndex(e => e.EventId).IsUnique();
         builder.HasIndex(e => new { e.IssueId, e.Timestamp });
-        
+        builder.HasIndex(e => new { e.ProjectId, e.Timestamp });
+        builder.HasIndex(e => new { e.ProjectId, e.Level, e.Timestamp }).IsDescending(false, false, true);
+        builder.HasIndex(e => e.ReceivedAt);
+
         builder.Property(e => e.Extra)
             .HasColumnType("jsonb");
         

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.SourceCode;
+using Sigil.Server.Auth;
 using Sigil.Server.Framework;
 
 namespace Sigil.Server.Controllers.API;
@@ -13,6 +14,7 @@ namespace Sigil.Server.Controllers.API;
 public class SourceCodeProvidersController(ISourceCodeService sourceCodeService) : SigilController
 {
     [Authorize(Policy = SigilPermissions.CanAccessAdmin)]
+    [CookieOnly]
     [HttpGet]
     public async Task<IActionResult> List() =>
         Ok(await sourceCodeService.GetProvidersAsync());

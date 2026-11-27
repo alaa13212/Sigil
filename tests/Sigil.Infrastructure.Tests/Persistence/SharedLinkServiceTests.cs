@@ -1,4 +1,5 @@
 using Sigil.Application.Interfaces;
+using Sigil.Application.Models.Events;
 using Sigil.Application.Models.Issues;
 using Sigil.Domain.Enums;
 using Sigil.Infrastructure.Persistence;
@@ -174,13 +175,14 @@ public class SharedLinkServiceTests(TestDatabaseFixture fixture)
         await using var ctx2 = Ctx();
         var eventService = Substitute.For<IEventService>();
         var fakePage = new Application.Models.PagedResponse<Application.Models.Events.EventSummary>([], 0, 1, 20);
-        eventService.GetEventSummariesAsync(issue.Id, 1, 20).Returns(fakePage);
+        var expected = new EventQueryParams { Page = 1, PageSize = 20 };
+        eventService.GetEventSummariesAsync(issue.Id, expected).Returns(fakePage);
         var service = new SharedLinkService(ctx2, Substitute.For<IIssueService>(), eventService, StubDateTime());
 
         var result = await service.GetSharedEventsAsync(link.Token, 1, 20);
 
         result.Should().NotBeNull();
-        await eventService.Received(1).GetEventSummariesAsync(issue.Id, 1, 20);
+        await eventService.Received(1).GetEventSummariesAsync(issue.Id, expected);
     }
 
     [Fact]

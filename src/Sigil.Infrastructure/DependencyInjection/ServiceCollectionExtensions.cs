@@ -67,6 +67,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAsyncStartupInitializer>(sp => (IAsyncStartupInitializer) sp.GetRequiredService<IAppConfigService>());
         services.AddScoped<IAppConfigEditorService, AppConfigEditorService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<IApiTokenService, ApiTokenService>();
         services.AddScoped<SamlConnectionService>();
         services.AddScoped<ISamlConnectionService>(UseExisting<SamlConnectionService>);
         services.AddScoped<ISamlRuntimeConfigurationService>(UseExisting<SamlConnectionService>);
@@ -113,6 +115,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISharedLinkService, SharedLinkService>();
         services.AddScoped<IReingestionService, ReingestionService>();
         services.AddSingleton<IRateLimiter, SlidingWindowRateLimiter>();
+        services.AddSingleton<ISigilMetrics, SigilMetrics>();
+        services.AddScoped<IMetricsQueryService, MetricsQueryService>();
         
         services.AddScoped<TokenEncryptionService>();
         services.AddScoped<ISourceCodeService, SourceCodeService>();

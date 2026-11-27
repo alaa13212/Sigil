@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Alerts;
+using Sigil.Server.Auth;
 using Sigil.Server.Framework;
 
 namespace Sigil.Server.Controllers.API;
@@ -11,6 +12,7 @@ namespace Sigil.Server.Controllers.API;
 [Authorize(Policy = SigilPermissions.CanAccessAdmin)]
 public class AlertChannelsController(IAlertChannelService channelService) : SigilController
 {
+    [CookieOnly]
     [HttpGet("api/alert-channels")]
     public async Task<IActionResult> List() =>
         Ok(await channelService.GetAllChannelsAsync());

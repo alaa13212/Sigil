@@ -1,4 +1,5 @@
 using Sigil.Application.Models;
+using Sigil.Application.Models.Common;
 using Sigil.Application.Models.Issues;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
@@ -28,6 +29,6 @@ public interface IIssueService
     Task RecordPageViewAsync(Guid userId, int projectId, PageType pageType);
 
     // Histogram
-    Task<List<int>> GetHistogramAsync(int issueId, int days = 14);
-    Task<Dictionary<int, List<int>>> GetBulkHistogramsAsync(List<int> issueIds, int days = 14);
+    Task<TimeSeries> GetHistogramAsync(int issueId, int days = 14, TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto);
+    Task<Dictionary<int, TimeSeries>> GetBulkHistogramsAsync(List<int> issueIds, int days = 14, TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto);
 }

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Domain;
+using Sigil.Server.Auth;
 using Sigil.Server.Auth.Saml;
 using Sigil.Server.Framework;
 
@@ -15,6 +16,7 @@ public class AppConfigController(
     IAppConfigEditorService appConfigEditorService,
     Saml2OptionsCache samlOptionsCache) : SigilController
 {
+    [CookieOnly]
     [HttpGet]
     public async Task<IActionResult> GetAll()
         => Ok(await appConfigEditorService.GetAllAsync());

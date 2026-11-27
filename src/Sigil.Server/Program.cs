@@ -49,12 +49,13 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 // Authentication & Authorization (must come after AddInfrastructure which registers Identity)
+int sessionDays = builder.Configuration.GetValue("Auth:SessionDays", 30);
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.Cookie.HttpOnly = true;
     options.Cookie.SameSite = SameSiteMode.Lax;
     options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-    options.ExpireTimeSpan = TimeSpan.FromDays(14);
+    options.ExpireTimeSpan = TimeSpan.FromDays(sessionDays);
     options.SlidingExpiration = true;
     options.LoginPath = "/login";
     options.LogoutPath = "/logout";
@@ -136,18 +137,29 @@ builder.Services.AddSingleton<SamlConnectionRegistry>();
 builder.Services.AddSingleton<IAsyncStartupInitializer>(
     sp => (IAsyncStartupInitializer)sp.GetRequiredService<SamlConnectionRegistry>());
 builder.Services.AddHostedService<SamlMetadataRefreshWorker>();
-builder.Services.AddAuthentication()
-    .AddCookie(SamlConstants.ExternalScheme, options =>
-    {
-        options.Cookie.Name = "Saml2.External";
-        options.Cookie.HttpOnly = true;
-        options.Cookie.SameSite = SameSiteMode.Lax;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-        options.Cookie.IsEssential = true;
-        options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
-        options.SlidingExpiration = false;
-    })
-    .AddSaml2(SamlConstants.Scheme, _ => { });
+
+// Authentication dispatch: API tokens for read-only API calls, UI cookie everywhere else
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = ApiTokenAuthenticationPolicy.SchemeName;
+    options.DefaultChallengeScheme = ApiTokenAuthenticationPolicy.SchemeName;
+})
+.AddPolicyScheme(ApiTokenAuthenticationPolicy.SchemeName, "Sigil API token or cookie", options =>
+{
+    options.ForwardDefaultSelector = ApiTokenAuthenticationPolicy.SelectScheme;
+})
+.AddScheme<ApiTokenAuthenticationOptions, ApiTokenAuthenticationHandler>(ApiTokenAuthenticationHandler.SchemeName, _ => { })
+.AddCookie(SamlConstants.ExternalScheme, options =>
+{
+    options.Cookie.Name = "Saml2.External";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.Cookie.IsEssential = true;
+    options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
+    options.SlidingExpiration = false;
+})
+.AddSaml2(SamlConstants.Scheme, _ => { });
 
 builder.Services.AddHealthChecks();
 

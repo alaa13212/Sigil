@@ -150,7 +150,7 @@ internal class SetupService(
         await appConfigEditorService.SetAsync(AppConfigKeys.SetupComplete, "true");
 
         // Sign in the admin
-        await signInManager.SignInAsync(admin, isPersistent: false);
+        await signInManager.SignInAsync(admin, isPersistent: true);
 
         var userInfo = new UserInfo(admin.Id, admin.Email, admin.DisplayName, admin.CreatedAt, admin.LastLogin, ["Admin"], IsActivated: true);
         return SetupResult.Success(userInfo, project.ApiKey, project.Id);

@@ -125,7 +125,7 @@
     [Parameter] public List<BreadcrumbResponse>? Breadcrumbs { get; set; }
     [Parameter] public bool Navigating { get; set; }
     [Parameter] public EventCallback<long> OnNavigateEvent { get; set; }
-    [SupplyParameterFromQuery(Name = "etab")] public string? EventTabParam { get; set; }
+    [Parameter] public string? EventTabParam { get; set; }
 
     private bool _hasLinkedRepository;
     private int _linkedRepositoryProjectId = -1;

@@ -1,0 +1,81 @@
+@page "/projects/{ProjectId:int}/events"
+@attribute [Authorize]
+@using Sigil.Application.Models.Events
+@using Sigil.Application.Models.Shared
+@using Sigil.Server.Client.Services
+@inject IEventService EventService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Events — Sigil</PageTitle>
+
+<PageBreadcrumb Items="@([ new PageBreadcrumb.BreadcrumbItem("Projects", "/"), new PageBreadcrumb.BreadcrumbItem("Events") ])" />
+
+<div class="bg-base-100 p-4 space-y-4">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold">Events</h1>
+        @if (_events is not null)
+        {
+            <span class="text-sm opacity-60">@_events.TotalCount total</span>
+        }
+    </div>
+
+    <EventTable ProjectId="ProjectId" Query="Query" Events="_events"
+                Loading="_loading" Error="@_error" Retry="LoadAsync" QueryChanged="ApplyQuery" />
+</div>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+
+    [SupplyParameterFromQuery(Name = EventQueryState.PageKey)] public int Page { get; set; } = 1;
+    [SupplyParameterFromQuery(Name = EventQueryState.SearchKey)] public string? Search { get; set; }
+    [SupplyParameterFromQuery(Name = EventQueryState.SortKey)] public string? Sort { get; set; }
+    [SupplyParameterFromQuery(Name = EventQueryState.ReleaseKey)] public int? ReleaseId { get; set; }
+    [SupplyParameterFromQuery(Name = EventQueryState.EventIdKey)] public string? EventId { get; set; }
+    [SupplyParameterFromQuery(Name = EventQueryState.LevelKey)] public string? LevelQuery { get; set; }
+    [SupplyParameterFromQuery(Name = EventQueryState.SinceKey)] public string? SinceQuery { get; set; }
+    [SupplyParameterFromQuery(Name = EventQueryState.UntilKey)] public string? UntilQuery { get; set; }
+
+    private const int PageSize = 50;
+
+    private PagedResponse<EventSummary>? _events;
+    private string? _error;
+    private bool _loading = true;
+    private string _lastQueryState = "";
+
+    private EventQueryParams Query => EventQueryParamsFactory.Create(
+        Page, Search, Sort, LevelQuery, ReleaseId, EventId, SinceQuery, UntilQuery, PageSize);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var queryState = EventQueryState.Apply(new Uri(NavigationManager.Uri), Query).Query;
+        if (queryState == _lastQueryState && _events is not null)
+            return;
+
+        _lastQueryState = queryState;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _events = await EventService.SearchEventsAsync(ProjectId, Query);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException)
+        {
+            _events = null;
+            _error = ex is ArgumentException ? ex.Message : "Could not load events. The request failed.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ApplyQuery(EventQueryParams next)
+    {
+        NavigationManager.NavigateTo(EventQueryState.Apply(new Uri(NavigationManager.Uri), next).PathAndQuery);
+    }
+}

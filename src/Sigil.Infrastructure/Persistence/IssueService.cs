@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using NpgsqlTypes;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
+using Sigil.Application.Models.Common;
 using Sigil.Application.Models.Events;
 using Sigil.Application.Models.IssueTrackers;
 using Sigil.Application.Models.Issues;
@@ -11,6 +12,7 @@ using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 using Sigil.Domain.Extensions;
 using Sigil.Domain.Ingestion;
+using Sigil.Infrastructure.Services;
 
 namespace Sigil.Infrastructure.Persistence;
 
@@ -109,8 +111,12 @@ internal class IssueService(
             .FirstOrDefaultAsync(i => i.Id == issueId);
     }
 
+    private const int MaxDateRangeDays = 365;
+
     public async Task<(List<Issue> Items, int TotalCount)> GetIssuesAsync(int projectId, IssueQueryParams query)
     {
+        ValidateDateRange(query);
+
         IQueryable<Issue> q = dbContext.Issues
             .Where(i => i.ProjectId == projectId)
             .Where(i => i.MergeSetId == null || i.MergeSet!.PrimaryIssueId == i.Id);
@@ -130,16 +136,45 @@ internal class IssueService(
         if (query.BookmarkedByUserId.HasValue)
             q = q.Where(i => dbContext.UserIssueStates.Any(s => s.IssueId == i.Id && s.UserId == query.BookmarkedByUserId.Value && s.IsBookmarked));
 
-        var (freeText, tagFilters) = IssueSearchParser.Parse(query.Search);
-        bool hasFullTextSearch = !string.IsNullOrEmpty(freeText);
+        if (query.Since.HasValue)
+            q = q.Where(i => i.LastSeen >= query.Since.Value.UtcDateTime);
+
+        if (query.Until.HasValue)
+            q = q.Where(i => i.LastSeen <= query.Until.Value.UtcDateTime);
+
+        var criteria = IssueSearchParser.ParseCriteria(query.Search);
+        bool hasFullTextSearch = !string.IsNullOrEmpty(criteria.FreeText);
+        string? prefixQuery = null;
         if (hasFullTextSearch)
         {
-            freeText = SearchService.BuildPrefixQuery(freeText!);
-            q = q.Where(i => EF.Property<NpgsqlTsVector>(i, "SearchVector").Matches(EF.Functions.ToTsQuery("simple", freeText!)));
+            prefixQuery = SearchService.BuildPrefixQuery(criteria.FreeText!);
+            q = q.Where(i => EF.Property<NpgsqlTsVector>(i, "SearchVector").Matches(EF.Functions.ToTsQuery("simple", prefixQuery)));
         }
-        foreach (var (tagKey, tagValue) in tagFilters)
+        foreach (var (tagKey, tagValue) in criteria.TagFilters)
         {
             q = q.Where(i => i.Tags.Any(t => EF.Functions.ILike(t.TagValue!.TagKey!.Key, tagKey) && EF.Functions.ILike(t.TagValue.Value, tagValue)));
+        }
+        foreach (var release in criteria.Releases)
+        {
+            q = q.Where(i => i.Events.Any(e => e.Release != null && EF.Functions.ILike(e.Release!.RawName, release)));
+        }
+        q = criteria.Assignment switch
+        {
+            IssueAssignmentFilter.Assigned => q.Where(i => i.AssignedToId != null),
+            IssueAssignmentFilter.Unassigned => q.Where(i => i.AssignedToId == null),
+            _ => q,
+        };
+        if (criteria.Bookmarked)
+        {
+            q = query.BookmarkedByUserId is { } bookmarkUserId
+                ? q.Where(i => dbContext.UserIssueStates.Any(s => s.IssueId == i.Id && s.UserId == bookmarkUserId && s.IsBookmarked))
+                : q.Where(_ => false);
+        }
+        if (criteria.Unviewed)
+        {
+            q = query.ViewerUserId is { } viewerUserId
+                ? q.Where(i => !dbContext.UserIssueStates.Any(s => s.IssueId == i.Id && s.UserId == viewerUserId && s.LastViewedAt >= i.LastChangedAt))
+                : q.Where(_ => false);
         }
 
         int totalCount = await q.CountAsync();
@@ -147,7 +182,7 @@ internal class IssueService(
         if (hasFullTextSearch)
         {
             // ReSharper disable EntityFramework.ClientSideDbFunctionCall
-            q = q.OrderByDescending(i => EF.Property<NpgsqlTsVector>(i, "SearchVector").Rank(EF.Functions.ToTsQuery("simple", freeText!)));
+            q = q.OrderByDescending(i => EF.Property<NpgsqlTsVector>(i, "SearchVector").Rank(EF.Functions.ToTsQuery("simple", prefixQuery!)));
             // ReSharper enable EntityFramework.ClientSideDbFunctionCall
         }
         else
@@ -177,6 +212,18 @@ internal class IssueService(
             .ToListAsync();
 
         return (items, totalCount);
+    }
+
+    private static void ValidateDateRange(IssueQueryParams query)
+    {
+        if (query.Since is not { } since || query.Until is not { } until)
+            return;
+
+        if (since > until)
+            throw new ArgumentException("Since must be the same instant as or earlier than Until.", nameof(query));
+
+        if (until - since > TimeSpan.FromDays(MaxDateRangeDays))
+            throw new ArgumentException($"The date range cannot span more than {MaxDateRangeDays} days.", nameof(query));
     }
 
     public async Task<Issue> UpdateIssueStatusAsync(int issueId, IssueStatus status, Guid? userId = null, bool ignoreFutureEvents = false)
@@ -468,46 +515,97 @@ internal class IssueService(
             i.AssignedTo?.DisplayName)).ToList();
     }
 
-    public async Task<List<int>> GetHistogramAsync(int issueId, int days = 14)
+    public async Task<TimeSeries> GetHistogramAsync(int issueId, int days = 14, TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto)
     {
-        var since = dateTime.UtcNow.Date.AddDays(-days + 1);
-        var buckets = await dbContext.EventBuckets
-            .Where(b => b.IssueId == issueId && b.BucketStart >= since)
-            .GroupBy(b => b.BucketStart.Date)
-            .Select(g => new { Day = g.Key, Count = g.Sum(b => b.Count) })
-            .ToListAsync();
+        var (from, to) = HistogramWindow(days);
+        var interval = TimeSeriesAggregator.IntervalFor(
+            TimeSeriesAggregator.ResolveGranularity(granularity, to - from));
 
-        var result = new List<int>(days);
-        for (int i = 0; i < days; i++)
-        {
-            var day = since.AddDays(i);
-            result.Add(buckets.FirstOrDefault(b => b.Day == day)?.Count ?? 0);
-        }
-        return result;
+        var query = dbContext.EventBuckets
+            .Where(b => b.IssueId == issueId && b.BucketStart >= from.UtcDateTime && b.BucketStart < to.UtcDateTime);
+
+        var points = await BucketQuery
+            .ReadAsync(query, interval);
+
+        return TimeSeriesAggregator.Build(points, from, to, granularity);
     }
 
-    public async Task<Dictionary<int, List<int>>> GetBulkHistogramsAsync(List<int> issueIds, int days = 14)
+    public async Task<Dictionary<int, TimeSeries>> GetBulkHistogramsAsync(List<int> issueIds, int days = 14, TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto)
     {
         if (issueIds.Count == 0) return [];
-        var since = dateTime.UtcNow.Date.AddDays(-days + 1);
+        var (from, to) = HistogramWindow(days);
+        var interval = TimeSeriesAggregator.IntervalFor(
+            TimeSeriesAggregator.ResolveGranularity(granularity, to - from));
 
-        var buckets = await dbContext.EventBuckets
-            .Where(b => issueIds.Contains(b.IssueId) && b.BucketStart >= since)
-            .GroupBy(b => new { b.IssueId, Day = b.BucketStart.Date })
-            .Select(g => new { g.Key.IssueId, g.Key.Day, Count = g.Sum(b => b.Count) })
-            .ToListAsync();
+        var query = dbContext.EventBuckets
+            .Where(b => issueIds.Contains(b.IssueId) && b.BucketStart >= from.UtcDateTime && b.BucketStart < to.UtcDateTime);
+
+        var raw = await BucketQuery
+            .ReadBulkAsync(query, interval);
 
         return issueIds.ToDictionary(id => id, id =>
+            TimeSeriesAggregator.Build(
+                raw.TryGetValue(id, out var points) ? points : [],
+                from, to, granularity));
+    }
+
+    /// <summary>Half-open UTC window covering the trailing <paramref name="days"/> calendar days, today included.</summary>
+    private (DateTimeOffset From, DateTimeOffset To) HistogramWindow(int days)
+    {
+        var today = dateTime.UtcNow.Date;
+        var from = new DateTimeOffset(today.AddDays(-days + 1), TimeSpan.Zero);
+        return (from, from.AddDays(days));
+    }
+
+    /// <summary>Reads stored hourly buckets, pre-aggregated in the database when whole-day buckets suffice.</summary>
+    private static class BucketQuery
+    {
+        public static async Task<List<TimeSeriesPoint>> ReadAsync(IQueryable<EventBucket> query, TimeSpan interval)
         {
-            var issueBuckets = buckets.Where(b => b.IssueId == id).ToList();
-            var result = new List<int>(days);
-            for (int i = 0; i < days; i++)
+            var rows = SpansWholeDays(interval)
+                ? await query
+                    .GroupBy(b => b.BucketStart.Date)
+                    .Select(g => new { Start = g.Key, Count = g.Sum(b => b.Count) })
+                    .ToListAsync()
+                : await query
+                    .Select(b => new { Start = b.BucketStart, Count = b.Count })
+                    .ToListAsync();
+
+            return [.. rows.Select(r => new TimeSeriesPoint(ToUtc(r.Start), r.Count))];
+        }
+
+        public static async Task<Dictionary<int, List<TimeSeriesPoint>>> ReadBulkAsync(IQueryable<EventBucket> query, TimeSpan interval)
+        {
+            if (SpansWholeDays(interval))
             {
-                var day = since.AddDays(i);
-                result.Add(issueBuckets.FirstOrDefault(b => b.Day == day)?.Count ?? 0);
+                var daily = await query
+                    .GroupBy(b => new { b.IssueId, Day = b.BucketStart.Date })
+                    .Select(g => new { g.Key.IssueId, Start = g.Key.Day, Count = g.Sum(b => b.Count) })
+                    .ToListAsync();
+
+                return daily
+                    .GroupBy(r => r.IssueId)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => (List<TimeSeriesPoint>)[.. g.Select(r => new TimeSeriesPoint(ToUtc(r.Start), r.Count))]);
             }
-            return result;
-        });
+
+            var hourly = await query
+                .Select(b => new { b.IssueId, Start = b.BucketStart, Count = b.Count })
+                .ToListAsync();
+
+            return hourly
+                .GroupBy(r => r.IssueId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => (List<TimeSeriesPoint>)[.. g.Select(r => new TimeSeriesPoint(ToUtc(r.Start), r.Count))]);
+        }
+
+        private static bool SpansWholeDays(TimeSpan interval) =>
+            interval.Ticks % TimeSpan.FromDays(1).Ticks == 0;
+
+        private static DateTimeOffset ToUtc(DateTime value) =>
+            new(DateTime.SpecifyKind(value, DateTimeKind.Utc), TimeSpan.Zero);
     }
 
     public async Task RecordPageViewAsync(Guid userId, int projectId, PageType pageType)

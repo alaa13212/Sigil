@@ -1,0 +1,301 @@
+@using Sigil.Application.Models.Common
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="space-y-2">
+    <div class="flex flex-wrap items-end gap-x-4 gap-y-2">
+        <fieldset class="fieldset">
+            <legend class="fieldset-legend">Range</legend>
+            <div class="join">
+                @foreach (var preset in RangePresets)
+                {
+                    <button type="button" class="join-item btn btn-sm @(RangeDays == preset.Days ? "btn-primary" : "")"
+                            @onclick="() => ApplyRange(preset.Days)">@preset.Label</button>
+                }
+            </div>
+        </fieldset>
+
+        <fieldset class="fieldset">
+            <legend class="fieldset-legend">Buckets</legend>
+            <EnumSelect TEnum="TimeSeriesGranularity" Value="Granularity" ValueChanged="ApplyGranularity"
+                        Class="select select-sm w-32" LabelSelector="GranularityLabel" />
+        </fieldset>
+
+        <fieldset class="fieldset">
+            <legend class="fieldset-legend">Style</legend>
+            <div class="join">
+                @foreach (var mode in ChartModes)
+                {
+                    <button type="button" class="join-item btn btn-sm @(Mode == mode.Value ? "btn-primary" : "")"
+                            @onclick="() => ApplyMode(mode.Value)">@mode.Label</button>
+                }
+            </div>
+        </fieldset>
+    </div>
+
+    <div class="text-xs opacity-60">@TimeSeriesCaption.Describe(Data)</div>
+
+    @if (_state == TimeSeriesChartState.Empty)
+    {
+        <EmptyState Title="No data to plot" Description="The selected range returned no buckets." />
+    }
+    else
+    {
+        <svg @ref="_chart" width="@Width" height="@Height" viewBox="0 0 @Width @Height" class="text-primary"
+             role="img" aria-label="@TimeSeriesCaption.Describe(Data)">
+            <line x1="@Px(AxisGutter)" y1="@Px(TopPadding)" x2="@Px(Width - RightPadding)" y2="@Px(TopPadding)"
+                  class="stroke-base-300" stroke-width="1" />
+            <line x1="@Px(AxisGutter)" y1="@Px(_baseline)" x2="@Px(Width - RightPadding)" y2="@Px(_baseline)"
+                  class="stroke-base-300" stroke-width="1" />
+
+            @if (_axisMax > 0)
+            {
+                <svg:text x="@Px(AxisGutter - 6)" y="@Px(TopPadding + 4)" text-anchor="end"
+                      class="fill-current text-[10px] opacity-60">@TimeSeriesAxis.FormatCount(_axisMax)</svg:text>
+            }
+            <svg:text x="@Px(AxisGutter - 6)" y="@Px(_baseline + 3)" text-anchor="end"
+                  class="fill-current text-[10px] opacity-60">0</svg:text>
+
+            @if (Mode == TimeSeriesChartMode.Bar)
+            {
+                @foreach (var band in _bands)
+                {
+                    <rect x="@Px(band.X)" y="@Px(band.Y)" width="@Px(band.Width)" height="@Px(band.Height)"
+                          class="fill-current @(band.Count > 0 ? "opacity-80" : "opacity-20")" rx="1">
+                        <title>@band.Tooltip</title>
+                    </rect>
+                }
+            }
+            else
+            {
+                <path d="@_areaPath" class="fill-current" fill-opacity="0.12" />
+                <path d="@_linePath" class="stroke-current" fill="none" stroke-width="1.5"
+                      stroke-linejoin="round" stroke-linecap="round" />
+                @foreach (var band in _bands)
+                {
+                    <circle cx="@Px(band.X + band.Width / 2)" cy="@Px(band.Y)" r="2" class="fill-current opacity-70" />
+                }
+            }
+
+            @foreach (var hit in _hits)
+            {
+                <rect x="@Px(hit.X)" y="@Px(hit.Y)" width="@Px(hit.Width)" height="@Px(hit.Height)"
+                      fill="transparent" pointer-events="all" data-tip-label="@hit.Label" data-tip-value="@hit.Value">
+                    <title>@hit.Tooltip</title>
+                </rect>
+            }
+
+            @foreach (var tick in _ticks)
+            {
+                <svg:text x="@Px(tick.X)" y="@Px(_baseline + 14)" text-anchor="@tick.Anchor"
+                      class="fill-current text-[10px] opacity-60">@tick.Text</svg:text>
+            }
+
+            @if (!string.IsNullOrEmpty(_annotation))
+            {
+                <svg:text x="@Px(_annotationX)" y="@Px(_annotationY)" text-anchor="middle"
+                      class="fill-current text-[11px] opacity-60">@_annotation</svg:text>
+            }
+        </svg>
+    }
+</div>
+
+@code {
+    private const int AxisGutter = 44;
+    private const int TopPadding = 12;
+    private const int RightPadding = 8;
+    private const int BottomPadding = 24;
+    private const double MaxBarGap = 4;
+
+    private static readonly (int Days, string Label)[] RangePresets = [(1, "24h"), (7, "7d"), (30, "30d")];
+
+    private static readonly (TimeSeriesChartMode Value, string Label)[] ChartModes =
+        [(TimeSeriesChartMode.Bar, "Bar"), (TimeSeriesChartMode.Line, "Line")];
+
+    /// <summary>Series to draw. The chart reads its own window from the series.</summary>
+    [Parameter, EditorRequired] public TimeSeries? Data { get; set; }
+
+    /// <summary>Drawing width of the SVG, in pixels.</summary>
+    [Parameter] public int Width { get; set; } = 560;
+
+    /// <summary>Drawing height of the SVG, in pixels.</summary>
+    [Parameter] public int Height { get; set; } = 160;
+
+    /// <summary>Window length in days the header presets select.</summary>
+    [Parameter] public int RangeDays { get; set; } = TimeSeriesChartView.DefaultRangeDays;
+
+    /// <summary>Bucket width override; <see cref="TimeSeriesGranularity.Auto"/> follows the range.</summary>
+    [Parameter] public TimeSeriesGranularity Granularity { get; set; } = TimeSeriesGranularity.Auto;
+
+    /// <summary>Bar or line + area.</summary>
+    [Parameter] public TimeSeriesChartMode Mode { get; set; } = TimeSeriesChartMode.Bar;
+
+    /// <summary>Attaches the styled hover tooltip. Off for charts too narrow to hold one.</summary>
+    [Parameter] public bool StyledHover { get; set; } = true;
+
+    /// <summary>Raised when the header selection changes, for the host page to persist in the URL.</summary>
+    [Parameter] public EventCallback<TimeSeriesChartView> ViewChanged { get; set; }
+
+    private sealed record Band(double X, double Y, double Width, double Height, int Count, string Label, string Value, string Tooltip);
+    private sealed record Hit(double X, double Y, double Width, double Height, string Label, string Value, string Tooltip);
+    private sealed record Tick(double X, string Text, string Anchor);
+
+    private readonly List<Band> _bands = [];
+    private readonly List<Hit> _hits = [];
+    private readonly List<Tick> _ticks = [];
+
+    private ElementReference _chart;
+    private IJSObjectReference? _module;
+    private TimeSeriesChartState _state = TimeSeriesChartState.Empty;
+    private int _axisMax;
+    private double _plotWidth;
+    private double _plotHeight;
+    private double _baseline;
+    private double _slot;
+    private string _linePath = string.Empty;
+    private string _areaPath = string.Empty;
+    private string _annotation = string.Empty;
+    private double _annotationX;
+    private double _annotationY;
+
+    protected override void OnParametersSet() => Rebuild();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_module is not null || !StyledHover || _state == TimeSeriesChartState.Empty) return;
+
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/time-series-chart.js");
+        await _module.InvokeVoidAsync("attach", _chart);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null) return;
+
+        try
+        {
+            await _module.InvokeVoidAsync("detach", _chart);
+            await _module.DisposeAsync();
+        }
+        catch (JSException)
+        {
+            // Circuit or module already gone
+        }
+
+        _module = null;
+    }
+
+    private void Rebuild()
+    {
+        _bands.Clear();
+        _hits.Clear();
+        _ticks.Clear();
+        _linePath = string.Empty;
+        _areaPath = string.Empty;
+        _annotation = string.Empty;
+
+        _plotWidth = Math.Max(1, Width - AxisGutter - RightPadding);
+        _plotHeight = Math.Max(1, Height - TopPadding - BottomPadding);
+        _baseline = TopPadding + _plotHeight;
+
+        _state = TimeSeriesAxis.Classify(Data);
+        if (_state == TimeSeriesChartState.Empty)
+        {
+            _axisMax = 1;
+            return;
+        }
+
+        var series = Data!;
+        var points = series.Points;
+        var count = points.Count;
+        _slot = _plotWidth / count;
+        _axisMax = _state == TimeSeriesChartState.AllZero
+            ? 0
+            : TimeSeriesAxis.AxisMax(points.Max(p => p.Count));
+
+        var single = _state == TimeSeriesChartState.SinglePoint;
+        var gap = Math.Min(MaxBarGap, _slot * 0.25);
+        var bandWidth = single ? _plotWidth * 0.6 : Math.Max(1, _slot - gap);
+
+        for (var index = 0; index < count; index++)
+        {
+            var point = points[index];
+            var centre = AxisGutter + (index + 0.5) * _slot;
+            var height = _axisMax > 0 ? _plotHeight * point.Count / _axisMax : 0;
+            var label = TimeSeriesAxis.TickLabel(point.Start, series.Interval);
+            var value = $"{TimeSeriesAxis.FormatCount(point.Count)} {(point.Count == 1 ? "event" : "events")}";
+            var tooltip = TimeSeriesAxis.TooltipText(point.Start, series.Interval, point.Count);
+
+            _bands.Add(new Band(centre - bandWidth / 2, _baseline - height, bandWidth, height, point.Count, label, value, tooltip));
+            _hits.Add(new Hit(centre - _slot / 2, TopPadding, _slot, _plotHeight, label, value, tooltip));
+        }
+
+        BuildTicks(points, series.Interval);
+
+        if (Mode == TimeSeriesChartMode.Line)
+            BuildLine();
+
+        if (_state == TimeSeriesChartState.AllZero)
+        {
+            _annotation = "No events in this window";
+            _annotationX = AxisGutter + _plotWidth / 2;
+            _annotationY = _baseline / 2;
+        }
+        else if (single)
+        {
+            var band = _bands[0];
+            _annotation = band.Value;
+            _annotationX = band.X + band.Width / 2;
+            _annotationY = band.Height > 0 ? Math.Max(TopPadding + 10, band.Y - 6) : _baseline - 6;
+        }
+    }
+
+    /// <summary>Thins x labels to the width they can occupy without touching.</summary>
+    private void BuildTicks(IReadOnlyList<TimeSeriesPoint> points, TimeSpan interval)
+    {
+        var candidates = TimeSeriesAxis.TickIndices(points.Count, TimeSeriesAxis.DesiredTicks);
+        var widest = candidates.Max(index => TimeSeriesAxis.TickLabel(points[index].Start, interval).Length);
+        var maxTicks = TimeSeriesAxis.MaxTicksForWidth((int)_plotWidth, widest);
+
+        foreach (var index in TimeSeriesAxis.TickIndices(points.Count, maxTicks))
+        {
+            var centre = AxisGutter + (index + 0.5) * _slot;
+            _ticks.Add(new Tick(
+                centre,
+                TimeSeriesAxis.TickLabel(points[index].Start, interval),
+                TimeSeriesAxis.Anchor(index, points.Count)));
+        }
+    }
+
+    private void BuildLine()
+    {
+        var centres = _bands.Select(b => b.X + b.Width / 2).ToList();
+        _linePath = string.Join(" ", _bands.Select((band, index) =>
+            $"{(index == 0 ? "M" : "L")} {Px(centres[index])} {Px(band.Y)}"));
+        _areaPath = $"{_linePath} L {Px(centres[^1])} {Px(_baseline)} L {Px(centres[0])} {Px(_baseline)} Z";
+    }
+
+    private static string GranularityLabel(TimeSeriesGranularity granularity) => granularity switch
+    {
+        TimeSeriesGranularity.Auto => "Auto",
+        TimeSeriesGranularity.Hour => "Hourly",
+        TimeSeriesGranularity.SixHour => "6-hour",
+        TimeSeriesGranularity.Day => "Daily",
+        TimeSeriesGranularity.Week => "Weekly",
+        _ => granularity.ToString(),
+    };
+
+    private Task ApplyRange(int days) =>
+        days == RangeDays ? Task.CompletedTask
+            : ViewChanged.InvokeAsync(new TimeSeriesChartView(days, Granularity, Mode));
+
+    private Task ApplyGranularity(TimeSeriesGranularity granularity) =>
+        granularity == Granularity ? Task.CompletedTask
+            : ViewChanged.InvokeAsync(new TimeSeriesChartView(RangeDays, granularity, Mode));
+
+    private Task ApplyMode(TimeSeriesChartMode mode) =>
+        mode == Mode ? Task.CompletedTask
+            : ViewChanged.InvokeAsync(new TimeSeriesChartView(RangeDays, Granularity, mode));
+
+    private static string Px(double value) => TimeSeriesAxis.Pixels(value);
+}

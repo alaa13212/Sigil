@@ -35,6 +35,9 @@ internal class AppConfigService(IServiceProvider serviceProvider) : IAppConfigSe
     public int RetentionCheckIntervalMinutes => Get(AppConfigKeys.RetentionCheckIntervalMinutes, 60);
     public int RetentionFailedEnvelopeMaxAgeDays => Get(AppConfigKeys.RetentionFailedEnvelopeMaxAgeDays, 7);
 
+    public string? MetricsToken => Get(AppConfigKeys.MetricsToken);
+    public string? MetricsAllowedCidrs => Get(AppConfigKeys.MetricsAllowedCidrs);
+
     public string? Get(string key) => _store.GetValueOrDefault(key);
 
     public T Get<T>(string key, T defaultValue) where T : IParsable<T>
