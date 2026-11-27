@@ -73,6 +73,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISamlConnectionService>(UseExisting<SamlConnectionService>);
         services.AddScoped<ISamlRuntimeConfigurationService>(UseExisting<SamlConnectionService>);
         services.AddScoped<ISamlLoginService, SamlLoginService>();
+        services.AddHttpClient(SamlMetadataDownloader.ClientName, client => client.Timeout = TimeSpan.FromSeconds(30))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
         services.AddScoped<TeamService>();
         services.AddScoped<ITeamService>(UseExisting<TeamService>);
         services.AddScoped<ITeamRoleService>(UseExisting<TeamService>);

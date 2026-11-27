@@ -4,6 +4,7 @@ using Sigil.Application.Models.Saml;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
 using Sigil.Domain.Interfaces;
+using Sigil.Infrastructure.Services;
 
 namespace Sigil.Infrastructure.Persistence;
 
@@ -11,7 +12,8 @@ internal class SamlConnectionService(
     SigilDbContext dbContext,
     IDateTime dateTime,
     IAppConfigService configService,
-    IHttpClientFactory httpClientFactory)
+    IHttpClientFactory httpClientFactory,
+    ISamlLoginService loginService)
     : ISamlConnectionService, ISamlRuntimeConfigurationService
 {
     public Task<SamlEndpointsResponse> GetEndpointsAsync()
@@ -116,6 +118,8 @@ internal class SamlConnectionService(
 
         await dbContext.SaveChangesAsync();
 
+        await loginService.ReconcileConnectionAsync(id);
+
         return ToResponse(connection);
     }
 
@@ -126,6 +130,8 @@ internal class SamlConnectionService(
             .FirstOrDefaultAsync(c => c.Id == id);
 
         if (connection is null) return false;
+
+        await loginService.RevokeConnectionAsync(id);
 
         dbContext.SamlConnections.Remove(connection);
         await dbContext.SaveChangesAsync();
@@ -165,10 +171,8 @@ internal class SamlConnectionService(
 
         try
         {
-            var client = httpClientFactory.CreateClient();
-            client.Timeout = TimeSpan.FromSeconds(30);
-
-            var xml = await client.GetStringAsync(connection.MetadataUrl);
+            var client = httpClientFactory.CreateClient(SamlMetadataDownloader.ClientName);
+            var xml = await SamlMetadataDownloader.DownloadAsync(client, connection.MetadataUrl);
 
             await SetMetadataAsync(id, xml, dateTime.UtcNow, null);
             return true;

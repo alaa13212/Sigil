@@ -1,3 +1,6 @@
+using System.Net;
+using System.Text;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
@@ -14,23 +17,52 @@ namespace Sigil.Infrastructure.Tests.Persistence;
 [Collection(DbCollection)]
 public class SamlConnectionServiceTests(TestDatabaseFixture fixture)
 {
-    private IServiceProvider BuildProvider()
+    private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(responder(request));
+    }
+
+    private IServiceProvider BuildProvider(Func<HttpRequestMessage, HttpResponseMessage>? responder = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddDbContext<SigilDbContext>(o => o.UseNpgsql(fixture.ConnectionString));
         services.AddHttpClient();
+        services.AddIdentity<User, IdentityRole<Guid>>(options =>
+            {
+                options.User.RequireUniqueEmail = true;
+                options.Password.RequiredLength = 8;
+            })
+            .AddEntityFrameworkStores<SigilDbContext>()
+            .AddDefaultTokenProviders();
+
+        if (responder is not null)
+        {
+            services.AddHttpClient(SamlMetadataDownloader.ClientName)
+                .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(responder));
+        }
+
         return services.BuildServiceProvider();
     }
 
-    private SamlConnectionService CreateService()
+    private SamlConnectionService CreateService(Func<HttpRequestMessage, HttpResponseMessage>? responder = null)
     {
-        var provider = BuildProvider();
+        var provider = BuildProvider(responder);
+        var ctx = provider.GetRequiredService<SigilDbContext>();
+
+        var loginService = new SamlLoginService(
+            ctx,
+            provider.GetRequiredService<UserManager<User>>(),
+            provider.GetRequiredService<RoleManager<IdentityRole<Guid>>>(),
+            new DateTimeProvider());
+
         return new SamlConnectionService(
-            provider.GetRequiredService<SigilDbContext>(),
+            ctx,
             new DateTimeProvider(),
             Substitute.For<IAppConfigService>(),
-            provider.GetRequiredService<IHttpClientFactory>());
+            provider.GetRequiredService<IHttpClientFactory>(),
+            loginService);
     }
 
     private static SamlConnectionRequest CreateRequest(string name) => new(
@@ -176,7 +208,12 @@ public class SamlConnectionServiceTests(TestDatabaseFixture fixture)
             provider.GetRequiredService<SigilDbContext>(),
             new DateTimeProvider(),
             configService,
-            provider.GetRequiredService<IHttpClientFactory>());
+            provider.GetRequiredService<IHttpClientFactory>(),
+            new SamlLoginService(
+                provider.GetRequiredService<SigilDbContext>(),
+                provider.GetRequiredService<UserManager<User>>(),
+                provider.GetRequiredService<RoleManager<IdentityRole<Guid>>>(),
+                new DateTimeProvider()));
 
         var endpoints = await service.GetEndpointsAsync();
 
@@ -186,8 +223,7 @@ public class SamlConnectionServiceTests(TestDatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task GetPendingUsersAsync_ReturnsPendingSamlUsers()
-    {
+    public async Task GetPendingUsersAsync_ReturnsPendingSamlUsers()    {
         var provider = BuildProvider();
         var service = CreateService();
 
@@ -231,6 +267,94 @@ public class SamlConnectionServiceTests(TestDatabaseFixture fixture)
             var stored = await ctx.Users.AsTracking().FirstAsync(u => u.Id == user.Id);
             stored.SamlStatus.Should().Be(SamlUserStatus.Rejected);
         }
+
+        await service.DeleteConnectionAsync(created.Id);
+    }
+
+    [Fact]
+    public async Task RefreshMetadataAsync_WithValidResponse_StoresMetadata()
+    {
+        var service = CreateService(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<EntityDescriptor />", Encoding.UTF8, "application/xml")
+        });
+
+        var created = await service.CreateConnectionAsync(CreateRequest($"saml_{Guid.NewGuid():N}") with
+        {
+            MetadataUrl = "http://93.184.216.34/metadata"
+        });
+
+        (await service.RefreshMetadataAsync(created.Id)).Should().BeTrue();
+
+        var reloaded = await service.GetConnectionAsync(created.Id);
+        reloaded!.HasMetadata.Should().BeTrue();
+        reloaded.MetadataError.Should().BeNull();
+
+        await service.DeleteConnectionAsync(created.Id);
+    }
+
+    [Fact]
+    public async Task RefreshMetadataAsync_WithOversizedResponse_RecordsError()
+    {
+        var service = CreateService(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(new string('x', SamlMetadataDownloader.MaxMetadataBytes + 1), Encoding.UTF8, "application/xml")
+        });
+
+        var created = await service.CreateConnectionAsync(CreateRequest($"saml_{Guid.NewGuid():N}") with
+        {
+            MetadataUrl = "http://93.184.216.34/metadata"
+        });
+
+        (await service.RefreshMetadataAsync(created.Id)).Should().BeFalse();
+
+        var reloaded = await service.GetConnectionAsync(created.Id);
+        reloaded!.HasMetadata.Should().BeFalse();
+        reloaded.MetadataError.Should().Contain("larger than");
+
+        await service.DeleteConnectionAsync(created.Id);
+    }
+
+    [Fact]
+    public async Task RefreshMetadataAsync_WithBlockedHost_RecordsError()
+    {
+        var service = CreateService(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<EntityDescriptor />", Encoding.UTF8, "application/xml")
+        });
+
+        var created = await service.CreateConnectionAsync(CreateRequest($"saml_{Guid.NewGuid():N}") with
+        {
+            MetadataUrl = "http://169.254.169.254/latest/meta-data"
+        });
+
+        (await service.RefreshMetadataAsync(created.Id)).Should().BeFalse();
+
+        var reloaded = await service.GetConnectionAsync(created.Id);
+        reloaded!.HasMetadata.Should().BeFalse();
+        reloaded.MetadataError.Should().Contain("blocked address");
+
+        await service.DeleteConnectionAsync(created.Id);
+    }
+
+    [Fact]
+    public async Task RefreshMetadataAsync_WithNonHttpUrl_RecordsError()
+    {
+        var service = CreateService(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<EntityDescriptor />", Encoding.UTF8, "application/xml")
+        });
+
+        var created = await service.CreateConnectionAsync(CreateRequest($"saml_{Guid.NewGuid():N}") with
+        {
+            MetadataUrl = "file:///etc/passwd"
+        });
+
+        (await service.RefreshMetadataAsync(created.Id)).Should().BeFalse();
+
+        var reloaded = await service.GetConnectionAsync(created.Id);
+        reloaded!.HasMetadata.Should().BeFalse();
+        reloaded.MetadataError.Should().Contain("http or https");
 
         await service.DeleteConnectionAsync(created.Id);
     }

@@ -1,46 +1,72 @@
+using System.Xml;
 using Sustainsys.Saml2.Metadata;
 
 namespace Sigil.Server.Auth.Saml;
 
 internal static class SamlMetadataReader
 {
+    internal const int MaxMetadataLength = 1_048_576;
+
     public static EntityDescriptor Read(string metadataXml, string expectedEntityId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(metadataXml);
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedEntityId);
 
-        var path = Path.Combine(Path.GetTempPath(), $"sigil-saml-{Guid.NewGuid():N}.xml");
-        File.WriteAllText(path, metadataXml);
+        if (metadataXml.Length > MaxMetadataLength)
+            throw new InvalidOperationException(
+                $"The metadata document is larger than the {MaxMetadataLength} character limit.");
 
-        try
+        var settings = new XmlReaderSettings
         {
-            var location = new Uri(path).AbsoluteUri;
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            MaxCharactersInDocument = MaxMetadataLength,
+            IgnoreComments = true,
+            IgnoreWhitespace = true
+        };
 
-            EntityDescriptor descriptor;
-            try
-            {
-                descriptor = MetadataLoader.LoadIdp(location, true);
-            }
-            catch (InvalidOperationException)
-            {
-                var federation = MetadataLoader.LoadFederation(location);
-                descriptor = federation.ChildEntities
-                    .FirstOrDefault(e => e.EntityId.Id == expectedEntityId)
-                    ?? throw new InvalidOperationException(
-                        $"The metadata does not contain an entity descriptor for '{expectedEntityId}'.");
-            }
+        using var textReader = new StringReader(metadataXml);
+        using var xmlReader = XmlReader.Create(textReader, settings);
 
-            if (descriptor.EntityId.Id != expectedEntityId)
-            {
-                throw new InvalidOperationException(
-                    $"The metadata describes '{descriptor.EntityId.Id}' but the connection is configured for '{expectedEntityId}'.");
-            }
+        var metadata = new MetadataSerializer().ReadMetadata(xmlReader);
 
-            return descriptor;
-        }
-        finally
+        return metadata switch
         {
-            File.Delete(path);
+            EntityDescriptor descriptor => VerifyEntity(descriptor, expectedEntityId),
+            EntitiesDescriptor federation => SelectEntity(federation, expectedEntityId),
+            _ => throw new InvalidOperationException("The metadata does not contain an entity descriptor.")
+        };
+    }
+
+    private static EntityDescriptor VerifyEntity(EntityDescriptor descriptor, string expectedEntityId)
+    {
+        if (descriptor.EntityId.Id != expectedEntityId)
+        {
+            throw new InvalidOperationException(
+                $"The metadata describes '{descriptor.EntityId.Id}' but the connection is configured for '{expectedEntityId}'.");
         }
+
+        return descriptor;
+    }
+
+    private static EntityDescriptor SelectEntity(EntitiesDescriptor federation, string expectedEntityId)
+    {
+        foreach (var entity in federation.ChildEntities)
+        {
+            if (entity.EntityId.Id == expectedEntityId)
+                return entity;
+        }
+
+        foreach (var group in federation.ChildEntityGroups)
+        {
+            foreach (var entity in group.ChildEntities)
+            {
+                if (entity.EntityId.Id == expectedEntityId)
+                    return entity;
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"The metadata does not contain an entity descriptor for '{expectedEntityId}'.");
     }
 }
