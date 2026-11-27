@@ -47,6 +47,28 @@ internal class IssueActivityService(SigilDbContext dbContext, IDateTime dateTime
         return activity;
     }
 
+    public async Task LogActivitiesAsync(IReadOnlyList<IssueActivityEntry> entries, Guid? userId = null)
+    {
+        if (entries.Count == 0) return;
+
+        var timestamp = dateTime.UtcNow;
+        var activities = entries.Select(entry => new IssueActivity
+        {
+            IssueId = entry.IssueId,
+            UserId = userId,
+            Action = entry.Action,
+            Timestamp = timestamp,
+        }).ToList();
+
+        dbContext.IssueActivities.AddRange(activities);
+        await dbContext.SaveChangesAsync();
+
+        var issueIds = entries.Select(entry => entry.IssueId).Distinct().ToList();
+        await dbContext.Issues
+            .Where(i => issueIds.Contains(i.Id))
+            .ExecuteUpdateAsync(s => s.SetProperty(i => i.LastChangedAt, timestamp));
+    }
+
     // Not used server-side — the controller handles auth and calls LogActivityAsync directly
     public Task<ActivityResponse> AddCommentAsync(int issueId, string message) =>
         throw new NotSupportedException("Call LogActivityAsync with IssueActivityAction.Commented instead.");

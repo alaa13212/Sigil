@@ -55,4 +55,18 @@ public record UpdateStatusRequest(IssueStatus Status, bool IgnoreFutureEvents = 
 public record AssignRequest(Guid? UserId);
 
 public record UpdatePriorityRequest(Priority Priority);
+
+/// <param name="IssueIds">Issues to act on.</param>
+/// <param name="Status">Status to set on every issue.</param>
+/// <param name="IgnoreFutureEvents">Creates a fingerprint filter per issue when the status is <c>Ignored</c>.</param>
+/// <param name="AssignToUserId">User to assign every issue to.</param>
+/// <param name="Unassign">Clears the assignee of every issue.</param>
+/// <param name="Bookmarked">Bookmark state to set on every issue.</param>
+public record BulkIssueActionRequest(
+    List<int> IssueIds,
+    IssueStatus? Status = null,
+    bool IgnoreFutureEvents = false,
+    Guid? AssignToUserId = null,
+    bool Unassign = false,
+    bool? Bookmarked = null);
 public record AddCommentRequest(string Message);

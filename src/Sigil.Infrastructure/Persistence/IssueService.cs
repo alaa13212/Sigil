@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using NpgsqlTypes;
 using Sigil.Application.Interfaces;
@@ -198,6 +199,9 @@ internal class IssueService(
                 IssueSortBy.Priority => query.SortDescending
                     ? q.OrderByDescending(i => i.Priority)
                     : q.OrderBy(i => i.Priority),
+                IssueSortBy.Level => query.SortDescending
+                    ? q.OrderByDescending(i => i.Level)
+                    : q.OrderBy(i => i.Level),
                 _ => query.SortDescending
                     ? q.OrderByDescending(i => i.MergeSet != null ? i.MergeSet.LastSeen : i.LastSeen)
                     : q.OrderBy(i => i.MergeSet != null ? i.MergeSet.LastSeen : i.LastSeen),
@@ -229,8 +233,127 @@ internal class IssueService(
     public async Task<Issue> UpdateIssueStatusAsync(int issueId, IssueStatus status, Guid? userId = null, bool ignoreFutureEvents = false)
     {
         var issue = await dbContext.Issues.AsTracking().FirstAsync(i => i.Id == issueId);
-        var previousStatus = issue.Status;
 
+        int? releaseId = status == IssueStatus.ResolvedInFuture
+            ? await GetLatestReleaseIdAsync(issue.ProjectId)
+            : null;
+
+        await ApplyStatusAsync(issue, status, userId, ignoreFutureEvents, releaseId);
+
+        await dbContext.SaveChangesAsync();
+
+        if (issue.MergeSetId.HasValue)
+            await dbContext.Issues
+                .Where(i => i.MergeSetId == issue.MergeSetId && i.Id != issueId)
+                .ExecuteUpdateAsync(s => s.SetProperty(i => i.Status, status));
+
+        // Log activity
+        if (userId.HasValue)
+            await activityService.LogActivityAsync(issueId, StatusActivityAction(status), userId.Value);
+
+        issueCache.InvalidateAll();
+        return issue;
+    }
+
+    public async Task<int> BulkUpdateIssuesAsync(int projectId, BulkIssueActionRequest request, Guid userId)
+    {
+        var ids = request.IssueIds.Distinct().ToList();
+        if (ids.Count == 0)
+            throw new InvalidOperationException("No issue IDs provided.");
+
+        var actions = CountRequestedActions(request);
+        if (actions == 0)
+            throw new InvalidOperationException("No action was requested.");
+        if (actions > 1)
+            throw new InvalidOperationException("Only one action can be applied to a batch.");
+
+        var issues = await dbContext.Issues.AsTracking()
+            .Where(i => ids.Contains(i.Id) && i.ProjectId == projectId)
+            .ToListAsync();
+
+        if (issues.Count != ids.Count)
+            throw new InvalidOperationException("One or more issues not found in this project.");
+
+        if (request.Status is { } status)
+            return await BulkSetStatusAsync(issues, projectId, status, request.IgnoreFutureEvents, userId);
+
+        if (request.AssignToUserId.HasValue || request.Unassign)
+            return await BulkSetAssigneeAsync(issues, request.AssignToUserId, userId);
+
+        return await BulkSetBookmarkAsync(issues, request.Bookmarked!.Value, userId);
+    }
+
+    private async Task<int> BulkSetStatusAsync(List<Issue> issues, int projectId, IssueStatus status, bool ignoreFutureEvents, Guid userId)
+    {
+        int? releaseId = status == IssueStatus.ResolvedInFuture
+            ? await GetLatestReleaseIdAsync(projectId)
+            : null;
+
+        foreach (var issue in issues)
+            await ApplyStatusAsync(issue, status, userId, ignoreFutureEvents, releaseId);
+
+        await dbContext.SaveChangesAsync();
+
+        await PropagateToMergeSiblingsAsync(issues, i => i.Status, status);
+
+        var action = StatusActivityAction(status);
+        await activityService.LogActivitiesAsync(
+            issues.Select(issue => new IssueActivityEntry(issue.Id, action)).ToList(), userId);
+
+        issueCache.InvalidateAll();
+        return issues.Count;
+    }
+
+    private async Task<int> BulkSetAssigneeAsync(List<Issue> issues, Guid? assignee, Guid userId)
+    {
+        foreach (var issue in issues)
+            issue.AssignedToId = assignee;
+
+        await dbContext.SaveChangesAsync();
+
+        await PropagateToMergeSiblingsAsync(issues, i => i.AssignedToId, assignee);
+
+        var action = assignee.HasValue ? IssueActivityAction.Assigned : IssueActivityAction.Unassigned;
+        await activityService.LogActivitiesAsync(
+            issues.Select(issue => new IssueActivityEntry(issue.Id, action)).ToList(), userId);
+
+        issueCache.InvalidateAll();
+        return issues.Count;
+    }
+
+    private async Task<int> BulkSetBookmarkAsync(List<Issue> issues, bool bookmarked, Guid userId)
+    {
+        var ids = issues.Select(issue => issue.Id).ToList();
+        var states = await dbContext.UserIssueStates.AsTracking()
+            .Where(state => state.UserId == userId && ids.Contains(state.IssueId))
+            .ToListAsync();
+
+        foreach (var issue in issues)
+        {
+            var state = states.FirstOrDefault(candidate => candidate.IssueId == issue.Id);
+            if (state is null)
+            {
+                state = new UserIssueState { UserId = userId, IssueId = issue.Id };
+                dbContext.UserIssueStates.Add(state);
+                states.Add(state);
+            }
+
+            state.IsBookmarked = bookmarked;
+            state.BookmarkedAt = bookmarked ? dateTime.UtcNow : null;
+        }
+
+        await dbContext.SaveChangesAsync();
+
+        if (bookmarked)
+            await activityService.LogActivitiesAsync(
+                issues.Select(issue => new IssueActivityEntry(issue.Id, IssueActivityAction.Bookmarked)).ToList(), userId);
+
+        issueCache.InvalidateAll();
+        return issues.Count;
+    }
+
+    private async Task ApplyStatusAsync(Issue issue, IssueStatus status, Guid? userId, bool ignoreFutureEvents, int? resolvedInReleaseId)
+    {
         issue.Status = status;
 
         if (status == IssueStatus.Resolved)
@@ -243,11 +366,7 @@ internal class IssueService(
         {
             issue.ResolvedAt = dateTime.UtcNow;
             issue.ResolvedById = userId;
-            var latestRelease = await dbContext.Releases
-                .Where(r => r.ProjectId == issue.ProjectId)
-                .OrderByDescending(r => r.FirstSeenAt)
-                .FirstOrDefaultAsync();
-            issue.ResolvedInReleaseId = latestRelease?.Id;
+            issue.ResolvedInReleaseId = resolvedInReleaseId;
         }
         else if (status == IssueStatus.Open)
         {
@@ -271,33 +390,50 @@ internal class IssueService(
                 Operator: FilterOperator.Equals,
                 Value: issue.Fingerprint,
                 Action: FilterAction.Reject,
-                Description: $"Auto-created when issue #{issueId} was ignored"));
+                Description: $"Auto-created when issue #{issue.Id} was ignored"));
             issue.IgnoreFilterId = filter.Id;
         }
-
-        await dbContext.SaveChangesAsync();
-
-        if (issue.MergeSetId.HasValue)
-            await dbContext.Issues
-                .Where(i => i.MergeSetId == issue.MergeSetId && i.Id != issueId)
-                .ExecuteUpdateAsync(s => s.SetProperty(i => i.Status, status));
-
-        // Log activity
-        if (userId.HasValue)
-        {
-            var action = status switch
-            {
-                IssueStatus.Resolved => IssueActivityAction.Resolved,
-                IssueStatus.Ignored  => IssueActivityAction.Ignored,
-                IssueStatus.Open     => IssueActivityAction.Unresolved,
-                _                    => IssueActivityAction.Unresolved
-            };
-            await activityService.LogActivityAsync(issueId, action, userId.Value);
-        }
-
-        issueCache.InvalidateAll();
-        return issue;
     }
+
+    private async Task PropagateToMergeSiblingsAsync<TValue>(List<Issue> issues, Expression<Func<Issue, TValue>> property, TValue value)
+    {
+        var batchIds = issues.Select(issue => issue.Id).ToList();
+        var mergeSetIds = issues
+            .Where(issue => issue.MergeSetId.HasValue)
+            .Select(issue => issue.MergeSetId!.Value)
+            .Distinct()
+            .ToList();
+
+        foreach (var mergeSetId in mergeSetIds)
+        {
+            await dbContext.Issues
+                .Where(i => i.MergeSetId == mergeSetId && !batchIds.Contains(i.Id))
+                .ExecuteUpdateAsync(s => s.SetProperty(property, value));
+        }
+    }
+
+    private async Task<int?> GetLatestReleaseIdAsync(int projectId) =>
+        await dbContext.Releases
+            .Where(r => r.ProjectId == projectId)
+            .OrderByDescending(r => r.FirstSeenAt)
+            .Select(r => (int?)r.Id)
+            .FirstOrDefaultAsync();
+
+    private static int CountRequestedActions(BulkIssueActionRequest request)
+    {
+        var count = 0;
+        if (request.Status.HasValue) count++;
+        if (request.AssignToUserId.HasValue || request.Unassign) count++;
+        if (request.Bookmarked.HasValue) count++;
+        return count;
+    }
+
+    private static IssueActivityAction StatusActivityAction(IssueStatus status) => status switch
+    {
+        IssueStatus.Resolved => IssueActivityAction.Resolved,
+        IssueStatus.Ignored  => IssueActivityAction.Ignored,
+        _                    => IssueActivityAction.Unresolved
+    };
 
     public async Task<Issue> AssignIssueAsync(int issueId, Guid? assignToUserId, Guid? actionByUserId = null)
     {
@@ -524,7 +660,7 @@ internal class IssueService(
         var query = dbContext.EventBuckets
             .Where(b => b.IssueId == issueId && b.BucketStart >= from.UtcDateTime && b.BucketStart < to.UtcDateTime);
 
-        var points = await BucketQuery
+        var points = await EventBucketQuery
             .ReadAsync(query, interval);
 
         return TimeSeriesAggregator.Build(points, from, to, granularity);
@@ -540,7 +676,7 @@ internal class IssueService(
         var query = dbContext.EventBuckets
             .Where(b => issueIds.Contains(b.IssueId) && b.BucketStart >= from.UtcDateTime && b.BucketStart < to.UtcDateTime);
 
-        var raw = await BucketQuery
+        var raw = await EventBucketQuery
             .ReadBulkAsync(query, interval);
 
         return issueIds.ToDictionary(id => id, id =>
@@ -550,63 +686,8 @@ internal class IssueService(
     }
 
     /// <summary>Half-open UTC window covering the trailing <paramref name="days"/> calendar days, today included.</summary>
-    private (DateTimeOffset From, DateTimeOffset To) HistogramWindow(int days)
-    {
-        var today = dateTime.UtcNow.Date;
-        var from = new DateTimeOffset(today.AddDays(-days + 1), TimeSpan.Zero);
-        return (from, from.AddDays(days));
-    }
-
-    /// <summary>Reads stored hourly buckets, pre-aggregated in the database when whole-day buckets suffice.</summary>
-    private static class BucketQuery
-    {
-        public static async Task<List<TimeSeriesPoint>> ReadAsync(IQueryable<EventBucket> query, TimeSpan interval)
-        {
-            var rows = SpansWholeDays(interval)
-                ? await query
-                    .GroupBy(b => b.BucketStart.Date)
-                    .Select(g => new { Start = g.Key, Count = g.Sum(b => b.Count) })
-                    .ToListAsync()
-                : await query
-                    .Select(b => new { Start = b.BucketStart, Count = b.Count })
-                    .ToListAsync();
-
-            return [.. rows.Select(r => new TimeSeriesPoint(ToUtc(r.Start), r.Count))];
-        }
-
-        public static async Task<Dictionary<int, List<TimeSeriesPoint>>> ReadBulkAsync(IQueryable<EventBucket> query, TimeSpan interval)
-        {
-            if (SpansWholeDays(interval))
-            {
-                var daily = await query
-                    .GroupBy(b => new { b.IssueId, Day = b.BucketStart.Date })
-                    .Select(g => new { g.Key.IssueId, Start = g.Key.Day, Count = g.Sum(b => b.Count) })
-                    .ToListAsync();
-
-                return daily
-                    .GroupBy(r => r.IssueId)
-                    .ToDictionary(
-                        g => g.Key,
-                        g => (List<TimeSeriesPoint>)[.. g.Select(r => new TimeSeriesPoint(ToUtc(r.Start), r.Count))]);
-            }
-
-            var hourly = await query
-                .Select(b => new { b.IssueId, Start = b.BucketStart, Count = b.Count })
-                .ToListAsync();
-
-            return hourly
-                .GroupBy(r => r.IssueId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => (List<TimeSeriesPoint>)[.. g.Select(r => new TimeSeriesPoint(ToUtc(r.Start), r.Count))]);
-        }
-
-        private static bool SpansWholeDays(TimeSpan interval) =>
-            interval.Ticks % TimeSpan.FromDays(1).Ticks == 0;
-
-        private static DateTimeOffset ToUtc(DateTime value) =>
-            new(DateTime.SpecifyKind(value, DateTimeKind.Utc), TimeSpan.Zero);
-    }
+    private (DateTimeOffset From, DateTimeOffset To) HistogramWindow(int days) =>
+        TimeSeriesWindow.CalendarDays(dateTime.UtcNow, days);
 
     public async Task RecordPageViewAsync(Guid userId, int projectId, PageType pageType)
     {

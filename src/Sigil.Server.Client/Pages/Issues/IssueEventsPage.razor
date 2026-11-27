@@ -1,5 +1,6 @@
 @page "/projects/{ProjectId:int}/events"
 @attribute [Authorize]
+@using Sigil.Application.Models.Common
 @using Sigil.Application.Models.Events
 @using Sigil.Application.Models.Shared
 @using Sigil.Server.Client.Services
@@ -19,6 +20,22 @@
         }
     </div>
 
+    <div class="card bg-base-100">
+        <div class="card-body p-4">
+            <h2 class="card-title text-base mb-2">Event activity</h2>
+            @if (_activity is not null)
+            {
+                <TimeSeriesChart Data="_activity" Width="560" Height="180"
+                                 RangeDays="ChartView.RangeDays" Granularity="ChartView.Granularity" Mode="ChartView.Mode"
+                                 ViewChanged="OnChartViewChanged" />
+            }
+            else
+            {
+                <div class="h-[180px] flex items-center justify-center opacity-60 text-sm">Loading activity…</div>
+            }
+        </div>
+    </div>
+
     <EventTable ProjectId="ProjectId" Query="Query" Events="_events"
                 Loading="_loading" Error="@_error" Retry="LoadAsync" QueryChanged="ApplyQuery" />
 </div>
@@ -34,25 +51,57 @@
     [SupplyParameterFromQuery(Name = EventQueryState.LevelKey)] public string? LevelQuery { get; set; }
     [SupplyParameterFromQuery(Name = EventQueryState.SinceKey)] public string? SinceQuery { get; set; }
     [SupplyParameterFromQuery(Name = EventQueryState.UntilKey)] public string? UntilQuery { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.RangeKey)] public int? RangeParam { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.BucketsKey)] public string? BucketsQuery { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.ChartKey)] public string? ChartModeQuery { get; set; }
+
+    private TimeSeriesGranularity? BucketsParam
+    {
+        get => QueryValue.Enum<TimeSeriesGranularity>(BucketsQuery);
+        set => BucketsQuery = value?.ToString();
+    }
+
+    private TimeSeriesChartMode? ChartModeParam
+    {
+        get => QueryValue.Enum<TimeSeriesChartMode>(ChartModeQuery);
+        set => ChartModeQuery = value?.ToString();
+    }
 
     private const int PageSize = 50;
+    private const int DefaultActivityRangeDays = 7;
 
     private PagedResponse<EventSummary>? _events;
+    private TimeSeries? _activity;
     private string? _error;
     private bool _loading = true;
     private string _lastQueryState = "";
+    private string _lastChartState = "";
+
+    private TimeSeriesChartView ChartView => new(
+        RangeParam ?? DefaultActivityRangeDays,
+        BucketsParam ?? TimeSeriesChartView.Default.Granularity,
+        ChartModeParam ?? TimeSeriesChartView.Default.Mode);
 
     private EventQueryParams Query => EventQueryParamsFactory.Create(
         Page, Search, Sort, LevelQuery, ReleaseId, EventId, SinceQuery, UntilQuery, PageSize);
 
     protected override async Task OnParametersSetAsync()
     {
-        var queryState = EventQueryState.Apply(new Uri(NavigationManager.Uri), Query).Query;
-        if (queryState == _lastQueryState && _events is not null)
-            return;
+        var baseUri = new Uri(NavigationManager.BaseUri);
 
-        _lastQueryState = queryState;
-        await LoadAsync();
+        var queryState = EventQueryState.Apply(baseUri, Query).Query;
+        if (queryState != _lastQueryState || _events is null)
+        {
+            _lastQueryState = queryState;
+            await LoadAsync();
+        }
+
+        var chartState = ChartQueryState.Apply(baseUri, ChartView).Query;
+        if (chartState != _lastChartState || _activity is null)
+        {
+            _lastChartState = chartState;
+            await LoadActivityAsync();
+        }
     }
 
     private async Task LoadAsync()
@@ -73,6 +122,21 @@
             _loading = false;
         }
     }
+
+    private async Task LoadActivityAsync()
+    {
+        try
+        {
+            _activity = await EventService.GetProjectEventSeriesAsync(ProjectId, ChartView.RangeDays, ChartView.Granularity);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException)
+        {
+            _activity = null;
+        }
+    }
+
+    private void OnChartViewChanged(TimeSeriesChartView view) =>
+        NavigationManager.NavigateTo(ChartQueryState.Apply(new Uri(NavigationManager.Uri), view).PathAndQuery, replace: true);
 
     private void ApplyQuery(EventQueryParams next)
     {

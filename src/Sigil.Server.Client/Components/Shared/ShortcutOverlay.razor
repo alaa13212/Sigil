@@ -1,0 +1,84 @@
+@using Sigil.Application.Input
+
+<div class="shortcut-modal">
+    <ModalBase IsOpen="IsOpen" Title="Keyboard shortcuts" OnClose="OnClose" Size="ModalSize.Large">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <section>
+                <h4 class="text-xs font-semibold uppercase tracking-wide opacity-60 mb-2">Navigation</h4>
+                <table class="table table-sm">
+                    <tbody>
+                        <tr>
+                            <td><kbd class="kbd">g</kbd> <kbd class="kbd">i</kbd></td>
+                            <td class="@DisabledClass">Issues</td>
+                        </tr>
+                        <tr>
+                            <td><kbd class="kbd">g</kbd> <kbd class="kbd">r</kbd></td>
+                            <td class="@DisabledClass">Releases</td>
+                        </tr>
+                        <tr>
+                            <td><kbd class="kbd">g</kbd> <kbd class="kbd">e</kbd></td>
+                            <td class="@DisabledClass">Events</td>
+                        </tr>
+                        <tr>
+                            <td><kbd class="kbd">g</kbd> <kbd class="kbd">d</kbd></td>
+                            <td>Dashboard</td>
+                        </tr>
+                        <tr>
+                            <td><kbd class="kbd">Ctrl</kbd> <kbd class="kbd">K</kbd></td>
+                            <td>Search</td>
+                        </tr>
+                    </tbody>
+                </table>
+                @if (!HasProjectContext)
+                {
+                    <p class="text-xs opacity-60 mt-2">The project shortcuts need a project page.</p>
+                }
+            </section>
+
+            <section>
+                <h4 class="text-xs font-semibold uppercase tracking-wide opacity-60 mb-2">Lists</h4>
+                <table class="table table-sm">
+                    <tbody>
+                        <tr>
+                            <td><kbd class="kbd">j</kbd></td>
+                            <td>Focus the next row</td>
+                        </tr>
+                        <tr>
+                            <td><kbd class="kbd">k</kbd></td>
+                            <td>Focus the previous row</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section>
+                <h4 class="text-xs font-semibold uppercase tracking-wide opacity-60 mb-2">Actions</h4>
+                <table class="table table-sm">
+                    <tbody>
+                        <tr>
+                            <td><kbd class="kbd">r</kbd></td>
+                            <td>Resolve the focused issue</td>
+                        </tr>
+                        <tr>
+                            <td><kbd class="kbd">?</kbd></td>
+                            <td>Show or hide this list</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+        </div>
+    </ModalBase>
+</div>
+
+@code {
+    /// <summary>Whether the shortcut list is on screen.</summary>
+    [Parameter] public bool IsOpen { get; set; }
+
+    /// <summary>Raised when the list should close.</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>Whether a project is open, which the project shortcuts need.</summary>
+    [Parameter] public bool HasProjectContext { get; set; }
+
+    private string DisabledClass => HasProjectContext ? "" : "opacity-40";
+}

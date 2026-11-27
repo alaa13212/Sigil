@@ -11,6 +11,7 @@ namespace Sigil.Application.Models.Issues;
 /// <param name="Since">Inclusive lower bound on <c>Issue.LastSeen</c>.</param>
 /// <param name="Until">Inclusive upper bound on <c>Issue.LastSeen</c>.</param>
 /// <param name="Search">Raw search query, holding free text and <c>key:value</c> tokens.</param>
+/// <param name="SortDirection">Direction the listing is sorted in, or <c>null</c> for the default.</param>
 public sealed record IssueFilterState(
     IssueStatus? Status,
     Severity? Level,
@@ -18,7 +19,8 @@ public sealed record IssueFilterState(
     bool Bookmarked,
     DateTimeOffset? Since,
     DateTimeOffset? Until,
-    string? Search);
+    string? Search,
+    IssueSortDirection? SortDirection = null);
 
 /// <summary>Builds the dismissible chips for the filters an issue listing is showing.</summary>
 public static class IssueFilterChips
@@ -56,7 +58,7 @@ public static class IssueFilterChips
             chips.Add(new ActiveFilterChip(ActiveFilterKind.Bookmarked, "Bookmarked"));
 
         if (state.Sort is { } sort && sort != IssueSortBy.LastSeen)
-            chips.Add(new ActiveFilterChip(ActiveFilterKind.Sort, SortLabel(sort)));
+            chips.Add(new ActiveFilterChip(ActiveFilterKind.Sort, SortLabel(sort, state.SortDirection)));
 
         chips.AddRange(SearchTokenChips.FromSearch(state.Search));
         return chips;
@@ -88,11 +90,17 @@ public static class IssueFilterChips
             : $"Until {UtcDateRangeInput.ToDateString(until!.Value)}";
     }
 
-    private static string SortLabel(IssueSortBy sort) => sort switch
+    private static string SortLabel(IssueSortBy sort, IssueSortDirection? direction)
     {
-        IssueSortBy.FirstSeen => "First seen",
-        IssueSortBy.OccurrenceCount => "Occurrences",
-        IssueSortBy.Priority => "Priority",
-        _ => sort.ToString(),
-    };
+        string label = sort switch
+        {
+            IssueSortBy.FirstSeen => "First seen",
+            IssueSortBy.OccurrenceCount => "Occurrences",
+            IssueSortBy.Priority => "Priority",
+            IssueSortBy.Level => "Severity",
+            _ => sort.ToString(),
+        };
+
+        return direction is IssueSortDirection.Ascending ? $"{label} ascending" : $"{label} descending";
+    }
 }

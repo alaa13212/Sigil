@@ -1,4 +1,5 @@
 using Sigil.Application.Models;
+using Sigil.Application.Models.Common;
 using Sigil.Application.Models.Events;
 using Sigil.Domain.Entities;
 
@@ -15,6 +16,9 @@ public interface IEventService
     // DTO access (UI/API)
     Task<PagedResponse<EventSummary>> GetEventSummariesAsync(int issueId, EventQueryParams query);
     Task<PagedResponse<EventSummary>> SearchEventsAsync(int projectId, EventQueryParams query);
+    Task<TimeSeries> GetProjectEventSeriesAsync(int projectId, int days = 7, TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto);
+    Task<TimeSeries> GetDashboardEventSeriesAsync(int days = 7, TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto);
+    Task<Dictionary<int, TimeSeries>> GetBulkProjectEventSeriesAsync(int days = 7, TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto);
     Task<EventDetailResponse?> GetEventDetailAsync(long eventId);
     Task<IssueEventDetailResponse?> GetIssueEventDetailAsync(int issueId, long eventId);
     Task<List<BreadcrumbResponse>> GetBreadcrumbsAsync(long eventId);

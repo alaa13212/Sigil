@@ -1,0 +1,35 @@
+@* Header cell that sorts a listing when clicked. *@
+
+<th class="@Class">
+    <button type="button" class="inline-flex items-center gap-1 hover:text-primary disabled:opacity-40 disabled:hover:text-inherit"
+            disabled="@Disabled" @onclick="() => OnClick.InvokeAsync()" title="@Title">
+        @Label
+        @if (Active)
+        {
+            <span aria-hidden="true">@(Descending ? "▼" : "▲")</span>
+        }
+    </button>
+</th>
+
+@code {
+    /// <summary>Text shown in the header cell.</summary>
+    [Parameter, EditorRequired] public string Label { get; set; }
+
+    /// <summary>True when the listing is sorted by this column.</summary>
+    [Parameter] public bool Active { get; set; }
+
+    /// <summary>Direction of the active column.</summary>
+    [Parameter] public bool Descending { get; set; }
+
+    /// <summary>Disables the header button.</summary>
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>Tooltip shown on the header button.</summary>
+    [Parameter] public string? Title { get; set; }
+
+    /// <summary>Classes applied to the header cell.</summary>
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>Raised when the header is clicked.</summary>
+    [Parameter] public EventCallback OnClick { get; set; }
+}

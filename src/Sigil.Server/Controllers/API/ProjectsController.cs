@@ -26,9 +26,9 @@ public class ProjectsController(IProjectService projectService, IProjectEntityAc
     }
 
     [HttpGet("overviews")]
-    public async Task<IActionResult> Overviews()
+    public async Task<IActionResult> Overviews([FromQuery] int days = 7)
     {
-        return Ok(await projectService.GetAllProjectOverviewsAsync());
+        return Ok(await projectService.GetAllProjectOverviewsAsync(Math.Clamp(days, 1, 90)));
     }
 
     [Authorize(Policy = SigilPermissions.CanViewProject)]

@@ -26,9 +26,9 @@ public class ApiProjectService(HttpClient http) : IProjectService
         }
     }
 
-    public async Task<List<ProjectOverviewResponse>> GetAllProjectOverviewsAsync()
+    public async Task<List<ProjectOverviewResponse>> GetAllProjectOverviewsAsync(int windowDays = 7)
     {
-        return await http.GetFromJsonAsync<List<ProjectOverviewResponse>>("api/projects/overviews") ?? [];
+        return await http.GetFromJsonAsync<List<ProjectOverviewResponse>>($"api/projects/overviews?days={windowDays}") ?? [];
     }
 
     public async Task<Project> CreateProjectAsync(string name, Platform platform, int? teamId = null)

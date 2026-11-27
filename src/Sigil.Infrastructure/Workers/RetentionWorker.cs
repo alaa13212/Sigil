@@ -14,6 +14,13 @@ internal class RetentionWorker(IServiceProvider services, IAppConfigService appC
         // Stagger startup to avoid competing with digestion
         await Task.Delay(TimeSpan.FromMinutes(2), ct);
 
+        logger.LogInformation(
+            "Retention baseline: events older than {MaxAgeDays} days are deleted, the oldest events beyond {MaxEvents} are deleted, the sweep runs every {IntervalMinutes} minutes and failed envelopes are kept for {FailedEnvelopeDays} days.",
+            appConfig.RetentionDefaultMaxAgeDays,
+            appConfig.RetentionDefaultMaxEvents,
+            appConfig.RetentionCheckIntervalMinutes,
+            appConfig.RetentionFailedEnvelopeMaxAgeDays);
+
         while (!ct.IsCancellationRequested)
         {
             try
@@ -49,6 +56,12 @@ internal class RetentionWorker(IServiceProvider services, IAppConfigService appC
             ct.ThrowIfCancellationRequested();
             await EnforceAgeRetentionAsync(dbContext, projectId, ct);
             await EnforceCountRetentionAsync(dbContext, projectId, ct);
+
+            logger.LogDebug(
+                "Retention policy for project {ProjectId}: events older than {MaxAgeDays} days are deleted and the oldest events beyond {MaxEvents} are deleted.",
+                projectId,
+                projectConfig.RetentionMaxAgeDays(projectId) ?? appConfig.RetentionDefaultMaxAgeDays,
+                projectConfig.RetentionMaxEventCount(projectId) ?? appConfig.RetentionDefaultMaxEvents);
         }
     }
 

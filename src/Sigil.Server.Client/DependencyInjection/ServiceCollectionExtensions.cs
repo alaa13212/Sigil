@@ -35,6 +35,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserPreferenceService, LocalStoragePreferenceService>();
         services.AddScoped<IAppConfigEditorService, ApiAppConfigEditorService>();
         services.AddScoped<IProjectConfigEditorService, ApiProjectConfigEditorService>();
+        services.AddScoped<IProjectLimitsService, ApiProjectLimitsService>();
         services.AddScoped<IProjectCorsService, ApiProjectCorsService>();
         services.AddScoped<ISharedLinkService, ApiSharedLinkService>();
         services.AddScoped<ISourceCodeService, ApiSourceCodeService>();
@@ -42,5 +43,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISourceMapService, ApiSourceMapService>();
         services.AddScoped<IIssueTrackerService, ApiIssueTrackerService>();
         services.AddScoped<IApiTokenService, ApiTokenClient>();
+        services.AddScoped<ShortcutTargetRegistry>();
     }
 }

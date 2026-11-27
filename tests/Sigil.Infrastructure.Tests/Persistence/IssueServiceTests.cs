@@ -381,6 +381,82 @@ public class IssueServiceTests(TestDatabaseFixture fixture)
     }
 
     [Fact]
+    public async Task GetSummaries_SortedBySeverityDescending()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var warning = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var fatal = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        (await ctx.Issues.FindAsync(warning.Id))!.Level = Severity.Warning;
+        (await ctx.Issues.FindAsync(fatal.Id))!.Level = Severity.Fatal;
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        var result = await service.GetIssueSummariesAsync(project.Id,
+            new IssueQueryParams { SortBy = IssueSortBy.Level, SortDescending = true });
+
+        result.Items[0].Id.Should().Be(fatal.Id);
+        result.Items[1].Id.Should().Be(warning.Id);
+    }
+
+    [Fact]
+    public async Task GetSummaries_SortedBySeverityAscending()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var warning = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var fatal = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        (await ctx.Issues.FindAsync(warning.Id))!.Level = Severity.Warning;
+        (await ctx.Issues.FindAsync(fatal.Id))!.Level = Severity.Fatal;
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        var result = await service.GetIssueSummariesAsync(project.Id,
+            new IssueQueryParams { SortBy = IssueSortBy.Level, SortDescending = false });
+
+        result.Items[0].Id.Should().Be(warning.Id);
+        result.Items[1].Id.Should().Be(fatal.Id);
+    }
+
+    [Fact]
+    public async Task GetSummaries_SortedByPriorityAscending_PutsLowPriorityFirst()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var low = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var high = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        (await ctx.Issues.FindAsync(low.Id))!.Priority = Priority.Low;
+        (await ctx.Issues.FindAsync(high.Id))!.Priority = Priority.High;
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        var result = await service.GetIssueSummariesAsync(project.Id,
+            new IssueQueryParams { SortBy = IssueSortBy.Priority, SortDescending = false });
+
+        result.Items[0].Id.Should().Be(low.Id);
+        result.Items[1].Id.Should().Be(high.Id);
+    }
+
+    [Fact]
+    public async Task GetSummaries_SortedByPriorityDescending_PutsHighPriorityFirst()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var low = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        var high = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        (await ctx.Issues.FindAsync(low.Id))!.Priority = Priority.Low;
+        (await ctx.Issues.FindAsync(high.Id))!.Priority = Priority.High;
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        var result = await service.GetIssueSummariesAsync(project.Id,
+            new IssueQueryParams { SortBy = IssueSortBy.Priority, SortDescending = true });
+
+        result.Items[0].Id.Should().Be(high.Id);
+        result.Items[1].Id.Should().Be(low.Id);
+    }
+
+    [Fact]
     public async Task GetSummaries_Since_ExcludesOlderIssues_IncludesBoundary()
     {
         await using var ctx = Ctx();

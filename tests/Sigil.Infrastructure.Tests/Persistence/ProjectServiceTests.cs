@@ -48,11 +48,15 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
         return engine;
     }
 
+    private static ProjectService CreateService(SigilDbContext context, IProjectAccessService? access = null)
+        => new(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime(),
+            access ?? new StubProjectAccessService());
+
     [Fact]
     public async Task CreateProject_PersistsWithApiKey()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
+        var service = CreateService(context);
 
         var project = await service.CreateProjectAsync("IntegrationTest Project", Platform.CSharp);
 
@@ -67,11 +71,11 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task GetProjectById_ExistingProject_ReturnsProject()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
+        var service = CreateService(context);
         var created = await service.CreateProjectAsync("GetById Test", Platform.Python);
 
         await using var context2 = CreateContext();
-        var service2 = new ProjectService(context2, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
+        var service2 = CreateService(context2);
         var found = await service2.GetProjectByIdAsync(created.Id);
 
         found.Should().NotBeNull();
@@ -82,7 +86,7 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task GetProjectById_NonExistent_ReturnsNull()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
+        var service = CreateService(context);
 
         var found = await service.GetProjectByIdAsync(999999);
 
@@ -93,7 +97,7 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task UpdateProject_ChangesName()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
+        var service = CreateService(context);
         var created = await service.CreateProjectAsync("Before Rename", Platform.JavaScript);
 
         var updated = await service.UpdateProjectAsync(created.Id, "After Rename");
@@ -110,7 +114,7 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task DeleteProject_RemovesFromDatabase()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
+        var service = CreateService(context);
         var created = await service.CreateProjectAsync("ToDelete", Platform.Go);
 
         var deleted = await service.DeleteProjectAsync(created.Id);
@@ -126,7 +130,7 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task DeleteProject_NonExistentId_ReturnsFalse()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
+        var service = CreateService(context);
 
         var deleted = await service.DeleteProjectAsync(999999);
 
@@ -137,7 +141,7 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task RotateApiKey_ReturnsNewKey()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
+        var service = CreateService(context);
         var created = await service.CreateProjectAsync("RotateKey Test", Platform.CSharp);
         var originalKey = created.ApiKey;
 
@@ -152,7 +156,7 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task GetAllProjects_ReturnsAll()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
+        var service = CreateService(context);
         await service.CreateProjectAsync("All-Test-1", Platform.CSharp);
         await service.CreateProjectAsync("All-Test-2", Platform.Python);
 
@@ -165,7 +169,7 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task GetProjectDetail_ReturnsDsn()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
+        var service = CreateService(context);
         var created = await service.CreateProjectAsync("DSN Test", Platform.CSharp);
 
         var detail = await service.GetProjectDetailAsync(created.Id);
@@ -180,7 +184,7 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
     public async Task CreateProject_SeedsDefaultProjectConfig()
     {
         await using var context = CreateContext();
-        var service = new ProjectService(context, StubAppConfig(), StubNormEngine(), StubProjectCache(), StubDateTime());
+        var service = CreateService(context);
         var created = await service.CreateProjectAsync("ConfigSeed Test", Platform.CSharp);
 
         await using var verifyCtx = CreateContext();
@@ -189,5 +193,122 @@ public class ProjectServiceTests(TestDatabaseFixture fixture)
             .ToListAsync();
 
         configs.Should().ContainSingle(c => c.Key == ProjectConfigKeys.HighVolumeThreshold);
+    }
+
+    // ── GetAllProjectOverviewsAsync ──────────────────────────────────────────
+
+    private static async Task<Issue> CreateIssueSeenAsync(SigilDbContext context, int projectId, DateTime firstSeen)
+    {
+        var issue = await TestHelper.CreateIssueAsync(context, projectId);
+        issue.FirstSeen = firstSeen;
+        issue.LastSeen = firstSeen;
+        issue.LastChangedAt = firstSeen;
+        await context.SaveChangesAsync();
+        return issue;
+    }
+
+    [Fact]
+    public async Task Overviews_ListOnlyTheProjectsTheUserCanSee()
+    {
+        await using var context = CreateContext();
+        var visible = await TestHelper.CreateProjectAsync(context);
+        await TestHelper.CreateProjectAsync(context);
+        var service = CreateService(context, new StubProjectAccessService(visible.Id));
+
+        var overviews = await service.GetAllProjectOverviewsAsync();
+
+        overviews.Should().ContainSingle();
+        overviews[0].Id.Should().Be(visible.Id);
+    }
+
+    [Fact]
+    public async Task Overviews_CountTheIssuesAndEventsInsideTheWindow()
+    {
+        await using var context = CreateContext();
+        var project = await TestHelper.CreateProjectAsync(context);
+        await CreateIssueSeenAsync(context, project.Id, new DateTime(2025, 5, 30, 0, 0, 0, DateTimeKind.Utc));
+        await CreateIssueSeenAsync(context, project.Id, new DateTime(2025, 5, 1, 0, 0, 0, DateTimeKind.Utc));
+        var inside = await TestHelper.CreateIssueAsync(context, project.Id);
+        inside.FirstSeen = new DateTime(2025, 5, 31, 0, 0, 0, DateTimeKind.Utc);
+        await context.SaveChangesAsync();
+        await TestHelper.CreateEventAsync(context, project.Id, inside.Id,
+            timestamp: new DateTime(2025, 5, 31, 12, 0, 0, DateTimeKind.Utc));
+        await TestHelper.CreateEventAsync(context, project.Id, inside.Id,
+            timestamp: new DateTime(2025, 5, 1, 12, 0, 0, DateTimeKind.Utc));
+        var service = CreateService(context, new StubProjectAccessService(project.Id));
+
+        var overview = (await service.GetAllProjectOverviewsAsync(7)).Single();
+
+        overview.IssueCount.Should().Be(3);
+        overview.EventCount.Should().Be(2);
+        overview.WindowDays.Should().Be(7);
+        overview.IssuesInWindow.Should().Be(2);
+        overview.EventsInWindow.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Overviews_ReportZeroForAProjectWithoutEventsInTheWindow()
+    {
+        await using var context = CreateContext();
+        var project = await TestHelper.CreateProjectAsync(context);
+        var issue = await TestHelper.CreateIssueAsync(context, project.Id);
+        await TestHelper.CreateEventAsync(context, project.Id, issue.Id,
+            timestamp: new DateTime(2025, 5, 1, 12, 0, 0, DateTimeKind.Utc));
+        var service = CreateService(context, new StubProjectAccessService(project.Id));
+
+        var overview = (await service.GetAllProjectOverviewsAsync(7)).Single();
+
+        overview.EventsInWindow.Should().Be(0);
+        overview.EventCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Overviews_LifetimeCountsDoNotDependOnTheWindow()
+    {
+        await using var context = CreateContext();
+        var project = await TestHelper.CreateProjectAsync(context);
+        var issue = await TestHelper.CreateIssueAsync(context, project.Id);
+        await TestHelper.CreateEventAsync(context, project.Id, issue.Id,
+            timestamp: new DateTime(2025, 5, 1, 12, 0, 0, DateTimeKind.Utc));
+        var service = CreateService(context, new StubProjectAccessService(project.Id));
+
+        var wide = (await service.GetAllProjectOverviewsAsync(30)).Single();
+        var narrow = (await service.GetAllProjectOverviewsAsync(1)).Single();
+
+        wide.IssueCount.Should().Be(narrow.IssueCount);
+        wide.EventCount.Should().Be(narrow.EventCount);
+        wide.WindowDays.Should().Be(30);
+        narrow.WindowDays.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Overviews_WithoutAVisibleProject_AreEmpty()
+    {
+        await using var context = CreateContext();
+        await TestHelper.CreateProjectAsync(context);
+        var service = CreateService(context, new StubProjectAccessService());
+
+        var overviews = await service.GetAllProjectOverviewsAsync();
+
+        overviews.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Overviews_OrderTheProjectsWithTheMostRecentActivityFirst()
+    {
+        await using var context = CreateContext();
+        var quiet = await TestHelper.CreateProjectAsync(context);
+        var busy = await TestHelper.CreateProjectAsync(context);
+        var quietIssue = await TestHelper.CreateIssueAsync(context, quiet.Id);
+        var busyIssue = await TestHelper.CreateIssueAsync(context, busy.Id);
+        await TestHelper.CreateEventAsync(context, quiet.Id, quietIssue.Id,
+            timestamp: new DateTime(2025, 5, 1, 12, 0, 0, DateTimeKind.Utc));
+        await TestHelper.CreateEventAsync(context, busy.Id, busyIssue.Id,
+            timestamp: new DateTime(2025, 5, 31, 12, 0, 0, DateTimeKind.Utc));
+        var service = CreateService(context, new StubProjectAccessService(quiet.Id, busy.Id));
+
+        var overviews = await service.GetAllProjectOverviewsAsync();
+
+        overviews.Select(o => o.Id).Should().ContainInOrder(busy.Id, quiet.Id);
     }
 }

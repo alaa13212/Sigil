@@ -53,6 +53,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ProjectService>();
         services.AddScoped<IProjectService>(UseExisting<ProjectService>);
         services.AddScoped<IProjectEntityAccess>(UseExisting<ProjectService>);
+        services.AddScoped<IProjectAccessService, ProjectAccessService>();
 
         services.AddScoped<IssueService>();
         services.AddScoped<IIssueService>(UseExisting<IssueService>);
@@ -102,6 +103,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IProjectConfigService, ProjectConfigService>();
         services.AddSingleton<IAsyncStartupInitializer>(sp => (IAsyncStartupInitializer) sp.GetRequiredService<IProjectConfigService>());
         services.AddScoped<IProjectConfigEditorService, ProjectConfigEditorService>();
+        services.AddScoped<IProjectLimitsService, ProjectLimitsService>();
         services.AddScoped<IProjectCorsService, ProjectCorsService>();
         services.AddScoped<ISearchService, SearchService>();
         services.AddScoped<IBadgeService, BadgeService>();

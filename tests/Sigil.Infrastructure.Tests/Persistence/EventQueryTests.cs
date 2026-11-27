@@ -18,7 +18,8 @@ public class EventQueryTests(TestDatabaseFixture fixture)
         => new(ctx,
             Substitute.For<ICompressionService>(),
             Substitute.For<IDateTime>(),
-            Substitute.For<ISourceMapService>());
+            Substitute.For<ISourceMapService>(),
+            new StubProjectAccessService());
 
     private static DateTimeOffset Utc(DateTime value) => new(value, TimeSpan.Zero);
 

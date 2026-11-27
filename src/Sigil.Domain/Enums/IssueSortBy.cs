@@ -6,4 +6,5 @@ public enum IssueSortBy
     FirstSeen,
     OccurrenceCount,
     Priority,
+    Level,
 }
