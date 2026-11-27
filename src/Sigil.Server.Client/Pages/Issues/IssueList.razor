@@ -1,6 +1,9 @@
 @page "/projects/{ProjectId:int}/issues"
 @attribute [Authorize]
+@implements IShortcutTarget
+@implements IDisposable
 @using System.Web
+@using Sigil.Application.Input
 @using Sigil.Application.Models.Shared
 @using Sigil.Application.Models.Issues
 @using Sigil.Application.Models.Teams
@@ -11,6 +14,7 @@
 @inject IRecommendationService RecommendationService
 @inject IProjectService ProjectService
 @inject ITeamService TeamService
+@inject ShortcutTargetRegistry ShortcutTargets
 @inject NavigationManager Navigation
 
 <PageTitle>Issues — Sigil</PageTitle>
@@ -198,7 +202,7 @@
                         var isMerged = issue.MergeSetId.HasValue;
                         var targetUrl = $"/projects/{ProjectId}/issues/{issue.Id}";
                         var isBookmarked = bookmarkedIssueIds.Contains(issue.Id);
-                        <tr class="hover:bg-base-300 relative @(_selected.Contains(issue.Id) ? "bg-primary/5" : "")">
+                        <tr id="@($"issue-row-{issue.Id}")" class="hover:bg-base-300 relative @(_selected.Contains(issue.Id) ? "bg-primary/5" : "") @FocusRowClass(issue.Id)">
                             <td @onclick:stopPropagation="true">
                                 <input type="checkbox" class="checkbox checkbox-sm"
                                        checked="@_selected.Contains(issue.Id)"
@@ -280,6 +284,20 @@
         <Pagination Page="currentPage" TotalCount="Response.TotalCount" PageSize="PageSize"/>
     }
 </div>
+
+@if (_toast is not null)
+{
+    <div class="toast toast-end z-50">
+        <div class="alert alert-success shadow-sm">
+            <span class="text-sm">@_toast</span>
+            @if (_toastUndoIssueId is { } undoIssueId)
+            {
+                <button type="button" class="btn btn-xs btn-ghost" @onclick="() => UndoResolveAsync(undoIssueId)">Undo</button>
+            }
+            <button type="button" class="btn btn-xs btn-ghost btn-circle" @onclick="DismissToast">×</button>
+        </div>
+    </div>
+}
 
 @code {
     [Parameter] public int ProjectId { get; set; }
@@ -375,6 +393,12 @@
     private List<TeamMemberResponse> _assignees = [];
     private Guid? _assigneeId;
 
+    // Keyboard focus: the row the shortcuts act on
+    private readonly ListFocusState _focus = new();
+    private string? _toast;
+    private int? _toastUndoIssueId;
+    private System.Timers.Timer? _toastTimer;
+
     private bool HasSelection => _selected.Count > 0;
 
     private bool HasAssignee => _assigneeId.HasValue;
@@ -428,6 +452,7 @@
         }
         _lastQueryState = queryState;
         _selected.Clear();
+        _focus.Reset();
 
         await LoadIssues();
         StateHasChanged();
@@ -455,6 +480,7 @@
             };
 
             Response = await IssueService.GetIssueSummariesAsync(ProjectId, query);
+            _focus.ClampTo(Response.Items.Count);
 
             // Load histograms in background (fire and don't block UI)
             _ = LoadHistogramsAsync(Response.Items.Select(i => i.Id).ToList());
@@ -708,5 +734,80 @@
         {
             _assignees = [];
         }
+    }
+
+    protected override void OnInitialized() => ShortcutTargets.Register(this);
+
+    public void Dispose()
+    {
+        ShortcutTargets.Unregister(this);
+        _toastTimer?.Dispose();
+    }
+
+    public async Task<string?> MoveFocusAsync(int delta)
+    {
+        if (Response is null) return null;
+
+        _focus.Move(delta, Response.Items.Count);
+        await InvokeAsync(StateHasChanged);
+
+        return FocusedRowId();
+    }
+
+    public async Task<bool> ResolveFocusedAsync()
+    {
+        if (Response is null || !_focus.HasFocus) return false;
+
+        var issue = Response.Items[_focus.Index];
+        await IssueService.UpdateIssueStatusAsync(issue.Id, IssueStatus.Resolved);
+        await LoadIssues();
+        ShowToast($"Issue #{issue.Id} resolved", issue.Id);
+
+        return true;
+    }
+
+    private string? FocusedRowId()
+    {
+        if (Response is null || !_focus.HasFocus || _focus.Index >= Response.Items.Count) return null;
+
+        return $"issue-row-{Response.Items[_focus.Index].Id}";
+    }
+
+    private string FocusRowClass(int issueId)
+    {
+        if (Response is null || !_focus.HasFocus || _focus.Index >= Response.Items.Count) return "";
+
+        return Response.Items[_focus.Index].Id == issueId ? "bg-base-300" : "";
+    }
+
+    private void ShowToast(string message, int? undoIssueId = null)
+    {
+        _toast = message;
+        _toastUndoIssueId = undoIssueId;
+
+        _toastTimer?.Stop();
+        _toastTimer?.Dispose();
+        _toastTimer = new System.Timers.Timer(8000) { AutoReset = false };
+        _toastTimer.Elapsed += async (_, _) => await InvokeAsync(() =>
+        {
+            _toast = null;
+            _toastUndoIssueId = null;
+            StateHasChanged();
+        });
+        _toastTimer.Start();
+    }
+
+    private void DismissToast()
+    {
+        _toast = null;
+        _toastUndoIssueId = null;
+        _toastTimer?.Stop();
+    }
+
+    private async Task UndoResolveAsync(int issueId)
+    {
+        await IssueService.UpdateIssueStatusAsync(issueId, IssueStatus.Open);
+        await LoadIssues();
+        DismissToast();
     }
 }

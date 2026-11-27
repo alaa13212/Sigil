@@ -1,10 +1,12 @@
 @implements IAsyncDisposable
 @using Sigil.Application.Models.Search
+@using Sigil.Application.Models.Events
 @using System.Text.Json
 @using System.Text.RegularExpressions
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 @inject ISearchService SearchService
+@inject IEventService EventService
 @inject IUserPreferenceService Preferences
 
 <ModalBase IsOpen="_isOpen" OnClose="Close" Size="ModalSize.Large" BoxClass="relative flex flex-col px-0 max-md:h-[85vh] md:mb-[10vh] md:h-[clamp(13rem,80vh,80vh)] md:w-11/12">
@@ -183,6 +185,8 @@
     private static readonly (string Name, string Path)[] ProjectSettingsPages =
     [
         ("Project Issues", "issues"),
+        ("Project Releases", "releases"),
+        ("Project Events", "events"),
         ("Project Settings", "settings"),
         ("Alert Rules", "settings/alerts"),
         ("Inbound Filters", "settings/filters"),
@@ -196,12 +200,15 @@
 
     private static readonly Regex ProjectIdRegex = new(@"^/projects/(\d+)(?:/|$)", RegexOptions.Compiled);
 
+    private static readonly Regex EventIdQuery = new(@"^event:(\d+)$", RegexOptions.Compiled);
+
     private bool _isOpen;
     private bool _scopeAll;
     private int? _currentProjectId;
     private string _query = string.Empty;
     private bool _loading;
     private SearchResultsResponse? _apiResults;
+    private EventDetailResponse? _eventResult;
     private List<StaticPage> _pageResults = [];
     private List<RecentItem> _recents = [];
     private List<SearchResultSection> _sections = [];
@@ -234,6 +241,18 @@
         }
         else
         {
+            if (_eventResult is not null && _currentProjectId is { } eventProjectId)
+            {
+                var eventUrl = $"/projects/{eventProjectId}/issues/{_eventResult.IssueId}?tab=SuggestedEvent&event={_eventResult.Id}";
+                var eventLabel = string.IsNullOrWhiteSpace(_eventResult.ExceptionType)
+                    ? $"Event {_eventResult.Id}"
+                    : $"Event {_eventResult.Id} — {_eventResult.ExceptionType}";
+                sections.Add(new SearchResultSection("Event",
+                    [new SearchResult(eventLabel, eventUrl, "event",
+                        Prefix: _eventResult.ExceptionType,
+                        Suffix: _eventResult.Message)]));
+            }
+
             if (_apiResults?.Issues.Count > 0)
                 sections.Add(new SearchResultSection("Issues",
                     _apiResults.Issues.Select(i =>
@@ -398,6 +417,7 @@
     {
         _query = string.Empty;
         _apiResults = null;
+        _eventResult = null;
         _pageResults = [];
         BuildSections();
     }
@@ -434,13 +454,15 @@
         if (string.IsNullOrWhiteSpace(_query))
         {
             _apiResults = null;
+            _eventResult = null;
             _pageResults = [];
             BuildSections();
             return;
         }
 
         _apiResults = null;
-        _pageResults = MatchStaticPages(_query);
+        _eventResult = null;
+        _pageResults = EventIdQuery.IsMatch(_query.Trim()) ? [] : MatchStaticPages(_query);
         BuildSections();
 
         _debounce = new System.Timers.Timer(250);
@@ -478,6 +500,16 @@
 
         try
         {
+            var eventMatch = EventIdQuery.Match(_query.Trim());
+            if (eventMatch.Success)
+            {
+                _apiResults = null;
+                _pageResults = [];
+                _eventResult = await LoadEventAsync(long.Parse(eventMatch.Groups[1].Value));
+                return;
+            }
+
+            _eventResult = null;
             int? projectId = (_scopeAll || !_currentProjectId.HasValue) ? null : _currentProjectId;
             _apiResults = await SearchService.SearchAsync(_query, projectId);
         }
@@ -489,6 +521,18 @@
         {
             _loading = false;
             BuildSections();
+        }
+    }
+
+    private async Task<EventDetailResponse?> LoadEventAsync(long eventId)
+    {
+        try
+        {
+            return await EventService.GetEventDetailAsync(eventId);
+        }
+        catch
+        {
+            return null;
         }
     }
 
