@@ -177,7 +177,8 @@ public class ApiTokenServiceTests(TestDatabaseFixture fixture)
     {
         await using var ctx = Ctx();
         var user = await TestHelper.CreateUserAsync(ctx);
-        var role = new IdentityRole<Guid> { Id = Guid.NewGuid(), Name = "Admin", NormalizedName = "ADMIN" };
+        var roleName = $"Role-{Guid.NewGuid():N}";
+        var role = new IdentityRole<Guid> { Id = Guid.NewGuid(), Name = roleName, NormalizedName = roleName.ToUpperInvariant() };
         ctx.Roles.Add(role);
         ctx.UserRoles.Add(new IdentityUserRole<Guid> { UserId = user.Id, RoleId = role.Id });
         await ctx.SaveChangesAsync();
@@ -188,7 +189,7 @@ public class ApiTokenServiceTests(TestDatabaseFixture fixture)
         var identity = await service.AuthenticateAsync(created.Token);
 
         identity.Should().NotBeNull();
-        identity!.Roles.Should().Contain("Admin");
+        identity!.Roles.Should().Contain(roleName);
     }
 
     [Fact]
