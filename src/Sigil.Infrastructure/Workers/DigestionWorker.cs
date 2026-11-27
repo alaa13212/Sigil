@@ -76,6 +76,7 @@ internal class DigestionWorker(
             var sw = Stopwatch.StartNew();
             var successIds = new List<long>();
             var failures = new List<(long Id, string Error)>();
+            var discarded = new List<(long Id, string Error)>();
             var parsedEvents = new List<ParsedEvent>();
 
             var context = await contextBuilder.BuildAsync(group.Key);
@@ -83,6 +84,15 @@ internal class DigestionWorker(
             sw.Restart();
             foreach (var raw in group)
             {
+                // An envelope that carries no event item is discarded instead of parsed, so that it
+                // leaves the digestion queue instead of waiting for a parser that will never use it.
+                string? unsupportedType = EnvelopeItemTypes.DetectUnsupported(raw.RawData);
+                if (unsupportedType is not null)
+                {
+                    discarded.Add((raw.Id, EnvelopeItemTypes.UnsupportedError(unsupportedType)));
+                    continue;
+                }
+
                 try
                 {
                     parsedEvents.AddRange(await parser.Parse(context, raw.RawData, raw.ReceivedAt));
@@ -96,9 +106,9 @@ internal class DigestionWorker(
             }
             var parseElapsedMs = (int)sw.ElapsedMilliseconds;
 
-            if (failures.Count > 0)
+            if (failures.Count > 0 || discarded.Count > 0)
             {
-                await rawEnvelopeService.BulkMarkFailedAsync(failures);
+                await rawEnvelopeService.BulkMarkFailedAsync(failures.Concat(discarded));
                 metrics.RecordEventsDropped(failures.Count);
             }
 
@@ -136,6 +146,11 @@ internal class DigestionWorker(
                 {
                     dbContext.ChangeTracker.Clear();
                 }
+            }
+            else if (successIds.Count > 0)
+            {
+                // Envelopes that carried no event have been parsed and leave the queue as well.
+                await rawEnvelopeService.DeleteAsync(successIds);
             }
         }
     }

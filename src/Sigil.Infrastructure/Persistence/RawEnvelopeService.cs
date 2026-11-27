@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
 using Sigil.Domain.Entities;
@@ -8,18 +9,13 @@ internal class RawEnvelopeService(SigilDbContext context, IDateTime dateTime) : 
 {
     public async Task StoreAsync(int projectId, string rawData, DateTime receivedAt)
     {
-        context.RawEnvelopes.Add(new RawEnvelope { ProjectId = projectId, RawData = rawData, ReceivedAt = receivedAt });
+        context.RawEnvelopes.Add(NewEnvelope(projectId, rawData, receivedAt));
         await context.SaveChangesAsync();
     }
 
     public async Task BulkStoreAsync(IEnumerable<(int ProjectId, string RawData, DateTime ReceivedAt)> items)
     {
-        var entities = items.Select(i => new RawEnvelope
-        {
-            ProjectId = i.ProjectId,
-            RawData = i.RawData,
-            ReceivedAt = i.ReceivedAt
-        });
+        var entities = items.Select(i => NewEnvelope(i.ProjectId, i.RawData, i.ReceivedAt));
         context.RawEnvelopes.AddRange(entities);
         await context.SaveChangesAsync();
     }
@@ -75,5 +71,132 @@ internal class RawEnvelopeService(SigilDbContext context, IDateTime dateTime) : 
         }
 
         await context.SaveChangesAsync();
+    }
+
+    /// <summary>Builds an envelope row, marking an envelope Sigil does not process as discarded.</summary>
+    private static RawEnvelope NewEnvelope(int projectId, string rawData, DateTime receivedAt)
+    {
+        string? unsupportedType = EnvelopeItemTypes.DetectUnsupported(rawData);
+
+        return new RawEnvelope
+        {
+            ProjectId = projectId,
+            RawData = rawData,
+            ReceivedAt = receivedAt,
+            Error = unsupportedType is null ? null : EnvelopeItemTypes.UnsupportedError(unsupportedType),
+            ProcessedAt = unsupportedType is null ? null : receivedAt,
+        };
+    }
+}
+
+/// <summary>Sentry envelope item types and the detection of the types Sigil does not process.</summary>
+internal static class EnvelopeItemTypes
+{
+    /// <summary>Item type of an error event envelope.</summary>
+    public const string Event = "event";
+
+    /// <summary>Label used for item types outside the known set.</summary>
+    public const string Other = "other";
+
+    /// <summary>Prefix of the error recorded for a discarded envelope.</summary>
+    public const string UnsupportedErrorPrefix = "unsupported envelope type: ";
+
+    /// <summary>Item types Sigil processes.</summary>
+    public static readonly IReadOnlyList<string> Supported = [Event];
+
+    /// <summary>Known Sentry envelope item types.</summary>
+    public static readonly IReadOnlyList<string> Known =
+    [
+        Event,
+        "transaction",
+        "client_report",
+        "session",
+        "attachment",
+        "profile",
+        "user_report",
+        "feedback",
+        "replay_event",
+        "replay_recording",
+        "check_in",
+        "statsd",
+        "metric_buckets",
+        "otel_log",
+        "span",
+        "log",
+    ];
+
+    /// <summary>Item type of an envelope that Sigil does not process, or null when the envelope holds a supported item.</summary>
+    public static string? DetectUnsupported(string rawEnvelope)
+    {
+        if (string.IsNullOrEmpty(rawEnvelope))
+            return null;
+
+        using var reader = new StringReader(rawEnvelope);
+
+        // The first line holds the envelope header, the lines after it alternate item header and payload.
+        if (reader.ReadLine() is null)
+            return null;
+
+        string? unsupported = null;
+        bool hasSupported = false;
+
+        while (reader.ReadLine() is { } itemHeaderLine)
+        {
+            string? type = ReadItemType(itemHeaderLine);
+
+            // Skip the payload line of this item.
+            reader.ReadLine();
+
+            if (type is null)
+                continue;
+
+            if (IsSupported(type))
+            {
+                hasSupported = true;
+                continue;
+            }
+
+            unsupported ??= type;
+        }
+
+        if (hasSupported)
+            return null;
+
+        return unsupported;
+    }
+
+    /// <summary>Maps an item type onto the known set, folding unknown types into one label.</summary>
+    public static string Normalize(string? type)
+    {
+        if (string.IsNullOrWhiteSpace(type))
+            return Other;
+
+        string trimmed = type.Trim().ToLowerInvariant();
+        return Known.Contains(trimmed) ? trimmed : Other;
+    }
+
+    /// <summary>Error recorded for an envelope Sigil does not process.</summary>
+    public static string UnsupportedError(string type) => UnsupportedErrorPrefix + Normalize(type);
+
+    private static bool IsSupported(string type) =>
+        Supported.Contains(type.Trim().ToLowerInvariant());
+
+    private static string? ReadItemType(string itemHeaderLine)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(itemHeaderLine);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+                return null;
+
+            if (!document.RootElement.TryGetProperty("type", out JsonElement typeElement))
+                return null;
+
+            return typeElement.ValueKind == JsonValueKind.String ? typeElement.GetString() : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }

@@ -11,6 +11,9 @@ public static class PrometheusExpositionWriter
     /// <summary>Content type declared by the Prometheus text exposition format.</summary>
     public const string ContentType = "text/plain; version=0.0.4; charset=utf-8";
 
+    /// <summary>Number of characters kept from a release commit sha.</summary>
+    public const int CommitShaLength = 7;
+
     /// <summary>Renders the snapshot as exposition text.</summary>
     public static string Write(MetricsSnapshot snapshot)
     {
@@ -22,14 +25,28 @@ public static class PrometheusExpositionWriter
             "Current issue count by project, status and level.",
             snapshot.Issues.Select(i =>
                 Sample(
-                    new[] { Label("project", i.Project), Label("status", StatusName(i.Status)), Label("level", SeverityName(i.Level)) },
+                    new[]
+                    {
+                        Label("project", i.Project),
+                        Label("project_id", Number(i.ProjectId)),
+                        Label("status", StatusName(i.Status)),
+                        Label("level", SeverityName(i.Level)),
+                    },
                     i.Count)));
 
         Family(sb, "sigil_events", "gauge",
-            "Events received within the window, by project and level.",
+            EventsHelp(),
             snapshot.Events.Select(e =>
                 Sample(
-                    new[] { Label("project", e.Project), Label("level", SeverityName(e.Level)), Label("window", WindowName(e.Window)) },
+                    new[]
+                    {
+                        Label("project", e.Project),
+                        Label("project_id", Number(e.ProjectId)),
+                        Label("level", SeverityName(e.Level)),
+                        Label("window", WindowName(e.Window)),
+                        Label("environment", e.Environment),
+                        Label("status", StatusName(e.Status)),
+                    },
                     e.Count)));
 
         Family(sb, "sigil_events_ingested_total", "counter",
@@ -44,6 +61,16 @@ public static class PrometheusExpositionWriter
             "Envelopes currently awaiting digestion.",
             [Sample([], snapshot.DigestionBacklog)]);
 
+        Family(sb, "sigil_digestion_oldest_pending_seconds", "gauge",
+            "Age of the oldest envelope still awaiting digestion, in seconds. Zero when the queue is empty.",
+            [Sample([], snapshot.DigestionOldestPendingSeconds)]);
+
+        Family(sb, "sigil_envelopes_discarded_total", "counter",
+            "Envelopes discarded because Sigil does not process their item type, by envelope item type. " +
+            "Counts the discarded envelopes still held in the database; retention removes older rows.",
+            snapshot.DiscardedEnvelopes.Select(d =>
+                Sample(new[] { Label("type", d.Type) }, d.Count)));
+
         Family(sb, "sigil_alert_deliveries_total", "counter",
             "Alert deliveries recorded, by channel type and delivery status.",
             snapshot.AlertDeliveries.Select(a =>
@@ -51,9 +78,48 @@ public static class PrometheusExpositionWriter
                     new[] { Label("channel", a.Channel.ToString().ToLowerInvariant()), Label("status", a.Status.ToString().ToLowerInvariant()) },
                     a.Count)));
 
+        Family(sb, "sigil_new_issues", "gauge",
+            "Issues first seen inside the window, by project and level. One series per observed combination.",
+            snapshot.NewIssues.Select(n =>
+                Sample(
+                    new[]
+                    {
+                        Label("project", n.Project),
+                        Label("project_id", Number(n.ProjectId)),
+                        Label("level", SeverityName(n.Level)),
+                        Label("window", WindowName(n.Window)),
+                    },
+                    n.Count)));
+
+        Family(sb, "sigil_release_info", "gauge",
+            "Newest release seen for each project. Always 1.",
+            snapshot.Releases.Select(r =>
+                Sample(
+                    new[]
+                    {
+                        Label("project", r.Project),
+                        Label("project_id", Number(r.ProjectId)),
+                        Label("release", r.Release),
+                        Label("commit", CommitSha(r.Commit)),
+                    },
+                    1L)));
+
+        Family(sb, "sigil_release_first_seen_timestamp_seconds", "gauge",
+            "Unix timestamp of the first time the newest release of a project was seen.",
+            snapshot.Releases.Select(r =>
+                Sample(
+                    new[]
+                    {
+                        Label("project", r.Project),
+                        Label("project_id", Number(r.ProjectId)),
+                    },
+                    UnixSeconds(r.FirstSeenAt))));
+
         Family(sb, "sigil_last_ingestion_timestamp_seconds", "gauge",
-            "Unix timestamp of the most recently ingested event, or 0 when none has been ingested.",
-            [Sample([], UnixSeconds(snapshot.LastIngestionUtc))]);
+            "Unix timestamp of the most recently ingested event, or 0 when none has been ingested. " +
+            "Seeded from persisted data, so it survives a restart.",
+            [Sample([], UnixSeconds(LatestIngestion(snapshot)))]);
+
         Family(sb, "sigil_build_info", "gauge",
             "Build information for the running Sigil instance. Always 1.",
             [Sample([Label("version", snapshot.BuildVersion)], 1L)]);
@@ -100,6 +166,14 @@ public static class PrometheusExpositionWriter
         return sb.ToString();
     }
 
+    /// <summary>Help text of the sigil_events family.</summary>
+    private static string EventsHelp() =>
+        "Events received within the window, by project, level, environment and issue status. " +
+        "One series per observed combination, combinations without events are not reported. " +
+        $"Environment values are capped at the {MetricsDefaults.EnvironmentLabelLimit} most frequent values per project, " +
+        $"the remaining values are reported as {MetricsDefaults.EnvironmentOtherLabel} " +
+        $"and events without an environment tag as {MetricsDefaults.EnvironmentMissingLabel}.";
+
     private static void Family(StringBuilder sb, string name, string type, string help, IEnumerable<(string Labels, string Value)> samples)
     {
         sb.Append("# HELP ").Append(name).Append(' ').Append(EscapeHelp(help)).Append('\n');
@@ -112,6 +186,9 @@ public static class PrometheusExpositionWriter
     private static (string Labels, string Value) Sample(IReadOnlyList<(string Key, string Value)> labels, long value) =>
         Render(labels, value.ToString(CultureInfo.InvariantCulture));
 
+    private static (string Labels, string Value) Sample(IReadOnlyList<(string Key, string Value)> labels, double value) =>
+        Render(labels, value.ToString("0.###", CultureInfo.InvariantCulture));
+
     private static (string Labels, string Value) Sample(IReadOnlyList<(string Key, string Value)> labels, string value) =>
         Render(labels, value);
 
@@ -122,6 +199,31 @@ public static class PrometheusExpositionWriter
     }
 
     private static (string Key, string Value) Label(string key, string value) => (key, value);
+
+    private static string Number(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>Short form of a commit sha, empty when the release carries no commit.</summary>
+    private static string CommitSha(string? commit)
+    {
+        if (string.IsNullOrWhiteSpace(commit))
+            return "";
+
+        return commit.Length <= CommitShaLength ? commit : commit[..CommitShaLength];
+    }
+
+    /// <summary>Later of the in-process counter and the persisted ingestion instant.</summary>
+    private static DateTime? LatestIngestion(MetricsSnapshot snapshot)
+    {
+        if (snapshot.LastIngestionUtc is null)
+            return snapshot.LastPersistedIngestionUtc;
+
+        if (snapshot.LastPersistedIngestionUtc is null)
+            return snapshot.LastIngestionUtc;
+
+        return snapshot.LastIngestionUtc >= snapshot.LastPersistedIngestionUtc
+            ? snapshot.LastIngestionUtc
+            : snapshot.LastPersistedIngestionUtc;
+    }
 
     private static string UnixSeconds(DateTime? utc)
     {
