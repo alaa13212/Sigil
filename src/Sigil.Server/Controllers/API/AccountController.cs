@@ -9,7 +9,7 @@ namespace Sigil.Server.Controllers.API;
 
 [ApiController]
 [Route("api/account")]
-public class AccountController(IAuthService authService) : SigilController
+public class AccountController(IAuthService authService, ICurrentUserService currentUserService) : SigilController
 {
     [AllowAnonymous]
     [HttpPost("login")]
@@ -20,6 +20,17 @@ public class AccountController(IAuthService authService) : SigilController
             return Unauthorized(new { errors = result.Errors });
 
         return Ok(result.User);
+    }
+
+    [Authorize]
+    [HttpGet("me")]
+    public async Task<IActionResult> GetCurrentUser()
+    {
+        var user = await currentUserService.GetCurrentUserAsync();
+        if (user is null)
+            return Unauthorized();
+
+        return Ok(user);
     }
 
     [Authorize]

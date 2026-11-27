@@ -214,7 +214,7 @@ internal class PasskeyService(
         user.LastLogin = dateTime.UtcNow;
         await userManager.UpdateAsync(user);
 
-        await signInManager.SignInAsync(user, isPersistent: false);
+        await signInManager.SignInAsync(user, isPersistent: true);
 
         var roles = await userManager.GetRolesAsync(user);
         return AuthResult.Success(new UserInfo(user.Id, user.Email!, user.DisplayName, user.CreatedAt, user.LastLogin, roles.ToList(), user.EmailConfirmed));
