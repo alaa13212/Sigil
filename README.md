@@ -81,6 +81,7 @@ All four are per-project, rule-based, and applied during digestion.
 - **Passkey Authentication**: login with a one-time passkey or with a **YubiKey**
 - **Teams and projects**: group projects under a team and grant per-user roles (`Owner`, `Admin`, `Member`)
 - **Project-scoped authorization** enforced on every mutating API route
+- **Read-only API tokens**: create a token in **Settings → API Tokens** and present it as `Authorization: Bearer <token>`. A token authorizes `GET` and `HEAD` requests under `/api` only, never carries the admin role, and is refused by the endpoints that return a secret.
 - **Invite-only onboarding**: an admin creates an invite link per user, and the recipient activates
   their own account from it. There is no open self-registration.
 
@@ -88,7 +89,7 @@ All four are per-project, rule-based, and applied during digestion.
 
 - **Ingestion rate limits**: a sliding-window limiter with a global cap, a default per-project cap, and a per-project override. Over-limit traffic is rejected rather than allowed to degrade the database.
 - **Retention**: a background worker enforces a maximum event age and a maximum event count, with global defaults and per-project overrides. Failed raw envelopes have their own, shorter, retention window.
-- **Prometheus metrics**: a `/metrics` endpoint exports issue counts, severity-separated event volumes over 5m/15m/1h/24h windows, ingestion counters, digestion backlog, alert deliveries and build info, gated by a dedicated token or a CIDR allow-list.
+- **Prometheus metrics**: a `/metrics` endpoint exports issue counts, severity-separated event volumes over 5m/15m/1h/24h windows, ingestion counters, digestion backlog and oldest-pending age, release info, new-issue counts, alert deliveries and build info, gated by a dedicated token or a CIDR allow-list.
 
 ### Web UI
 

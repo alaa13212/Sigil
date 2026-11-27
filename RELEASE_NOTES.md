@@ -1,195 +1,145 @@
-# Sigil v0.8.0
+# Sigil v0.8.1
 
-Search, filtering and observability — the largest release since v0.7.0.
+Read-only API access, and a metrics endpoint that survives a restart.
 
-This release lands Phase 9 in full, the remaining Phase 8 integrations, and the
-operational groundwork (CI, README, Prometheus export) that makes the product
-self-hostable with confidence.
+This release closes the gap that a deployment without its own database exporter kept
+running into: the `/api` endpoints had no supported way in for a script, and the
+metrics that exporter provided were missing from `/metrics`. It also fixes three
+defects that made pages crash and events go missing.
 
-**22 commits · 924 → 1366 tests · no new runtime dependency.**
-
----
-
-## Filtering and search
-
-### Issue date-range filtering
-
-Issue lists can now be scoped to a time window. Filtering runs on `Issue.LastSeen`,
-because an issue is a grouping bucket rather than an event — "issues active in this
-window" is the meaningful query, and it matches the existing default sort.
-
-A shared `DateRangePicker` component provides 24h / 7d / 30d / 90d presets and a
-custom range, and is reused by the issue list, the event list and the chart range
-selector. Ranges are transmitted as UTC instants, so a browser offset never shifts
-the window.
-
-### Event search and filtering
-
-The largest gap in the product, now closed. Events were previously unfilterable —
-finding one specific event in an issue with thousands of occurrences meant clicking
-"next" repeatedly.
-
-Events can now be filtered by date range, severity, release, logger, platform, user,
-free text, tag filters, and exact SDK event id, within an issue or across a whole
-project. The search grammar is shared with the issue list, so `level:error tag:env:prod`
-works in both places.
-
-Supporting work: new indexes for project-wide and level-filtered event browse, a
-project-wide event list page, and a shared event table component.
-
-### Filter state lives in the URL
-
-Every filter — status, severity, sort, date range, search, bookmarked — is now part of
-the URL. Combinations are shareable, bookmarkable and survive a refresh.
-
-### Active filter chips and a wider grammar
-
-Each active filter renders as a dismissible chip. Dismissing one reparses the query
-rather than editing the string, so free text and the other tokens survive. The grammar
-now understands `release:`, `is:assigned`, `is:unassigned`, `is:bookmarked` and
-`is:unviewed`, in addition to the existing `key:value` tag filters.
+**8 commits · 1366 → 1469 tests · no new runtime dependency.**
 
 ---
 
-## Charts
+## API tokens
 
-### Interactive time series
+### Read-only tokens for the API endpoints
 
-Charts are now drawn from a `TimeSeries` model that carries its own window, instead of
-a bare list of counts. That makes axis labels, range captions and per-bucket tooltips
-possible.
+The API endpoints accepted only the UI cookie, so a script had no supported way in
+and a deployment kept its own database exporter beside Sigil.
 
-- The chart always states the window it is showing (`Oct 1 – Oct 7, 2026 · 6-hour buckets`),
-  read from the data itself, so it can never disagree with what is plotted.
-- Every bucket carries a tooltip with its start, end and exact count.
-- Bucket width adapts to the range — hourly, 6-hour, daily or weekly — and can be
-  overridden. Weekly buckets align to ISO weeks, starting Monday, in UTC.
-- Bar and line + area modes.
-- Empty, single-point and all-zero states are distinct rather than a blank box.
+A user creates a token in **Settings → API Tokens** and receives the secret once.
+Only the SHA-256 hash is stored, the lookup compares it in constant time, and a
+revoked or expired token is rejected. The token is presented as a bearer credential
+and authenticates `GET` and `HEAD` requests under `/api` only, so it can never
+authorize a state-changing request. The UI cookie keeps working unchanged.
 
-Rendering is done in real pixel space, so the chart no longer stretches the way the old
-sparkline did.
+A token carries the read access of its owner, so a script sees what its creator sees,
+minus the admin role.
 
-### Charts no longer lie about their range
+### A token never reaches the secrets
 
-The hardcoded "Last 14 days" labels are gone. Issue sidebar and release pages now expose
-the range as a real selector.
+A token carries every role of its owner, so a token made by an administrator could
+have read the ingestion key of every project, the webhook URLs of the alert channels
+and the metrics token in the application configuration. A token is long lived and
+lives in scripts and environment files, so it leaks far more easily than a session.
+
+- The admin role is no longer granted to a token, so the endpoints an administrator
+  sees stay out of reach.
+- The endpoints that return a secret are marked cookie only: the project detail, the
+  alert channels, the issue tracker configurations, the source code providers, the
+  project repositories and the application configuration. A bearer token is refused
+  there and the session keeps working.
+- The project list stays reachable for a script, but without the ingestion keys,
+  which are the secret it used to carry.
 
 ---
 
-## Prometheus metrics
+## Metrics
 
-`GET /metrics` exports metrics in Prometheus text exposition format.
+### The missing ingestion and release signals
 
-| Metric | Type | Labels | Meaning |
-|---|---|---|---|
-| `sigil_issues` | gauge | `project`, `status`, `level` | Current issue count |
-| `sigil_events` | gauge | `project`, `level`, `window` | Events received within the window (`5m`, `15m`, `1h`, `24h`) |
-| `sigil_events_ingested_total` | counter | — | Events accepted into the pipeline since process start |
-| `sigil_events_dropped_total` | counter | — | Events discarded during digestion since process start |
-| `sigil_digestion_backlog` | gauge | — | Envelopes awaiting digestion |
-| `sigil_alert_deliveries_total` | counter | `channel`, `status` | Alert deliveries recorded |
-| `sigil_last_ingestion_timestamp_seconds` | gauge | — | Unix time of the last ingested event, for staleness alerts |
-| `sigil_build_info` | gauge | `version` | Running build version |
+A deployment that dropped its own database exporter lost the signals that exporter
+provided. These are restored, together with the identifiers needed to keep a series
+stable.
 
-**Access control.** The endpoint is closed by default. Set a metrics token or a CIDR
-allow-list to enable it. A scraper never needs a UI session, and issue identifiers,
-fingerprints and tag values are never exported.
+- `sigil_digestion_oldest_pending_seconds`: the age of the oldest envelope still
+  awaiting digestion, which is what shows a stalled ingestion pipeline. The backlog
+  depth alone stays low while the queue stops moving.
+- Envelopes Sigil does not process, such as `client_report` and `transaction`, are
+  marked discarded at ingestion and at digestion, so they leave the queue instead of
+  inflating the backlog forever.
+- `sigil_release_info` and `sigil_release_first_seen_timestamp_seconds`: the newest
+  release of every project and when it was first seen.
+- `sigil_events` gains environment and status labels, with the environment values
+  capped per project and the remainder reported as `other`.
+- `sigil_new_issues`: issues first seen inside each reported window.
+- `project_id` sits next to `project` on every per-project family, so a renamed
+  project keeps its series.
+- `sigil_last_ingestion_timestamp_seconds` is seeded from persisted data, so it no
+  longer reads as 56 years old after a restart.
 
-`/metrics` reports sliding-window gauges rather than counters, so it must not be fed to
-`rate()` or `increase()`. Alert on a threshold instead — for example
-`sigil_events{level=~"fatal|error",window="5m"} > 0` for new errors in the last five
-minutes.
+### A series that does not disappear
 
-No Prometheus library was added; the exposition format is hand-rolled in roughly a
-hundred lines.
+`sigil_events` reports all four windows for every combination seen in the last day,
+including the quiet ones with a zero, so a series does not vanish while it is still
+observed. The new `sigil_project_events` family carries the project level grid and
+reports every project, so a silence rule can still fire after a day of quiet.
+
+### Discarded envelopes are counted, not measured
+
+`sigil_envelopes_discarded_total` is now a counter that only rises, fed by the process
+local counter store. The number of discarded envelopes still held in the database is
+reported as the `sigil_envelopes_discarded` gauge, because retention removes those rows
+and a counter that falls reads as a reset.
+
+`Events.ReceivedAt` is indexed, so the persisted ingestion instant no longer costs a
+sequential scan of the whole table on every scrape.
+
+### Metrics access from the interface
+
+The metrics token and the CIDR allow-list are editable from **Settings → Metrics
+Access** in the admin area: a masked token with a random generator, copy and clear,
+and the allow-list with client-side validation that rejects unparsable ranges instead
+of letting the server drop them silently. Status badges mirror the endpoint state and
+the Prometheus scrape snippet is shown inline.
 
 ---
 
 ## Reliability
 
-### Failed requests are no longer empty states
+### Query string parameters bind as raw strings
 
-A failed request used to render as "No events" or "No issues found" — indistinguishable
-from genuinely zero data, which is the most trust-destroying defect the UI had. Loading,
-error-with-retry and empty are now distinct states on the issue list, issue sidebar and
-release pages.
+`SupplyParameterFromQuery` only binds string, bool, numeric, `Guid`, `DateTime`,
+`DateOnly` and `TimeOnly` types. The issue list, issue detail, issue events and
+release pages bound enum and `DateTimeOffset` parameters, which the binder rejects
+before it reads the query string, so the pages crashed with "Querystring values cannot
+be parsed as type ..." even with an empty URL.
 
-### Project-scoped authorization on mutating routes
+The raw string is now bound and the typed name kept as a property that parses on read
+and formats on write, so every existing read and write site is unchanged. The enum
+helper rejects values that are not defined members, so `?level=42` no longer parses to
+a severity. A reflection test over the client assembly fails when any page binds a
+type the binder cannot handle.
 
-Every mutating API route now resolves its project from the route and is authorized
-against it, instead of relying on a generic authenticated check.
+### Events with a partial runtime context are parsed
 
-### Sign-in session survives reloads and browser restarts
+Sentry's runtime context is optional, the Unity SDK sends a name with no version, and
+`extra` carries free-form values. Reading them with `GetProperty` and `GetString`
+threw on every such payload, so the whole envelope was marked failed and the event
+never became an issue.
 
-Sessions no longer expire on a page reload or a browser restart.
+The runtime context is now looked up by key, name and version are read through a
+tolerant helper that returns null instead of throwing, a runtime without a version is
+kept, and `extra` and user data values are rendered as text whatever their JSON type.
 
-### Tailwind build order
+### Envelope payloads with a declared length
 
-`tailwind.targets` had contradictory target hooks that made a **fresh clone unbuildable
-on Linux and macOS** — the step that runs the Tailwind CLI fired before the step that
-downloads it. It was masked on developer machines by a gitignored binary and by the
-Dockerfile pre-downloading it in an earlier layer.
-
-### Search palette: holding Shift no longer flickers
-
-The double-Shift shortcut triggered on every auto-repeat keydown, so holding the key
-toggled the palette open and shut rapidly. It now requires two discrete presses.
-
----
-
-## Integrations
-
-### Source maps
-
-Source code can be linked to issues, and stack frames are deobfuscated against the
-matching uploaded source map.
-
-### Issue tracker integration
-
-Issues can be pushed to an external tracker, and the external state is kept in sync.
-
-### Per-project CORS origin whitelist
-
-SDK ingestion now accepts a per-project list of allowed browser origins.
-
----
-
-## Operations
-
-### CI
-
-A GitHub Actions workflow runs on every push and pull request: a fast job that builds
-and tests Domain and Application, and a slower job that runs the Infrastructure tests
-against a real PostgreSQL container. Previously nothing guarded the repository.
-
-### README
-
-The README documented roughly 40% of the product. It now covers alerting, data hygiene,
-source code and source maps, issue tracker integration, merge sets, re-ingestion, shared
-links, teams and permissions, retention, rate limits, recommendations and analyzers,
-breadcrumbs, the event timeline and the metrics endpoint — including a Prometheus scrape
-example and the real architecture, with `Sigil.Server.Client` shown as a distinct layer.
-
----
-
-## Security
-
-Dependency updates clear three published advisories:
-
-- **CVE-2026-102870** — remote code execution in the Blazor WebAssembly debugger
-- **CVE-2026-96230** — cross-site scripting in the Blazor WebAssembly development-server debug endpoint
-- **CVE-2026-118747** — hash-flood denial of service in `System.Formats.Cbor`
-
-The ASP.NET Core and Entity Framework packages move to 10.0.15.
+An envelope item header may declare the byte length of its payload, and that payload
+may contain line feeds. The payload is now skipped by its declared length, and an
+envelope that cannot be read exactly is left alone rather than marked unsupported.
 
 ---
 
 ## Upgrading
 
-The Docker image is published as `ghcr.io/alaa13212/sigil:0.8.0` and `:latest`.
+The Docker image is published as `ghcr.io/alaa13212/sigil:0.8.1` and `:latest`.
 
-Existing installations need no configuration change. The metrics endpoint stays disabled
-until you set `metrics_token` or `metrics_allowed_cidrs`. Existing deployments should
-confirm that their ingestion CORS configuration still matches, since the per-project
-allow-list is now enforced.
+Two migrations are included, `AddApiTokens` and `AddIndexOnEventsReceivedAt`. They
+are applied by the setup wizard or by the maintenance migration endpoint, exactly as
+before.
+
+Existing installations need no configuration change. The metrics endpoint stays
+disabled until you set `metrics_token` or `metrics_allowed_cidrs`. A scraper that
+reads `sigil_envelopes_discarded_total` now reads a counter, and the number of rows
+still held in the database moves to the `sigil_envelopes_discarded` gauge.
