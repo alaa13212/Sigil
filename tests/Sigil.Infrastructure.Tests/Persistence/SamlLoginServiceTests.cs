@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Saml;
 using Sigil.Domain.Entities;
 using Sigil.Domain.Enums;
@@ -25,6 +26,7 @@ public class SamlLoginServiceTests(TestDatabaseFixture fixture)
             })
             .AddEntityFrameworkStores<SigilDbContext>()
             .AddDefaultTokenProviders();
+        services.AddHttpClient();
         return services.BuildServiceProvider();
     }
 
@@ -92,6 +94,29 @@ public class SamlLoginServiceTests(TestDatabaseFixture fixture)
         await using var scope = BuildProvider().CreateAsyncScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         return await userManager.FindByEmailAsync(email);
+    }
+
+    private async Task ApproveAsync(Guid userId)
+    {
+        await using var scope = BuildProvider().CreateAsyncScope();
+        var ctx = scope.ServiceProvider.GetRequiredService<SigilDbContext>();
+        var user = await ctx.Users.AsTracking().FirstAsync(u => u.Id == userId);
+        user.SamlStatus = SamlUserStatus.Approved;
+        await ctx.SaveChangesAsync();
+    }
+
+    private async Task<List<TeamMembership>> GetMembershipsAsync(Guid userId)
+    {
+        await using var scope = BuildProvider().CreateAsyncScope();
+        var ctx = scope.ServiceProvider.GetRequiredService<SigilDbContext>();
+        return await ctx.TeamMemberships.Where(m => m.UserId == userId).ToListAsync();
+    }
+
+    private async Task<Team> GetTeamAsync(string name)
+    {
+        await using var scope = BuildProvider().CreateAsyncScope();
+        var ctx = scope.ServiceProvider.GetRequiredService<SigilDbContext>();
+        return await ctx.Teams.FirstAsync(t => t.Name == name);
     }
 
     [Fact]
@@ -232,5 +257,224 @@ public class SamlLoginServiceTests(TestDatabaseFixture fixture)
 
         var result = await CompleteLoginAsync(connection, Assertion($"disabled_{Guid.NewGuid():N}@example.com"));
         result.Status.Should().Be(SamlLoginStatus.Failed);
+    }
+
+    [Fact]
+    public async Task CompleteLoginAsync_GroupNoLongerMatches_RevokesTeamMembership()
+    {
+        var teamName = $"team_{Guid.NewGuid():N}";
+        var connection = await CreateConnectionAsync(
+        [
+            new SamlGroupMappingRequest("engineering", teamName, TeamRole.Admin)
+        ]);
+
+        var email = $"revoked_{Guid.NewGuid():N}@example.com";
+
+        var pending = await CompleteLoginAsync(connection, Assertion(email, "engineering"));
+        await ApproveAsync(pending.UserId!.Value);
+
+        var approved = await CompleteLoginAsync(connection, Assertion(email, "engineering"));
+        approved.Status.Should().Be(SamlLoginStatus.Approved);
+
+        var team = await GetTeamAsync(teamName);
+        var memberships = await GetMembershipsAsync(pending.UserId!.Value);
+        memberships.Should().ContainSingle(m => m.TeamId == team.Id);
+        memberships.Single(m => m.TeamId == team.Id).Role.Should().Be(TeamRole.Admin);
+
+        await CompleteLoginAsync(connection, Assertion(email));
+
+        var after = await GetMembershipsAsync(pending.UserId!.Value);
+        after.Should().NotContain(m => m.TeamId == team.Id);
+    }
+
+    [Fact]
+    public async Task CompleteLoginAsync_GroupNoLongerMatches_RevokesGlobalAdmin()
+    {
+        var teamName = $"team_{Guid.NewGuid():N}";
+        var connection = await CreateConnectionAsync(
+        [
+            new SamlGroupMappingRequest("engineering", teamName, TeamRole.Member, true)
+        ]);
+
+        var email = $"admin_revoked_{Guid.NewGuid():N}@example.com";
+
+        var pending = await CompleteLoginAsync(connection, Assertion(email, "engineering"));
+        await ApproveAsync(pending.UserId!.Value);
+
+        await CompleteLoginAsync(connection, Assertion(email, "engineering"));
+
+        await using (var scope = BuildProvider().CreateAsyncScope())
+        {
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+            var user = await userManager.FindByIdAsync(pending.UserId!.Value.ToString());
+            (await userManager.IsInRoleAsync(user!, "Admin")).Should().BeTrue();
+        }
+
+        await CompleteLoginAsync(connection, Assertion(email));
+
+        await using (var scope = BuildProvider().CreateAsyncScope())
+        {
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+            var user = await userManager.FindByIdAsync(pending.UserId!.Value.ToString());
+            (await userManager.IsInRoleAsync(user!, "Admin")).Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public async Task CompleteLoginAsync_ManualMembership_SurvivesSamlRevocation()
+    {
+        var teamName = $"team_{Guid.NewGuid():N}";
+        var connection = await CreateConnectionAsync(
+        [
+            new SamlGroupMappingRequest("engineering", teamName)
+        ]);
+
+        var email = $"manual_{Guid.NewGuid():N}@example.com";
+
+        var pending = await CompleteLoginAsync(connection, Assertion(email, "engineering"));
+        await ApproveAsync(pending.UserId!.Value);
+
+        await using (var scope = BuildProvider().CreateAsyncScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<SigilDbContext>();
+            var manualTeam = new Team { Name = teamName };
+            ctx.Teams.Add(manualTeam);
+            await ctx.SaveChangesAsync();
+
+            ctx.TeamMemberships.Add(new TeamMembership
+            {
+                UserId = pending.UserId!.Value,
+                TeamId = manualTeam.Id,
+                Role = TeamRole.Member
+            });
+            await ctx.SaveChangesAsync();
+        }
+
+        await CompleteLoginAsync(connection, Assertion(email, "engineering"));
+        await CompleteLoginAsync(connection, Assertion(email));
+
+        var team = await GetTeamAsync(teamName);
+        var memberships = await GetMembershipsAsync(pending.UserId!.Value);
+        memberships.Should().ContainSingle(m => m.TeamId == team.Id);
+        memberships.Single(m => m.TeamId == team.Id).SamlConnectionId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CompleteLoginAsync_LowerMappingRole_DowngradesMembership()
+    {
+        var teamName = $"team_{Guid.NewGuid():N}";
+        var connection = await CreateConnectionAsync(
+        [
+            new SamlGroupMappingRequest("engineering", teamName, TeamRole.Owner)
+        ]);
+
+        var email = $"downgrade_{Guid.NewGuid():N}@example.com";
+
+        var pending = await CompleteLoginAsync(connection, Assertion(email, "engineering"));
+        await ApproveAsync(pending.UserId!.Value);
+
+        await CompleteLoginAsync(connection, Assertion(email, "engineering"));
+
+        var team = await GetTeamAsync(teamName);
+        var memberships = await GetMembershipsAsync(pending.UserId!.Value);
+        memberships.Single(m => m.TeamId == team.Id).Role.Should().Be(TeamRole.Owner);
+
+        await using (var scope = BuildProvider().CreateAsyncScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<SigilDbContext>();
+            var stored = await ctx.SamlConnections.AsTracking()
+                .Include(c => c.GroupMappings)
+                .FirstAsync(c => c.Id == connection.Id);
+            stored.GroupMappings.First().Role = TeamRole.Member;
+            await ctx.SaveChangesAsync();
+        }
+
+        await CompleteLoginAsync(connection, Assertion(email, "engineering"));
+
+        var after = await GetMembershipsAsync(pending.UserId!.Value);
+        after.Single(m => m.TeamId == team.Id).Role.Should().Be(TeamRole.Member);
+    }
+
+    [Fact]
+    public async Task ReconcileConnectionAsync_MappingRemoved_RevokesAccess()
+    {
+        var teamName = $"team_{Guid.NewGuid():N}";
+        var connection = await CreateConnectionAsync(
+        [
+            new SamlGroupMappingRequest("engineering", teamName, TeamRole.Member, true)
+        ]);
+
+        var email = $"mapping_removed_{Guid.NewGuid():N}@example.com";
+
+        var pending = await CompleteLoginAsync(connection, Assertion(email, "engineering"));
+        await ApproveAsync(pending.UserId!.Value);
+
+        await CompleteLoginAsync(connection, Assertion(email, "engineering"));
+
+        var team = await GetTeamAsync(teamName);
+        (await GetMembershipsAsync(pending.UserId!.Value)).Should().Contain(m => m.TeamId == team.Id);
+
+        await using (var scope = BuildProvider().CreateAsyncScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<SigilDbContext>();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+            var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+
+            var loginService = new SamlLoginService(ctx, userManager, roleManager, new DateTimeProvider());
+            var connectionService = new SamlConnectionService(
+                ctx,
+                new DateTimeProvider(),
+                Substitute.For<IAppConfigService>(),
+                scope.ServiceProvider.GetRequiredService<IHttpClientFactory>(),
+                loginService);
+
+            await connectionService.UpdateConnectionAsync(connection.Id, new SamlConnectionRequest(
+                connection.Name,
+                connection.EntityId,
+                GroupMappings: []));
+        }
+
+        (await GetMembershipsAsync(pending.UserId!.Value)).Should().NotContain(m => m.TeamId == team.Id);
+
+        await using (var scope = BuildProvider().CreateAsyncScope())
+        {
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+            var user = await userManager.FindByIdAsync(pending.UserId!.Value.ToString());
+            (await userManager.IsInRoleAsync(user!, "Admin")).Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public async Task RevokeConnectionAsync_RemovesGlobalAdminGrant()
+    {
+        var teamName = $"team_{Guid.NewGuid():N}";
+        var connection = await CreateConnectionAsync(
+        [
+            new SamlGroupMappingRequest("engineering", teamName, TeamRole.Member, true)
+        ]);
+
+        var email = $"connection_deleted_{Guid.NewGuid():N}@example.com";
+
+        var pending = await CompleteLoginAsync(connection, Assertion(email, "engineering"));
+        await ApproveAsync(pending.UserId!.Value);
+
+        await CompleteLoginAsync(connection, Assertion(email, "engineering"));
+
+        await using (var scope = BuildProvider().CreateAsyncScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<SigilDbContext>();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+            var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+
+            var loginService = new SamlLoginService(ctx, userManager, roleManager, new DateTimeProvider());
+            await loginService.RevokeConnectionAsync(connection.Id);
+        }
+
+        await using (var scope = BuildProvider().CreateAsyncScope())
+        {
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+            var user = await userManager.FindByIdAsync(pending.UserId!.Value.ToString());
+            (await userManager.IsInRoleAsync(user!, "Admin")).Should().BeFalse();
+        }
     }
 }

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Sigil.Application.Interfaces;
@@ -78,9 +79,46 @@ internal class SamlLoginService(
             return new SamlLoginResult(SamlLoginStatus.Pending, user.Id, "Your account is waiting for administrator approval.");
         }
 
-        await ApplyGroupMappingsAsync(connection, user.Id, GetGroups(assertion, connection));
+        await ApplyAccessAsync(connection, user.Id, GetGroups(assertion, connection));
 
         return new SamlLoginResult(SamlLoginStatus.Approved, user.Id, null);
+    }
+
+    public async Task ReconcileConnectionAsync(Guid connectionId)
+    {
+        var connection = await dbContext.SamlConnections
+            .AsTracking()
+            .Include(c => c.GroupMappings)
+            .FirstOrDefaultAsync(c => c.Id == connectionId);
+
+        if (connection is null) return;
+
+        var users = await dbContext.Users
+            .Where(u => u.SamlConnectionId == connectionId && u.SamlStatus == SamlUserStatus.Approved)
+            .ToListAsync();
+
+        foreach (var user in users)
+            await ApplyAccessAsync(connection, user.Id, ParseGroups(user.SamlGroups));
+    }
+
+    public async Task RevokeConnectionAsync(Guid connectionId)
+    {
+        var users = await dbContext.Users
+            .Where(u => u.SamlAdminConnectionId == connectionId)
+            .ToListAsync();
+
+        foreach (var user in users)
+        {
+            var tracked = await dbContext.Users.AsTracking().FirstAsync(u => u.Id == user.Id);
+            var identity = await userManager.FindByIdAsync(user.Id.ToString());
+
+            if (identity is not null)
+                await userManager.RemoveFromRoleAsync(identity, AdminRoleName);
+
+            tracked.SamlAdminConnectionId = null;
+        }
+
+        await dbContext.SaveChangesAsync();
     }
 
     private async Task<User?> CreateUserAsync(string email, string? displayName, string? nameId, Guid connectionId)
@@ -116,41 +154,93 @@ internal class SamlLoginService(
         await dbContext.SaveChangesAsync();
     }
 
-    private async Task ApplyGroupMappingsAsync(SamlConnection connection, Guid userId, IReadOnlyCollection<string> groups)
+    private async Task ApplyAccessAsync(SamlConnection connection, Guid userId, IReadOnlyCollection<string> groups)
     {
         var matched = connection.GroupMappings
             .Where(m => groups.Contains(m.GroupName, StringComparer.OrdinalIgnoreCase))
             .ToList();
 
+        var desired = new Dictionary<int, TeamRole>();
+
         foreach (var mapping in matched)
         {
-            if (mapping.GrantsGlobalAdmin)
-                await GrantAdminRoleAsync(userId);
+            if (string.IsNullOrWhiteSpace(mapping.TeamName)) continue;
 
-            if (!string.IsNullOrWhiteSpace(mapping.TeamName))
-            {
-                var team = await GetOrCreateTeamAsync(mapping.TeamName);
-                await UpsertMembershipAsync(userId, team.Id, mapping.Role);
-            }
+            var team = await GetOrCreateTeamAsync(mapping.TeamName);
+            desired[team.Id] = desired.TryGetValue(team.Id, out var current) && current > mapping.Role
+                ? current
+                : mapping.Role;
         }
 
         if (matched.Count == 0 && !string.IsNullOrWhiteSpace(connection.DefaultTeamName))
         {
             var team = await GetOrCreateTeamAsync(connection.DefaultTeamName);
-            await UpsertMembershipAsync(userId, team.Id, TeamRole.Member);
+            desired[team.Id] = desired.TryGetValue(team.Id, out var current) && current > TeamRole.Member
+                ? current
+                : TeamRole.Member;
         }
+
+        var memberships = await dbContext.TeamMemberships
+            .AsTracking()
+            .Where(m => m.UserId == userId)
+            .ToListAsync();
+
+        foreach (var membership in memberships.Where(m => m.SamlConnectionId == connection.Id))
+        {
+            if (desired.TryGetValue(membership.TeamId, out var role))
+                membership.Role = role;
+            else
+                dbContext.TeamMemberships.Remove(membership);
+        }
+
+        foreach (var (teamId, role) in desired)
+        {
+            if (memberships.Any(m => m.TeamId == teamId)) continue;
+
+            dbContext.TeamMemberships.Add(new TeamMembership
+            {
+                UserId = userId,
+                TeamId = teamId,
+                Role = role,
+                SamlConnectionId = connection.Id
+            });
+        }
+
+        var tracked = await dbContext.Users.AsTracking().FirstOrDefaultAsync(u => u.Id == userId);
+        if (tracked is not null)
+            tracked.SamlGroups = JsonSerializer.Serialize(groups);
+
+        await dbContext.SaveChangesAsync();
+
+        await SyncAdminRoleAsync(connection, userId, matched.Any(m => m.GrantsGlobalAdmin));
     }
 
-    private async Task GrantAdminRoleAsync(Guid userId)
+    private async Task SyncAdminRoleAsync(SamlConnection connection, Guid userId, bool grantsAdmin)
     {
-        if (!await roleManager.RoleExistsAsync(AdminRoleName))
-            await roleManager.CreateAsync(new IdentityRole<Guid> { Name = AdminRoleName });
+        var tracked = await dbContext.Users.AsTracking().FirstOrDefaultAsync(u => u.Id == userId);
+        if (tracked is null) return;
 
         var user = await userManager.FindByIdAsync(userId.ToString());
         if (user is null) return;
 
-        if (!await userManager.IsInRoleAsync(user, AdminRoleName))
-            await userManager.AddToRoleAsync(user, AdminRoleName);
+        if (grantsAdmin)
+        {
+            if (!await roleManager.RoleExistsAsync(AdminRoleName))
+                await roleManager.CreateAsync(new IdentityRole<Guid> { Name = AdminRoleName });
+
+            if (!await userManager.IsInRoleAsync(user, AdminRoleName))
+            {
+                await userManager.AddToRoleAsync(user, AdminRoleName);
+                tracked.SamlAdminConnectionId = connection.Id;
+            }
+        }
+        else if (tracked.SamlAdminConnectionId == connection.Id)
+        {
+            await userManager.RemoveFromRoleAsync(user, AdminRoleName);
+            tracked.SamlAdminConnectionId = null;
+        }
+
+        await dbContext.SaveChangesAsync();
     }
 
     private async Task<Team> GetOrCreateTeamAsync(string name)
@@ -170,29 +260,17 @@ internal class SamlLoginService(
         return team;
     }
 
-    private async Task UpsertMembershipAsync(Guid userId, int teamId, TeamRole role)
+    private static IReadOnlyCollection<string> ParseGroups(string? stored)
     {
-        var membership = await dbContext.TeamMemberships
-            .AsTracking()
-            .FirstOrDefaultAsync(m => m.UserId == userId && m.TeamId == teamId);
+        if (string.IsNullOrWhiteSpace(stored)) return [];
 
-        if (membership is null)
+        try
         {
-            dbContext.TeamMemberships.Add(new TeamMembership
-            {
-                UserId = userId,
-                TeamId = teamId,
-                Role = role
-            });
-
-            await dbContext.SaveChangesAsync();
-            return;
+            return JsonSerializer.Deserialize<string[]>(stored) ?? [];
         }
-
-        if (role > membership.Role)
+        catch (JsonException)
         {
-            membership.Role = role;
-            await dbContext.SaveChangesAsync();
+            return [];
         }
     }
 

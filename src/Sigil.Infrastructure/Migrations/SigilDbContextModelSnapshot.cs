@@ -1571,7 +1571,12 @@ namespace Sigil.infrastructure.Migrations
                     b.Property<int>("Role")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("SamlConnectionId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("UserId", "TeamId");
+
+                    b.HasIndex("SamlConnectionId");
 
                     b.HasIndex("TeamId");
 
@@ -1672,8 +1677,14 @@ namespace Sigil.infrastructure.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<Guid?>("SamlAdminConnectionId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("SamlConnectionId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("SamlGroups")
+                        .HasColumnType("text");
 
                     b.Property<string>("SamlNameId")
                         .HasMaxLength(500)
@@ -2291,6 +2302,11 @@ namespace Sigil.infrastructure.Migrations
 
             modelBuilder.Entity("Sigil.Domain.Entities.TeamMembership", b =>
                 {
+                    b.HasOne("Sigil.Domain.Entities.SamlConnection", null)
+                        .WithMany()
+                        .HasForeignKey("SamlConnectionId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("Sigil.Domain.Entities.Team", "Team")
                         .WithMany("Members")
                         .HasForeignKey("TeamId")

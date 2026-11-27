@@ -5,4 +5,8 @@ namespace Sigil.Application.Interfaces;
 public interface ISamlLoginService
 {
     Task<SamlLoginResult> CompleteLoginAsync(Guid connectionId, SamlAssertion assertion);
+
+    Task ReconcileConnectionAsync(Guid connectionId);
+
+    Task RevokeConnectionAsync(Guid connectionId);
 }

@@ -20,6 +20,10 @@ public class User : IdentityUser<Guid>
     [MaxLength(500)]
     public string? SamlNameId { get; set; }
 
+    public Guid? SamlAdminConnectionId { get; set; }
+
+    public string? SamlGroups { get; set; }
+
     public ICollection<TeamMembership> TeamMemberships { get; set; } = [];
     public ICollection<UserPasskey> Passkeys { get; set; } = [];
 }
