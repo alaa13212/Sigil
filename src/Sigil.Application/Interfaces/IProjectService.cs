@@ -9,7 +9,7 @@ public interface IProjectService
     // DTO access (UI/API)
     Task<List<ProjectResponse>> GetProjectListAsync();
     Task<ProjectDetailResponse?> GetProjectDetailAsync(int id);
-    Task<List<ProjectOverviewResponse>> GetAllProjectOverviewsAsync();
+    Task<List<ProjectOverviewResponse>> GetAllProjectOverviewsAsync(int windowDays = 7);
 
     // Mutations
     Task<Project> CreateProjectAsync(string name, Platform platform, int? teamId = null);

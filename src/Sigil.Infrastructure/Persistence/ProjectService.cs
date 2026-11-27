@@ -8,7 +8,7 @@ using Sigil.Domain.Enums;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class ProjectService(SigilDbContext dbContext, IAppConfigService appConfigService, INormalizationRuleEngine normalizationRuleEngine, IProjectCache projectCache, IDateTime dateTime) : IProjectService, IProjectEntityAccess
+internal class ProjectService(SigilDbContext dbContext, IAppConfigService appConfigService, INormalizationRuleEngine normalizationRuleEngine, IProjectCache projectCache, IDateTime dateTime, IProjectAccessService projectAccess) : IProjectService, IProjectEntityAccess
 {
     public async Task<Project> CreateProjectAsync(string name, Platform platform, int? teamId = null)
     {
@@ -114,14 +114,26 @@ internal class ProjectService(SigilDbContext dbContext, IAppConfigService appCon
         return new ProjectDetailResponse(project.Id, project.Name, project.Platform, project.ApiKey, dsn, project.TeamId);
     }
 
-    public async Task<List<ProjectOverviewResponse>> GetAllProjectOverviewsAsync()
+    public async Task<List<ProjectOverviewResponse>> GetAllProjectOverviewsAsync(int windowDays = 7)
     {
+        var visible = await projectAccess.GetVisibleProjectIdsAsync();
+        if (visible.Count == 0) return [];
+
+        var days = Math.Clamp(windowDays, 1, 90);
+        var from = dateTime.UtcNow.AddDays(-days);
+
         return await dbContext.Projects
-            .OrderBy(p => p.Events.Max(e => e.Timestamp))
+            .Where(p => visible.Contains(p.Id))
+            .OrderByDescending(p => p.Events.Any())
+            .ThenByDescending(p => p.Events.Max(e => e.Timestamp))
+            .ThenBy(p => p.Name)
             .Select(p => new ProjectOverviewResponse(
                 p.Id, p.Name, p.Platform,
                 p.Issues.Count(i => i.MergeSetId == null || i.MergeSet!.PrimaryIssueId == i.Id),
-                p.Events.Count))
+                p.Events.Count,
+                days,
+                p.Issues.Count(i => (i.MergeSetId == null || i.MergeSet!.PrimaryIssueId == i.Id) && i.FirstSeen >= from),
+                p.Events.Count(e => e.Timestamp >= from)))
             .ToListAsync();
     }
 }

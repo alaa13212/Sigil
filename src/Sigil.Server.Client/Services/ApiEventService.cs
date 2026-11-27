@@ -32,6 +32,20 @@ public class ApiEventService(HttpClient http) : IEventService
             ?? TimeSeries.Empty;
     }
 
+    public async Task<TimeSeries> GetDashboardEventSeriesAsync(int days = 7, TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto)
+    {
+        return await http.GetFromJsonAsync<TimeSeries>(
+            $"api/dashboard/activity?days={days}&granularity={granularity}")
+            ?? TimeSeries.Empty;
+    }
+
+    public async Task<Dictionary<int, TimeSeries>> GetBulkProjectEventSeriesAsync(int days = 7, TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto)
+    {
+        return await http.GetFromJsonAsync<Dictionary<int, TimeSeries>>(
+            $"api/dashboard/sparklines?days={days}&granularity={granularity}")
+            ?? [];
+    }
+
     private static string BuildQueryString(EventQueryParams query)
     {
         var qs = HttpUtility.ParseQueryString(string.Empty);

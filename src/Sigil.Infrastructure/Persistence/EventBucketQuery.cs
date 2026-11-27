@@ -48,6 +48,33 @@ internal static class EventBucketQuery
                 g => (List<TimeSeriesPoint>)[.. g.Select(r => new TimeSeriesPoint(ToUtc(r.Start), r.Count))]);
     }
 
+    public static async Task<Dictionary<int, List<TimeSeriesPoint>>> ReadProjectBucketsAsync(IQueryable<EventBucket> query, TimeSpan interval)
+    {
+        if (SpansWholeDays(interval))
+        {
+            var daily = await query
+                .GroupBy(b => new { b.Issue!.ProjectId, Day = b.BucketStart.Date })
+                .Select(g => new { g.Key.ProjectId, Start = g.Key.Day, Count = g.Sum(b => b.Count) })
+                .ToListAsync();
+
+            return daily
+                .GroupBy(r => r.ProjectId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => (List<TimeSeriesPoint>)[.. g.Select(r => new TimeSeriesPoint(ToUtc(r.Start), r.Count))]);
+        }
+
+        var hourly = await query
+            .Select(b => new { b.Issue!.ProjectId, Start = b.BucketStart, Count = b.Count })
+            .ToListAsync();
+
+        return hourly
+            .GroupBy(r => r.ProjectId)
+            .ToDictionary(
+                g => g.Key,
+                g => (List<TimeSeriesPoint>)[.. g.Select(r => new TimeSeriesPoint(ToUtc(r.Start), r.Count))]);
+    }
+
     private static bool SpansWholeDays(TimeSpan interval) =>
         interval.Ticks % TimeSpan.FromDays(1).Ticks == 0;
 

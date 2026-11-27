@@ -16,7 +16,7 @@ using Sigil.Infrastructure.Services;
 
 namespace Sigil.Infrastructure.Persistence;
 
-internal class EventService(SigilDbContext dbContext, ICompressionService compressionService, IDateTime dateTime, ISourceMapService sourceMapService) : IEventService, IEventIngestionService
+internal class EventService(SigilDbContext dbContext, ICompressionService compressionService, IDateTime dateTime, ISourceMapService sourceMapService, IProjectAccessService projectAccess) : IEventService, IEventIngestionService
 {
     private static readonly JsonSerializerOptions SnakeCaseOptions = new()
     {
@@ -117,6 +117,46 @@ internal class EventService(SigilDbContext dbContext, ICompressionService compre
         var points = await EventBucketQuery.ReadAsync(query, interval);
 
         return TimeSeriesAggregator.Build(points, from, to, granularity);
+    }
+
+    public async Task<TimeSeries> GetDashboardEventSeriesAsync(int days = 7, TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto)
+    {
+        var visible = await projectAccess.GetVisibleProjectIdsAsync();
+        if (visible.Count == 0) return TimeSeries.Empty;
+
+        var (from, to) = TimeSeriesWindow.Trailing(dateTime.UtcNow, days);
+        var interval = TimeSeriesAggregator.IntervalFor(
+            TimeSeriesAggregator.ResolveGranularity(granularity, to - from));
+
+        var query = dbContext.EventBuckets
+            .Where(b => visible.Contains(b.Issue!.ProjectId)
+                     && b.BucketStart >= from.UtcDateTime
+                     && b.BucketStart < to.UtcDateTime);
+
+        var points = await EventBucketQuery.ReadAsync(query, interval);
+
+        return TimeSeriesAggregator.Build(points, from, to, granularity);
+    }
+
+    public async Task<Dictionary<int, TimeSeries>> GetBulkProjectEventSeriesAsync(int days = 7, TimeSeriesGranularity granularity = TimeSeriesGranularity.Auto)
+    {
+        var visible = await projectAccess.GetVisibleProjectIdsAsync();
+        if (visible.Count == 0) return [];
+
+        var (from, to) = TimeSeriesWindow.Trailing(dateTime.UtcNow, days);
+        var interval = TimeSeriesAggregator.IntervalFor(
+            TimeSeriesAggregator.ResolveGranularity(granularity, to - from));
+
+        var query = dbContext.EventBuckets
+            .Where(b => visible.Contains(b.Issue!.ProjectId)
+                     && b.BucketStart >= from.UtcDateTime
+                     && b.BucketStart < to.UtcDateTime);
+
+        var buckets = await EventBucketQuery.ReadProjectBucketsAsync(query, interval);
+
+        return visible.ToDictionary(
+            id => id,
+            id => TimeSeriesAggregator.Build(buckets.GetValueOrDefault(id) ?? [], from, to, granularity));
     }
 
     private async Task<(List<CapturedEvent> Items, int TotalCount)> QueryEventsAsync(

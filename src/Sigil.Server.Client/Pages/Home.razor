@@ -1,31 +1,83 @@
 @page "/"
 @attribute [Authorize]
 @using Sigil.Application.Models.Projects
+@using Sigil.Application.Models.Shared
+@using Sigil.Server.Client.Services
 @inject IProjectService ProjectService
+@inject IEventService EventService
+@inject IBadgeService BadgeService
 @inject NavigationManager Navigation
 
 
 <PageTitle>سجل</PageTitle>
 
-@if (loading)
+@if (_error is not null)
+{
+    <div class="flex flex-col items-center justify-center py-16 space-y-4">
+        <div class="alert alert-error text-sm">@_error</div>
+        <button type="button" class="btn btn-primary" @onclick="RetryAsync">Retry</button>
+    </div>
+}
+else if (Projects is null)
 {
     <div class="flex items-center justify-center h-64">
         <span class="loading loading-spinner loading-lg"></span>
     </div>
 }
-else if (Projects is null || Projects.Count == 0)
+else if (Projects.Count == 0)
 {
     <div class="flex flex-col items-center justify-center py-16 space-y-4">
-        <EmptyState Title="No projects yet" Description="Create a project to get started." />
-        <a href="/projects/create" class="btn btn-primary">Create Project</a>
+        <AuthorizeView Roles="Admin">
+            <Authorized>
+                <EmptyState Title="No projects yet" Description="Create a project to get started." />
+                <a href="/projects/create" class="btn btn-primary">Create Project</a>
+            </Authorized>
+            <NotAuthorized>
+                <EmptyState Title="No projects available" Description="You are not a member of a team that has a project yet." />
+            </NotAuthorized>
+        </AuthorizeView>
     </div>
 }
-else if (Projects.Count > 1)
+else if (Projects.Count == 1)
+{
+    <div class="flex items-center justify-center h-64">
+        <span class="loading loading-spinner loading-lg"></span>
+    </div>
+}
+else
 {
     <div class="space-y-4">
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-bold">Projects</h1>
         </div>
+
+        @if (TotalUnseenIssues > 0)
+        {
+            <div class="alert alert-info text-sm">
+                @TotalUnseenIssues open @(TotalUnseenIssues == 1 ? "issue" : "issues") you have not seen since you last opened the issue list of these projects.
+            </div>
+        }
+
+        <div class="card bg-base-100">
+            <div class="card-body p-4">
+                <h2 class="card-title text-base mb-2">Activity</h2>
+                @if (_activity is not null)
+                {
+                    <TimeSeriesChart Data="_activity" Width="560" Height="180"
+                                     RangeDays="ChartView.RangeDays" Granularity="ChartView.Granularity" Mode="ChartView.Mode"
+                                     ViewChanged="OnChartViewChanged" />
+                }
+                else if (_activityFailed)
+                {
+                    <div class="h-[180px] flex items-center justify-center opacity-60 text-sm">Activity could not be loaded.</div>
+                }
+                else
+                {
+                    <div class="h-[180px] flex items-center justify-center opacity-60 text-sm">Loading activity…</div>
+                }
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             @foreach (var project in Projects)
             {
@@ -41,44 +93,158 @@ else if (Projects.Count > 1)
                                 <span class="font-mono font-semibold">@project.EventCount</span> events
                             </div>
                         </div>
+                        <div class="text-xs opacity-60 mt-1">
+                            @project.IssuesInWindow issues · @project.EventsInWindow events in the last @WindowLabel(project.WindowDays)
+                        </div>
+                        <div class="flex items-center gap-2 mt-2">
+                            @if (UnseenIssuesFor(project.Id) > 0)
+                            {
+                                <span class="badge badge-warning badge-sm"
+                                      title="Open issues you have not seen since you last opened this project's issue list">@UnseenIssuesFor(project.Id) new</span>
+                            }
+                            <div class="ml-auto text-primary opacity-70">
+                                <Sparkline Data="SparklineFor(project.Id)" Width="120" Height="24" />
+                            </div>
+                        </div>
                     </div>
                 </a>
             }
-            
-            <a href="/projects/create" class="card hover:bg-base-300 transition-colors cursor-pointer border-dashed border-2 border-base-300/50">
-                <div class="card-body p-5">
-                    <h2 class="card-title text-base items-center"> <span class="text-4xl font-mono">+</span> <span>Create New Project</span></h2>
-                </div>
-            </a>
 
-            
+            <AuthorizeView Roles="Admin">
+                <Authorized>
+                    <a href="/projects/create" class="card hover:bg-base-300 transition-colors cursor-pointer border-dashed border-2 border-base-300/50">
+                        <div class="card-body p-5">
+                            <h2 class="card-title text-base items-center"> <span class="text-4xl font-mono">+</span> <span>Create New Project</span></h2>
+                        </div>
+                    </a>
+                </Authorized>
+            </AuthorizeView>
         </div>
     </div>
 }
 
 @code {
     [PersistentState] public List<ProjectOverviewResponse>? Projects { get; set; }
-    
-    private bool loading = true;
 
-    protected override async Task OnInitializedAsync()
+    [SupplyParameterFromQuery(Name = ChartQueryState.RangeKey)] public int? RangeParam { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.BucketsKey)] public string? BucketsQuery { get; set; }
+    [SupplyParameterFromQuery(Name = ChartQueryState.ChartKey)] public string? ChartModeQuery { get; set; }
+
+    private const int DefaultRangeDays = 7;
+
+    private string? _error;
+    private bool _redirected;
+    private bool _activityFailed;
+    private TimeSeries? _activity;
+    private Dictionary<int, TimeSeries> _sparklines = [];
+    private Dictionary<int, int> _unseenIssues = [];
+    private string _lastChartState = string.Empty;
+
+    private TimeSeriesChartView ChartView => new(
+        RangeParam ?? DefaultRangeDays,
+        BucketsParam ?? TimeSeriesChartView.Default.Granularity,
+        ChartModeParam ?? TimeSeriesChartView.Default.Mode);
+
+    private TimeSeriesGranularity? BucketsParam => QueryValue.Enum<TimeSeriesGranularity>(BucketsQuery);
+
+    private TimeSeriesChartMode? ChartModeParam => QueryValue.Enum<TimeSeriesChartMode>(ChartModeQuery);
+
+    private int TotalUnseenIssues => Projects?.Sum(project => UnseenIssuesFor(project.Id)) ?? 0;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var chartState = ChartQueryState.Apply(new Uri(Navigation.BaseUri), ChartView).Query;
+        if (chartState != _lastChartState || _activity is null)
+        {
+            _lastChartState = chartState;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            var days = ChartView.RangeDays;
+            if (Projects is null || (Projects.Count > 0 && Projects[0].WindowDays != days))
+                Projects = await ProjectService.GetAllProjectOverviewsAsync(days);
+
+            if (Projects is { Count: 1 } && !_redirected)
+            {
+                _redirected = true;
+                Navigation.NavigateTo($"/projects/{Projects[0].Id}/issues", replace: true);
+                return;
+            }
+
+            await LoadActivityAsync();
+            await LoadSparklinesAsync();
+            await LoadUnseenAsync();
+        }
+        catch (Exception)
+        {
+            _error = "The dashboard could not be loaded. The server may be unreachable.";
+        }
+    }
+
+    private async Task LoadActivityAsync()
     {
         try
         {
-            Projects ??= await ProjectService.GetAllProjectOverviewsAsync();
-
-            if (Projects is { Count: 1 })
-            {
-                Navigation.NavigateTo($"/projects/{Projects[0].Id}/issues", replace: true);
-            }
+            _activity = await EventService.GetDashboardEventSeriesAsync(ChartView.RangeDays, ChartView.Granularity);
+            _activityFailed = false;
         }
-        catch
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
-            Projects = null;
-        }
-        finally
-        {
-            loading = false;
+            _activity = null;
+            _activityFailed = true;
         }
     }
+
+    private async Task LoadSparklinesAsync()
+    {
+        try
+        {
+            _sparklines = await EventService.GetBulkProjectEventSeriesAsync(ChartView.RangeDays, ChartView.Granularity);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            _sparklines = [];
+        }
+    }
+
+    private async Task LoadUnseenAsync()
+    {
+        try
+        {
+            var counts = await BadgeService.GetAllBadgeCountsAsync(Guid.Empty);
+            _unseenIssues = counts.ToDictionary(count => count.Key, count => count.Value.UnseenIssues);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            _unseenIssues = [];
+        }
+    }
+
+    private async Task RetryAsync()
+    {
+        Projects = null;
+        await LoadAsync();
+    }
+
+    private void OnChartViewChanged(TimeSeriesChartView view) =>
+        Navigation.NavigateTo(ChartQueryState.Apply(new Uri(Navigation.Uri), view).PathAndQuery, replace: true);
+
+    private TimeSeries? SparklineFor(int projectId) =>
+        _sparklines.TryGetValue(projectId, out var series) ? series : null;
+
+    private int UnseenIssuesFor(int projectId) => _unseenIssues.GetValueOrDefault(projectId);
+
+    private static string WindowLabel(int days) => days switch
+    {
+        1 => "24 hours",
+        7 => "7 days",
+        30 => "30 days",
+        _ => $"{days} days",
+    };
 }

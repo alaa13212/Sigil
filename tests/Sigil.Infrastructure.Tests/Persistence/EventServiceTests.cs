@@ -29,8 +29,9 @@ public class EventServiceTests(TestDatabaseFixture fixture)
         return dt;
     }
 
-    private static EventService Create(SigilDbContext ctx, ICompressionService? compression = null)
-        => new(ctx, compression ?? StubCompression(), StubDateTime(), Substitute.For<ISourceMapService>());
+    private static EventService Create(SigilDbContext ctx, ICompressionService? compression = null, IProjectAccessService? access = null)
+        => new(ctx, compression ?? StubCompression(), StubDateTime(), Substitute.For<ISourceMapService>(),
+            access ?? new StubProjectAccessService());
 
     private static ParsedEvent MakeEvent(string? release = null, ParsedEventUser? user = null,
         Dictionary<string, string>? tags = null, List<ParsedStackFrame>? frames = null,
@@ -144,6 +145,97 @@ public class EventServiceTests(TestDatabaseFixture fixture)
         var series = await service.GetProjectEventSeriesAsync(project.Id, 1);
 
         series.To.Should().Be(new DateTimeOffset(SeriesNow, TimeSpan.Zero));
+    }
+
+    // ── GetDashboardEventSeriesAsync / GetBulkProjectEventSeriesAsync ───────
+
+    [Fact]
+    public async Task DashboardSeries_SumsTheBucketsOfEveryVisibleProject()
+    {
+        await using var ctx = Ctx();
+        var first = await TestHelper.CreateProjectAsync(ctx);
+        var second = await TestHelper.CreateProjectAsync(ctx);
+        var firstIssue = await TestHelper.CreateIssueAsync(ctx, first.Id);
+        var secondIssue = await TestHelper.CreateIssueAsync(ctx, second.Id);
+        ctx.EventBuckets.Add(new EventBucket { IssueId = firstIssue.Id, BucketStart = new DateTime(2025, 5, 31, 22, 0, 0, DateTimeKind.Utc), Count = 3 });
+        ctx.EventBuckets.Add(new EventBucket { IssueId = secondIssue.Id, BucketStart = new DateTime(2025, 5, 31, 22, 0, 0, DateTimeKind.Utc), Count = 4 });
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx, access: new StubProjectAccessService(first.Id, second.Id));
+
+        var series = await service.GetDashboardEventSeriesAsync(7);
+
+        series.Points.Sum(p => p.Count).Should().Be(7);
+    }
+
+    [Fact]
+    public async Task DashboardSeries_ExcludesTheProjectsThatAreNotVisible()
+    {
+        await using var ctx = Ctx();
+        var visible = await TestHelper.CreateProjectAsync(ctx);
+        var hidden = await TestHelper.CreateProjectAsync(ctx);
+        var visibleIssue = await TestHelper.CreateIssueAsync(ctx, visible.Id);
+        var hiddenIssue = await TestHelper.CreateIssueAsync(ctx, hidden.Id);
+        ctx.EventBuckets.Add(new EventBucket { IssueId = visibleIssue.Id, BucketStart = new DateTime(2025, 5, 31, 22, 0, 0, DateTimeKind.Utc), Count = 3 });
+        ctx.EventBuckets.Add(new EventBucket { IssueId = hiddenIssue.Id, BucketStart = new DateTime(2025, 5, 31, 22, 0, 0, DateTimeKind.Utc), Count = 9 });
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx, access: new StubProjectAccessService(visible.Id));
+
+        var series = await service.GetDashboardEventSeriesAsync(7);
+
+        series.Points.Sum(p => p.Count).Should().Be(3);
+    }
+
+    [Fact]
+    public async Task DashboardSeries_WithoutAVisibleProject_IsEmpty()
+    {
+        await using var ctx = Ctx();
+        var project = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, project.Id);
+        ctx.EventBuckets.Add(new EventBucket { IssueId = issue.Id, BucketStart = new DateTime(2025, 5, 31, 22, 0, 0, DateTimeKind.Utc), Count = 3 });
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx);
+
+        var series = await service.GetDashboardEventSeriesAsync(7);
+
+        series.Points.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task BulkProjectSeries_ReturnsOneSeriesForEveryVisibleProject()
+    {
+        await using var ctx = Ctx();
+        var withEvents = await TestHelper.CreateProjectAsync(ctx);
+        var withoutEvents = await TestHelper.CreateProjectAsync(ctx);
+        var issue = await TestHelper.CreateIssueAsync(ctx, withEvents.Id);
+        ctx.EventBuckets.Add(new EventBucket { IssueId = issue.Id, BucketStart = new DateTime(2025, 5, 31, 22, 0, 0, DateTimeKind.Utc), Count = 6 });
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx, access: new StubProjectAccessService(withEvents.Id, withoutEvents.Id));
+
+        var series = await service.GetBulkProjectEventSeriesAsync(7);
+
+        series.Keys.Should().BeEquivalentTo([withEvents.Id, withoutEvents.Id]);
+        series[withEvents.Id].Points.Sum(p => p.Count).Should().Be(6);
+        series[withoutEvents.Id].Points.Should().NotBeEmpty();
+        series[withoutEvents.Id].Points.Should().OnlyContain(p => p.Count == 0);
+    }
+
+    [Fact]
+    public async Task BulkProjectSeries_KeepsTheBucketsOfEachProjectApart()
+    {
+        await using var ctx = Ctx();
+        var first = await TestHelper.CreateProjectAsync(ctx);
+        var second = await TestHelper.CreateProjectAsync(ctx);
+        var firstIssue = await TestHelper.CreateIssueAsync(ctx, first.Id);
+        var secondIssue = await TestHelper.CreateIssueAsync(ctx, second.Id);
+        ctx.EventBuckets.Add(new EventBucket { IssueId = firstIssue.Id, BucketStart = new DateTime(2025, 5, 31, 22, 0, 0, DateTimeKind.Utc), Count = 3 });
+        ctx.EventBuckets.Add(new EventBucket { IssueId = secondIssue.Id, BucketStart = new DateTime(2025, 5, 31, 22, 0, 0, DateTimeKind.Utc), Count = 4 });
+        await ctx.SaveChangesAsync();
+        var service = Create(ctx, access: new StubProjectAccessService(first.Id, second.Id));
+
+        var series = await service.GetBulkProjectEventSeriesAsync(7);
+
+        series[first.Id].Points.Sum(p => p.Count).Should().Be(3);
+        series[second.Id].Points.Sum(p => p.Count).Should().Be(4);
     }
 
     // ── FindExistingEventIdsAsync ─────────────────────────────────────────────
