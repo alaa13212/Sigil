@@ -5,59 +5,17 @@
 @inject NavigationManager NavigationManager
 
 <EventTable ProjectId="ProjectId" IssueId="IssueId" Query="Query" Events="_events"
-            Loading="_loading" Error="_error" Retry="LoadAsync" QueryChanged="ApplyQuery" />
+            Loading="_loading" Error="@_error" Retry="LoadAsync" QueryChanged="ApplyQuery" />
 
 @code {
     [Parameter, EditorRequired] public int ProjectId { get; set; }
     [Parameter, EditorRequired] public int IssueId { get; set; }
-
-    [SupplyParameterFromQuery(Name = EventQueryState.PageKey)] public int Page { get; set; } = 1;
-    [SupplyParameterFromQuery(Name = EventQueryState.SearchKey)] public string? Search { get; set; }
-    [SupplyParameterFromQuery(Name = EventQueryState.SortKey)] public string? Sort { get; set; }
-    [SupplyParameterFromQuery(Name = EventQueryState.ReleaseKey)] public int? ReleaseId { get; set; }
-    [SupplyParameterFromQuery(Name = EventQueryState.EventIdKey)] public string? EventId { get; set; }
-    [SupplyParameterFromQuery(Name = EventQueryState.LevelKey)] public string? LevelQuery { get; set; }
-    [SupplyParameterFromQuery(Name = EventQueryState.SinceKey)] public string? SinceQuery { get; set; }
-    [SupplyParameterFromQuery(Name = EventQueryState.UntilKey)] public string? UntilQuery { get; set; }
-
-    private Severity? Level
-    {
-        get => QueryValue.Enum<Severity>(LevelQuery);
-        set => LevelQuery = value?.ToString();
-    }
-
-    private DateTimeOffset? Since
-    {
-        get => QueryValue.Instant(SinceQuery);
-        set => SinceQuery = QueryValue.Format(value);
-    }
-
-    private DateTimeOffset? Until
-    {
-        get => QueryValue.Instant(UntilQuery);
-        set => UntilQuery = QueryValue.Format(value);
-    }
-
-    private const int PageSize = 50;
+    [Parameter, EditorRequired] public EventQueryParams Query { get; set; } = new();
 
     private PagedResponse<EventSummary>? _events;
     private string? _error;
     private bool _loading = true;
     private string _lastQueryState = "";
-
-    private EventQueryParams Query => new()
-    {
-        Since = Since,
-        Until = Until,
-        Level = Level,
-        ReleaseId = ReleaseId,
-        Search = Search,
-        EventId = EventId,
-        SortBy = EventQueryState.ParseSort(Sort) is { } selection ? selection.SortBy : EventSortBy.Timestamp,
-        SortDescending = EventQueryState.ParseSort(Sort) is { } parsed ? parsed.Descending : true,
-        Page = Math.Max(1, Page),
-        PageSize = PageSize,
-    };
 
     protected override async Task OnParametersSetAsync()
     {

@@ -48,9 +48,32 @@ public class QueryParameterBindingTests
         offenders.Should().BeEmpty();
     }
 
+    [Fact]
+    public void Only_page_components_bind_query_parameters()
+    {
+        var assembly = typeof(IssueList).Assembly;
+        var offenders = new List<string>();
+        var inspected = 0;
+
+        foreach (var type in Types(assembly))
+        {
+            var bindsQueryParameters = type
+                .GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                .Any(property => property.GetCustomAttribute<SupplyParameterFromQueryAttribute>() is not null);
+
+            if (!bindsQueryParameters) continue;
+
+            inspected++;
+            var isPage = type.GetCustomAttributes().Any(attribute => attribute is RouteAttribute);
+            if (!isPage) offenders.Add(type.FullName!);
+        }
+
+        inspected.Should().BeGreaterThan(0);
+        offenders.Should().BeEmpty();
+    }
+
     [Theory]
-    [InlineData("Fatal", Severity.Fatal)]
-    [InlineData("fatal", Severity.Fatal)]
+    [InlineData("Fatal", Severity.Fatal)]    [InlineData("fatal", Severity.Fatal)]
     [InlineData("WARNING", Severity.Warning)]
     public void Enum_parses_a_defined_member_name(string value, Severity expected)
     {
