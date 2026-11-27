@@ -281,8 +281,8 @@ the `window` that matches the intent of the alert.
 #### Access control
 
 The endpoint is closed by default. It does **not** use UI sessions, so a scraper never needs a
-cookie. Configure at least one of these two database-backed settings, editable from the admin
-settings page:
+cookie. Configure at least one of these two database-backed settings, editable from
+**Settings → Metrics Access** in the admin area:
 
 | Setting | Purpose |
 |---|---|
@@ -304,7 +304,7 @@ scrape_configs:
       - targets: ['sigil.example.com']
     authorization:
       # Sent as 'Authorization: Bearer <token>'
-      credentials: <metrics_token>
+      credentials: <metrics_token_value>
       type: Bearer
 ```
 

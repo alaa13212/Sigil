@@ -1,0 +1,252 @@
+@page "/admin/settings/metrics-access"
+@attribute [Authorize]
+@layout AdminSettingsLayout
+@using System.Net
+@using System.Security.Cryptography
+@using Sigil.Application.Services
+@using Sigil.Domain
+@inject IAppConfigEditorService AppConfigService
+
+<PageTitle>Metrics Access — Sigil</PageTitle>
+
+<div class="max-w-2xl space-y-6">
+    @if (loading)
+    {
+        <div class="flex justify-center py-16">
+            <span class="loading loading-spinner loading-lg"></span>
+        </div>
+    }
+    else
+    {
+        <!-- Status -->
+        <div class="card bg-base-100">
+            <div class="card-body p-5 space-y-3">
+                <h2 class="font-semibold">Metrics Endpoint Access</h2>
+                <p class="text-sm opacity-60">
+                    The <code>/metrics</code> endpoint stays closed until a token or an allow-list is configured.
+                    Scraper requests never use UI sessions.
+                </p>
+                <div class="flex flex-wrap gap-2">
+                    @if (HasToken)
+                    {
+                        <span class="badge badge-success badge-sm">Token configured</span>
+                    }
+                    else
+                    {
+                        <span class="badge badge-ghost badge-sm">No token</span>
+                    }
+                    @if (AllowedCidrs.Count > 0)
+                    {
+                        <span class="badge badge-success badge-sm">@AllowedCidrs.Count allowed range(s)</span>
+                    }
+                    else
+                    {
+                        <span class="badge badge-ghost badge-sm">No allow-list</span>
+                    }
+                    @if (!HasToken && AllowedCidrs.Count == 0)
+                    {
+                        <span class="badge badge-error badge-sm">Endpoint disabled</span>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Token -->
+        <div class="card bg-base-100">
+            <div class="card-body p-5 space-y-3">
+                <h2 class="font-semibold">Shared Token</h2>
+                <p class="text-sm opacity-60">
+                    Scrapers send this as <code>Authorization: Bearer &lt;token&gt;</code> or <code>?token=&lt;token&gt;</code>.
+                    Compared in constant time.
+                </p>
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Token</legend>
+                    <form class="join w-full" @onsubmit="SaveToken" @onsubmit:preventDefault>
+                        <input type="@(revealToken ? "text" : "password")" class="input join-item flex-1 font-mono"
+                               @bind="tokenInput" autocomplete="off" spellcheck="false"
+                               placeholder="e.g. a long random string" />
+                        <button type="button" class="btn join-item" @onclick="() => revealToken = !revealToken">
+                            @(revealToken ? "Hide" : "Show")
+                        </button>
+                        <button type="submit" class="btn btn-primary join-item" disabled="@(tokenSaving || string.IsNullOrWhiteSpace(tokenInput))">
+                            @(tokenSaving ? "Saving..." : "Save")
+                        </button>
+                    </form>
+                    @if (!string.IsNullOrEmpty(tokenMessage))
+                    {
+                        <p class="fieldset-label text-xs @tokenMessageClass">@tokenMessage</p>
+                    }
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-ghost btn-xs" @onclick="GenerateToken">Generate random token</button>
+                        @if (HasToken)
+                        {
+                            <CopyButton Text="@CurrentToken" Label="Copy current token" />
+                            <button type="button" class="btn btn-ghost btn-xs text-error" @onclick="ClearToken">Clear token</button>
+                        }
+                    </div>
+                </fieldset>
+            </div>
+        </div>
+
+        <!-- CIDRs -->
+        <div class="card bg-base-100">
+            <div class="card-body p-5 space-y-3">
+                <h2 class="font-semibold">Allowed CIDR Ranges</h2>
+                <p class="text-sm opacity-60">
+                    Comma-separated ranges allowed to scrape without a token, e.g. <code>10.0.0.0/8,192.168.0.0/16</code>.
+                    Behind a reverse proxy the forwarded client address is matched.
+                </p>
+                <ConfigField Label="CIDR ranges" Description="Leave empty to disable token-less scraping"
+                             Value="@Get(AppConfigKeys.MetricsAllowedCidrs)" OnSave="SaveCidrs"
+                             Saving="@IsSaving(AppConfigKeys.MetricsAllowedCidrs)"
+                             Placeholder="10.0.0.0/8,192.168.0.0/16" InputType="text" />
+                @if (!string.IsNullOrEmpty(cidrError))
+                {
+                    <div class="alert alert-error text-sm">@cidrError</div>
+                }
+                @if (AllowedCidrs.Count > 0)
+                {
+                    <div class="text-xs opacity-60">
+                        Active ranges:
+                        @foreach (IPNetwork network in AllowedCidrs)
+                        {
+                            <code class="mr-1">@network.BaseAddress/@network.PrefixLength</code>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Scrape config -->
+        <div class="card bg-base-100">
+            <div class="card-body p-5 space-y-3">
+                <h2 class="font-semibold">Prometheus Scrape Config</h2>
+                <p class="text-sm opacity-60">Use the configured token as the bearer credential.</p>
+                <pre class="bg-base-300 rounded p-2 text-xs overflow-x-auto">scrape_configs:
+  - job_name: sigil
+    metrics_path: /metrics
+    scheme: https
+    static_configs:
+      - targets: ['sigil.example.com']
+    authorization:
+      credentials: &lt;metrics_token&gt;
+      type: Bearer</pre>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private Dictionary<string, string?> _config = [];
+    private HashSet<string> _savingKeys = [];
+    private bool loading = true;
+
+    private string tokenInput = "";
+    private bool tokenSaving;
+    private bool revealToken;
+    private string tokenMessage = "";
+    private string tokenMessageClass = "";
+    private string cidrError = "";
+
+    private bool HasToken => !string.IsNullOrWhiteSpace(CurrentToken);
+
+    private string? CurrentToken => Get(AppConfigKeys.MetricsToken);
+
+    private IReadOnlyList<IPNetwork> AllowedCidrs => MetricsAccessControl.ParseAllowedCidrs(Get(AppConfigKeys.MetricsAllowedCidrs));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _config = await AppConfigService.GetAllAsync();
+        tokenInput = CurrentToken ?? "";
+        loading = false;
+    }
+
+    private string? Get(string key) => _config.GetValueOrDefault(key);
+
+    private bool IsSaving(string key) => _savingKeys.Contains(key);
+
+    private async Task SaveToken()
+    {
+        if (string.IsNullOrWhiteSpace(tokenInput))
+            return;
+
+        tokenSaving = true;
+        tokenMessage = "";
+        try
+        {
+            await AppConfigService.SetAsync(AppConfigKeys.MetricsToken, tokenInput);
+            _config[AppConfigKeys.MetricsToken] = tokenInput;
+            tokenMessage = "Token saved.";
+            tokenMessageClass = "text-success";
+        }
+        catch (Exception ex)
+        {
+            tokenMessage = ex.Message;
+            tokenMessageClass = "text-error";
+        }
+        finally
+        {
+            tokenSaving = false;
+        }
+    }
+
+    private async Task ClearToken()
+    {
+        tokenSaving = true;
+        tokenMessage = "";
+        try
+        {
+            await AppConfigService.SetAsync(AppConfigKeys.MetricsToken, null);
+            _config[AppConfigKeys.MetricsToken] = null;
+            tokenInput = "";
+            tokenMessage = "Token cleared.";
+            tokenMessageClass = "text-success";
+        }
+        catch (Exception ex)
+        {
+            tokenMessage = ex.Message;
+            tokenMessageClass = "text-error";
+        }
+        finally
+        {
+            tokenSaving = false;
+        }
+    }
+
+    private void GenerateToken()
+    {
+        tokenInput = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+            .Replace('+', '-')
+            .Replace('/', '_')
+            .TrimEnd('=');
+        revealToken = true;
+        tokenMessage = "Generated a new token — press Save to apply it.";
+        tokenMessageClass = "opacity-60";
+    }
+
+    private async Task SaveCidrs(string? value)
+    {
+        cidrError = "";
+        string[] invalid = value?
+            .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(entry => !IPNetwork.TryParse(entry, out _))
+            .ToArray() ?? [];
+
+        if (invalid.Length > 0)
+        {
+            cidrError = $"Not a valid CIDR range: {string.Join(", ", invalid)}";
+            return;
+        }
+
+        _savingKeys.Add(AppConfigKeys.MetricsAllowedCidrs);
+        try
+        {
+            await AppConfigService.SetAsync(AppConfigKeys.MetricsAllowedCidrs, value);
+            _config[AppConfigKeys.MetricsAllowedCidrs] = value;
+        }
+        finally
+        {
+            _savingKeys.Remove(AppConfigKeys.MetricsAllowedCidrs);
+        }
+    }
+}
