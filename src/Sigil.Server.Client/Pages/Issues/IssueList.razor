@@ -426,6 +426,7 @@
         ("Last Seen", IssueSortBy.LastSeen),
         ("First Seen", IssueSortBy.FirstSeen),
         ("Occurrences", IssueSortBy.OccurrenceCount),
+        ("Severity", IssueSortBy.Level),
         ("Priority", IssueSortBy.Priority),
     ];
 
@@ -609,7 +610,7 @@
         var qs = HttpUtility.ParseQueryString(string.Empty);
         qs["page"] = Math.Max(1, PageParam).ToString();
         if (!string.IsNullOrWhiteSpace(SearchParam)) qs["q"] = SearchParam;
-        if (StatusFilter is { } status) qs["status"] = status.ToString();
+        if (StatusParam is { } rawStatus) qs["status"] = rawStatus;
         if (LevelParam is { } level) qs["level"] = level.ToString();
         if (SortParam is { } sort) qs["sort"] = sort.ToString();
         if (DirectionParam is { } direction) qs["dir"] = direction.ToString();
@@ -762,6 +763,7 @@
         await IssueService.UpdateIssueStatusAsync(issue.Id, IssueStatus.Resolved);
         await LoadIssues();
         ShowToast($"Issue #{issue.Id} resolved", issue.Id);
+        await InvokeAsync(StateHasChanged);
 
         return true;
     }
