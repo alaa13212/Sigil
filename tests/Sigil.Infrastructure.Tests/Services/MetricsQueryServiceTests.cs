@@ -94,7 +94,7 @@ public class MetricsQueryServiceTests(TestDatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task GetSnapshot_ExcludesEventsOlderThanTheWindow()
+    public async Task GetSnapshot_CountsEventsIntoEachWindow()
     {
         var project = await SeedProjectAsync("metrics-window-project");
         var (db, service, _) = CreateService();
@@ -104,14 +104,93 @@ public class MetricsQueryServiceTests(TestDatabaseFixture fixture)
         await db.SaveChangesAsync();
 
         db.Events.AddRange(
-            SeedEventIn(db, project.Id, issue.Id, Severity.Error, _now.AddHours(-1)),
+            SeedEventIn(db, project.Id, issue.Id, Severity.Error, _now.AddMinutes(-1)),
+            SeedEventIn(db, project.Id, issue.Id, Severity.Error, _now.AddMinutes(-10)),
+            SeedEventIn(db, project.Id, issue.Id, Severity.Error, _now.AddMinutes(-30)),
+            SeedEventIn(db, project.Id, issue.Id, Severity.Error, _now.AddHours(-5)),
             SeedEventIn(db, project.Id, issue.Id, Severity.Error, _now.AddHours(-48)));
         await db.SaveChangesAsync();
 
         MetricsSnapshot snapshot = await service.GetSnapshotAsync();
 
-        snapshot.Events.Single(e => e.Project == "metrics-window-project" && e.Level == Severity.Error)
-            .Count.Should().Be(1);
+        long Count(TimeSpan window) => snapshot.Events
+            .Single(e => e.Project == "metrics-window-project" && e.Level == Severity.Error && e.Window == window)
+            .Count;
+
+        Count(MetricsDefaults.FiveMinutes).Should().Be(1);
+        Count(MetricsDefaults.FifteenMinutes).Should().Be(2);
+        Count(MetricsDefaults.OneHour).Should().Be(3);
+        Count(MetricsDefaults.OneDay).Should().Be(4);
+    }
+
+    [Fact]
+    public async Task GetSnapshot_CountsSeveritiesSeparately()
+    {
+        var project = await SeedProjectAsync("metrics-severity-project");
+        var (db, service, _) = CreateService();
+
+        var issue = NewIssue(project.Id, IssueStatus.Open, Severity.Error);
+        db.Issues.Add(issue);
+        await db.SaveChangesAsync();
+
+        db.Events.AddRange(
+            SeedEventIn(db, project.Id, issue.Id, Severity.Error, _now.AddMinutes(-1)),
+            SeedEventIn(db, project.Id, issue.Id, Severity.Error, _now.AddMinutes(-1)),
+            SeedEventIn(db, project.Id, issue.Id, Severity.Warning, _now.AddMinutes(-1)),
+            SeedEventIn(db, project.Id, issue.Id, Severity.Info, _now.AddMinutes(-1)));
+        await db.SaveChangesAsync();
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        long Count(Severity level) => snapshot.Events
+            .Single(e => e.Project == "metrics-severity-project" && e.Level == level && e.Window == MetricsDefaults.FiveMinutes)
+            .Count;
+
+        Count(Severity.Error).Should().Be(2);
+        Count(Severity.Warning).Should().Be(1);
+        Count(Severity.Info).Should().Be(1);
+        Count(Severity.Fatal).Should().Be(0);
+        Count(Severity.Debug).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetSnapshot_EmitsAZeroSeriesForEveryLevelAndWindow()
+    {
+        var project = await SeedProjectAsync("metrics-zero-project");
+        var (db, service, _) = CreateService();
+
+        var issue = NewIssue(project.Id, IssueStatus.Open, Severity.Error);
+        db.Issues.Add(issue);
+        await db.SaveChangesAsync();
+
+        db.Events.Add(SeedEventIn(db, project.Id, issue.Id, Severity.Error, _now.AddMinutes(-1)));
+        await db.SaveChangesAsync();
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        var forProject = snapshot.Events.Where(e => e.Project == "metrics-zero-project").ToList();
+
+        // A level without events still gets a series, so a panel shows 0 rather than no data
+        // and the series does not churn in Prometheus.
+        forProject.Should().HaveCount(Enum.GetValues<Severity>().Length * MetricsDefaults.EventWindows.Count);
+
+        foreach (Severity level in Enum.GetValues<Severity>())
+            foreach (TimeSpan window in MetricsDefaults.EventWindows)
+                forProject.Should().Contain(e => e.Level == level && e.Window == window);
+    }
+
+    [Fact]
+    public async Task GetSnapshot_EmitsZeroSeriesForAProjectWithoutAnyEvents()
+    {
+        await SeedProjectAsync("metrics-silent-project");
+        var (_, service, _) = CreateService();
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        var forProject = snapshot.Events.Where(e => e.Project == "metrics-silent-project").ToList();
+
+        forProject.Should().HaveCount(Enum.GetValues<Severity>().Length * MetricsDefaults.EventWindows.Count);
+        forProject.Should().OnlyContain(e => e.Count == 0);
     }
 
     [Fact]
@@ -201,13 +280,18 @@ public class MetricsQueryServiceTests(TestDatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task GetSnapshot_ReportsTheConfiguredEventWindow()
+    public async Task GetSnapshot_ReportsEveryConfiguredEventWindow()
     {
+        await SeedProjectAsync("metrics-windows-project");
         var (_, service, _) = CreateService();
 
         MetricsSnapshot snapshot = await service.GetSnapshotAsync();
 
-        snapshot.EventWindow.Should().Be(MetricsDefaults.EventWindow);
+        snapshot.Events
+            .Where(e => e.Project == "metrics-windows-project")
+            .Select(e => e.Window)
+            .Distinct()
+            .Should().BeEquivalentTo(MetricsDefaults.EventWindows);
     }
 
     [Fact]

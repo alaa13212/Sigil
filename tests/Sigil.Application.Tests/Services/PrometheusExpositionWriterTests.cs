@@ -17,8 +17,7 @@ public class PrometheusExpositionWriterTests
         long backlog = 0,
         DateTime? lastIngestion = null,
         string version = "9.1.0") =>
-        new(issues ?? [], events ?? [], deliveries ?? [], ingested, dropped, backlog, lastIngestion, version,
-            MetricsDefaults.EventWindow);
+        new(issues ?? [], events ?? [], deliveries ?? [], ingested, dropped, backlog, lastIngestion, version);
 
     private static string[] Lines(string text) =>
         text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
@@ -40,7 +39,7 @@ public class PrometheusExpositionWriterTests
 
         lines.Should().Contain("# HELP sigil_issues Current issue count by project, status and level.");
         lines.Should().Contain("# TYPE sigil_issues gauge");
-        lines.Should().Contain("# TYPE sigil_events_total counter");
+        lines.Should().Contain("# TYPE sigil_events gauge");
         lines.Should().Contain("# TYPE sigil_events_ingested_total counter");
         lines.Should().Contain("# TYPE sigil_events_dropped_total counter");
         lines.Should().Contain("# TYPE sigil_digestion_backlog gauge");
@@ -113,7 +112,7 @@ public class PrometheusExpositionWriterTests
         Severity[] levels = [Severity.Debug, Severity.Info, Severity.Warning, Severity.Error, Severity.Fatal];
 
         string text = PrometheusExpositionWriter.Write(Snapshot(events:
-            levels.Select(l => new EventCountSample("web", l, 1)).ToList()));
+            levels.Select(l => new EventCountSample("web", l, MetricsDefaults.FiveMinutes, 1)).ToList()));
 
         foreach (string expected in new[] { "debug", "info", "warning", "error", "fatal" })
             text.Should().Contain($"level=\"{expected}\"");
@@ -250,7 +249,19 @@ public class PrometheusExpositionWriterTests
     public void Write_DescribesTheEventWindowInHelp()
     {
         PrometheusExpositionWriter.Write(Snapshot())
-            .Should().Contain("# HELP sigil_events_total Events received in the last 24 hours, by project and level.");
+            .Should().Contain("# HELP sigil_events Events received within the window, by project and level.");
+    }
+
+    [Fact]
+    public void Write_NoLongerExposesTheWindowedCountAsACounter()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(events:
+            [new EventCountSample("web", Severity.Error, MetricsDefaults.OneDay, 4)]));
+
+        // The old family was a 24 hour window typed as a counter, so rate() and increase()
+        // over it produced numbers that were not event rates.
+        text.Should().NotContain("sigil_events_total");
+        text.Should().Contain("# TYPE sigil_events gauge");
     }
 
     // ── Cardinality bounds ────────────────────────────────────────────────────
@@ -278,11 +289,11 @@ public class PrometheusExpositionWriterTests
     [Fact]
     public void Write_EmitsOnlyTheDeclaredLabelNames()
     {
-        var allowed = new HashSet<string> { "project", "status", "level", "channel", "version" };
+        var allowed = new HashSet<string> { "project", "status", "level", "window", "channel", "version" };
 
         string text = PrometheusExpositionWriter.Write(Snapshot(
             issues: [new IssueCountSample("web", IssueStatus.Open, Severity.Error, 3)],
-            events: [new EventCountSample("web", Severity.Fatal, 9)],
+            events: [new EventCountSample("web", Severity.Fatal, MetricsDefaults.OneHour, 9)],
             deliveries: [new AlertDeliverySample(AlertChannelType.Slack, AlertDeliveryStatus.Sent, 1)],
             ingested: 5, dropped: 2, backlog: 4, lastIngestion: IngestedAt, version: "1.0.0"));
 
@@ -307,5 +318,90 @@ public class PrometheusExpositionWriterTests
 
         string[] lines = Lines(PrometheusExpositionWriter.Write(Snapshot(issues: issues)));
         lines.Count(l => l.StartsWith("sigil_issues{")).Should().Be(3 * 4 * 5);
+    }
+
+    [Fact]
+    public void Write_EventSeriesCountIsBoundedByProjectsTimesLevelsTimesWindows()
+    {
+        // 3 projects x 5 levels x 4 windows is the theoretical maximum for sigil_events
+        var events = new List<EventCountSample>();
+        foreach (string project in new[] { "a", "b", "c" })
+            foreach (Severity level in Enum.GetValues<Severity>())
+                foreach (TimeSpan window in MetricsDefaults.EventWindows)
+                    events.Add(new EventCountSample(project, level, window, 1));
+
+        string[] lines = Lines(PrometheusExpositionWriter.Write(Snapshot(events: events)));
+        lines.Count(l => l.StartsWith("sigil_events{")).Should().Be(3 * 5 * 4);
+    }
+
+    // ── Windows ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Write_RendersEachWindowAsItsOwnLabelValue()
+    {
+        var events = new List<EventCountSample>();
+        foreach (TimeSpan window in MetricsDefaults.EventWindows)
+            events.Add(new EventCountSample("web", Severity.Error, window, 1));
+
+        string text = PrometheusExpositionWriter.Write(Snapshot(events: events));
+
+        text.Should().Contain("sigil_events{project=\"web\",level=\"error\",window=\"5m\"} 1");
+        text.Should().Contain("sigil_events{project=\"web\",level=\"error\",window=\"15m\"} 1");
+        text.Should().Contain("sigil_events{project=\"web\",level=\"error\",window=\"1h\"} 1");
+        text.Should().Contain("sigil_events{project=\"web\",level=\"error\",window=\"24h\"} 1");
+    }
+
+    [Fact]
+    public void Write_RendersTheSameLevelInDifferentWindowsAsDifferentSeries()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(events:
+        [
+            new EventCountSample("web", Severity.Error, MetricsDefaults.FiveMinutes, 2),
+            new EventCountSample("web", Severity.Error, MetricsDefaults.OneHour, 40),
+        ]));
+
+        text.Should().Contain("sigil_events{project=\"web\",level=\"error\",window=\"5m\"} 2");
+        text.Should().Contain("sigil_events{project=\"web\",level=\"error\",window=\"1h\"} 40");
+    }
+
+    // ── Severity separation ───────────────────────────────────────────────────
+
+    [Fact]
+    public void Write_KeepsErrorAndWarningCountsInSeparateSeries()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(events:
+        [
+            new EventCountSample("web", Severity.Error, MetricsDefaults.FiveMinutes, 7),
+            new EventCountSample("web", Severity.Warning, MetricsDefaults.FiveMinutes, 300),
+        ]));
+
+        text.Should().Contain("sigil_events{project=\"web\",level=\"error\",window=\"5m\"} 7");
+        text.Should().Contain("sigil_events{project=\"web\",level=\"warning\",window=\"5m\"} 300");
+    }
+
+    [Fact]
+    public void Write_KeepsFatalInItsOwnSeriesSoErrorQueriesCanExcludeIt()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(events:
+        [
+            new EventCountSample("web", Severity.Fatal, MetricsDefaults.FiveMinutes, 1),
+            new EventCountSample("web", Severity.Error, MetricsDefaults.FiveMinutes, 2),
+        ]));
+
+        text.Should().Contain("level=\"fatal\"");
+        text.Should().Contain("level=\"error\"");
+    }
+
+    [Fact]
+    public void Write_NeverMergesTwoProjectsIntoOneSeries()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(events:
+        [
+            new EventCountSample("web", Severity.Error, MetricsDefaults.FiveMinutes, 1),
+            new EventCountSample("api", Severity.Error, MetricsDefaults.FiveMinutes, 1),
+        ]));
+
+        text.Should().Contain("sigil_events{project=\"web\",level=\"error\",window=\"5m\"} 1");
+        text.Should().Contain("sigil_events{project=\"api\",level=\"error\",window=\"5m\"} 1");
     }
 }

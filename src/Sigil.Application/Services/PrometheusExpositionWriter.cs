@@ -17,7 +17,6 @@ public static class PrometheusExpositionWriter
         ArgumentNullException.ThrowIfNull(snapshot);
 
         var sb = new StringBuilder();
-        var window = FormatWindow(snapshot.EventWindow);
 
         Family(sb, "sigil_issues", "gauge",
             "Current issue count by project, status and level.",
@@ -26,11 +25,11 @@ public static class PrometheusExpositionWriter
                     new[] { Label("project", i.Project), Label("status", StatusName(i.Status)), Label("level", SeverityName(i.Level)) },
                     i.Count)));
 
-        Family(sb, "sigil_events_total", "counter",
-            $"Events received in the last {window}, by project and level.",
+        Family(sb, "sigil_events", "gauge",
+            "Events received within the window, by project and level.",
             snapshot.Events.Select(e =>
                 Sample(
-                    new[] { Label("project", e.Project), Label("level", SeverityName(e.Level)) },
+                    new[] { Label("project", e.Project), Label("level", SeverityName(e.Level)), Label("window", WindowName(e.Window)) },
                     e.Count)));
 
         Family(sb, "sigil_events_ingested_total", "counter",
@@ -134,10 +133,16 @@ public static class PrometheusExpositionWriter
         return seconds.ToString("0.###", CultureInfo.InvariantCulture);
     }
 
-    private static string FormatWindow(TimeSpan window) =>
-        window.TotalHours % 1 == 0
-            ? ((int)window.TotalHours).ToString(CultureInfo.InvariantCulture) + " hours"
-            : window.ToString("g", CultureInfo.InvariantCulture);
+    private static string WindowName(TimeSpan window)
+    {
+        if (window.TotalSeconds < 60)
+            return window.TotalSeconds.ToString("0.###", CultureInfo.InvariantCulture) + "s";
+
+        if (window.TotalMinutes < 60)
+            return window.TotalMinutes.ToString("0.###", CultureInfo.InvariantCulture) + "m";
+
+        return window.TotalHours.ToString("0.###", CultureInfo.InvariantCulture) + "h";
+    }
 
     private static string StatusName(IssueStatus status) => status switch
     {

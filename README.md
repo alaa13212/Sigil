@@ -88,7 +88,7 @@ All four are per-project, rule-based, and applied during digestion.
 
 - **Ingestion rate limits**: a sliding-window limiter with a global cap, a default per-project cap, and a per-project override. Over-limit traffic is rejected rather than allowed to degrade the database.
 - **Retention**: a background worker enforces a maximum event age and a maximum event count, with global defaults and per-project overrides. Failed raw envelopes have their own, shorter, retention window.
-- **Prometheus metrics**: a `/metrics` endpoint exports issue counts, ingestion counters, digestion backlog, alert deliveries and build info, gated by a dedicated token or a CIDR allow-list.
+- **Prometheus metrics**: a `/metrics` endpoint exports issue counts, severity-separated event volumes over 5m/15m/1h/24h windows, ingestion counters, digestion backlog, alert deliveries and build info, gated by a dedicated token or a CIDR allow-list.
 
 ### Web UI
 
@@ -214,7 +214,7 @@ information:
 | Metric | Type | Labels | Meaning |
 |---|---|---|---|
 | `sigil_issues` | gauge | `project`, `status`, `level` | Current issue count |
-| `sigil_events_total` | counter | `project`, `level` | Events received in the last 24 hours |
+| `sigil_events` | gauge | `project`, `level`, `window` | Events received within the window (`5m`, `15m`, `1h`, `24h`) |
 | `sigil_events_ingested_total` | counter | — | Events accepted into the ingestion pipeline since process start |
 | `sigil_events_dropped_total` | counter | — | Events discarded during digestion since process start |
 | `sigil_digestion_backlog` | gauge | — | Envelopes awaiting digestion |
@@ -223,7 +223,47 @@ information:
 | `sigil_build_info` | gauge | `version` | Running build version, always `1` |
 
 Label cardinality is bounded by design: only project names and enum values are ever used as
-labels. Issue identifiers, fingerprints and tag values are never exported.
+labels. Issue identifiers, fingerprints and tag values are never exported. `sigil_events` emits
+one series per project, severity and window — `projects × 5 × 4` — and emits them even when the
+count is zero, so a series never disappears when a severity goes quiet.
+
+#### Severity and time windows
+
+`sigil_events` is a **gauge**, not a counter. Its value is the number of events inside a sliding
+window that ends at scrape time, so it rises and falls. Do not wrap it in `rate()` or
+`increase()`: those functions assume a monotonically increasing series and report a number that is
+not an event rate. Compare it against a threshold instead.
+
+Each severity is its own series, so an error count is never mixed with a warning or info count.
+The `window` label selects the span — `5m`, `15m`, `1h` or `24h`. The windows are nested, so the
+5-minute count is always a subset of the 24-hour count.
+
+`sigil_events_ingested_total` and `sigil_events_dropped_total` carry no `level` label: ingestion
+counts raw envelopes before parsing, and dropped events are parse failures whose severity is
+often unknown. Use `sigil_events` when you need severity-aware volume.
+
+#### Alerting on severity
+
+Severity values are `debug`, `info`, `warning`, `error` and `fatal`. `error` and `fatal` are
+separate series, so a query for "errors" has to ask for both:
+
+```promql
+# New errors in the last 5 minutes, errors and fatals together.
+sigil_events{level=~"fatal|error", window="5m"} > 0
+
+# New errors in the last 5 minutes, per project.
+sum by (project) (sigil_events{level=~"fatal|error", window="5m"}) > 0
+
+# Warnings in the last hour, counted separately from errors.
+sum by (project) (sigil_events{level="warning", window="1h"}) > 100
+
+# Errors currently open, never mixed with resolved or ignored issues.
+sigil_issues{status="open", level=~"fatal|error"} > 0
+```
+
+`sigil_issues` is a gauge of the current issue state, so it answers "how many errors are open
+right now". `sigil_events` answers "how many error events arrived in the last N minutes" — pick
+the `window` that matches the intent of the alert.
 
 #### Access control
 
