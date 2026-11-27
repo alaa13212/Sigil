@@ -18,6 +18,14 @@ public sealed record EventCountSample(
 /// <summary>Alert delivery count for one channel type and delivery status.</summary>
 public sealed record AlertDeliverySample(AlertChannelType Channel, AlertDeliveryStatus Status, long Count);
 
+/// <summary>Event count for one project and level inside one time window, without the environment and status breakdown.</summary>
+public sealed record ProjectEventCountSample(
+    string Project,
+    int ProjectId,
+    Severity Level,
+    TimeSpan Window,
+    long Count);
+
 /// <summary>Count of issues first seen inside one time window.</summary>
 public sealed record NewIssueCountSample(string Project, int ProjectId, Severity Level, TimeSpan Window, long Count);
 
@@ -30,10 +38,12 @@ public sealed record EnvelopeDiscardSample(string Type, long Count);
 /// <summary>Full set of values exposed by a single scrape.</summary>
 /// <param name="Issues">Issue counts grouped by project, status and level.</param>
 /// <param name="Events">Event counts grouped by project, level, window, environment and issue status.</param>
+/// <param name="ProjectEvents">Event counts grouped by project, level and window, zero filled for every project.</param>
 /// <param name="AlertDeliveries">Cumulative alert deliveries grouped by channel type and status.</param>
 /// <param name="NewIssues">Issues first seen inside a window, grouped by project, level and window.</param>
 /// <param name="Releases">Newest release observed for each project.</param>
-/// <param name="DiscardedEnvelopes">Discarded envelopes grouped by envelope item type.</param>
+/// <param name="DiscardedEnvelopes">Discarded envelopes still held in the database, grouped by envelope item type.</param>
+/// <param name="DiscardedEnvelopeTotals">Envelopes discarded since process start, grouped by envelope item type.</param>
 /// <param name="EventsIngested">Events accepted into the ingestion pipeline since process start.</param>
 /// <param name="EventsDropped">Events discarded by the digestion pipeline since process start.</param>
 /// <param name="DigestionBacklog">Envelopes currently awaiting digestion.</param>
@@ -44,10 +54,12 @@ public sealed record EnvelopeDiscardSample(string Type, long Count);
 public sealed record MetricsSnapshot(
     IReadOnlyList<IssueCountSample> Issues,
     IReadOnlyList<EventCountSample> Events,
+    IReadOnlyList<ProjectEventCountSample> ProjectEvents,
     IReadOnlyList<AlertDeliverySample> AlertDeliveries,
     IReadOnlyList<NewIssueCountSample> NewIssues,
     IReadOnlyList<ReleaseInfoSample> Releases,
     IReadOnlyList<EnvelopeDiscardSample> DiscardedEnvelopes,
+    IReadOnlyList<EnvelopeDiscardSample> DiscardedEnvelopeTotals,
     long EventsIngested,
     long EventsDropped,
     long DigestionBacklog,

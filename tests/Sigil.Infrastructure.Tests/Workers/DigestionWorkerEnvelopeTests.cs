@@ -13,6 +13,8 @@ using Sigil.Infrastructure.Tests.Fixtures;
 using Sigil.Infrastructure.Tests.Persistence;
 using Sigil.Infrastructure.Workers;
 
+using Sigil.Infrastructure.Tests.Services;
+
 namespace Sigil.Infrastructure.Tests.Workers;
 
 [Collection(DbCollection)]
@@ -42,7 +44,7 @@ public class DigestionWorkerEnvelopeTests(TestDatabaseFixture fixture)
         var services = new ServiceCollection();
         services.AddScoped(_ => db);
         services.AddScoped<IRawEnvelopeService>(sp =>
-            new RawEnvelopeService(sp.GetRequiredService<SigilDbContext>(), new FixedDateTime(DateTime.UtcNow)));
+            new RawEnvelopeService(sp.GetRequiredService<SigilDbContext>(), new FixedDateTime(DateTime.UtcNow), new FakeSigilMetrics()));
         services.AddScoped<IEventParsingContextBuilder>(_ => Substitute.For<IEventParsingContextBuilder>());
         services.AddSingleton(parser);
         services.AddScoped<IDigestionService>(_ => Substitute.For<IDigestionService>());

@@ -19,8 +19,9 @@ public sealed class FakeSigilMetrics : ISigilMetrics
     public List<int> IngestedCounts { get; } = [];
     public List<int> DroppedCounts { get; } = [];
     public List<DateTime> LastIngestions { get; } = [];
+    public List<string> DiscardedEnvelopeTypes { get; } = [];
 
-    private SigilMetricsSnapshot _snapshot = new(0, 0, null);
+    private SigilMetricsSnapshot _snapshot = new(0, 0, null, new Dictionary<string, long>());
 
     public void RecordEventsIngested(int count)
     {
@@ -33,6 +34,8 @@ public sealed class FakeSigilMetrics : ISigilMetrics
         DroppedCalls++;
         DroppedCounts.Add(count);
     }
+
+    public void RecordEnvelopeDiscarded(string type) => DiscardedEnvelopeTypes.Add(type);
 
     public void RecordLastIngestion(DateTime receivedAtUtc) => LastIngestions.Add(receivedAtUtc);
 
@@ -123,6 +126,66 @@ public class MetricsQueryServiceTests(TestDatabaseFixture fixture)
         Count(MetricsDefaults.FifteenMinutes).Should().Be(2);
         Count(MetricsDefaults.OneHour).Should().Be(3);
         Count(MetricsDefaults.OneDay).Should().Be(4);
+    }
+
+    [Fact]
+    public async Task GetSnapshot_ReportsEveryWindowOfAnObservedCombination()
+    {
+        var project = await SeedProjectAsync("metrics-zero-fill-project");
+        var (db, service, _) = CreateService();
+
+        var issue = NewIssue(project.Id, IssueStatus.Open, Severity.Error);
+        db.Issues.Add(issue);
+        await db.SaveChangesAsync();
+
+        db.Events.Add(SeedEventIn(db, project.Id, issue.Id, Severity.Error, _now.AddMinutes(-30)));
+        await db.SaveChangesAsync();
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        var samples = snapshot.Events
+            .Where(e => e.Project == "metrics-zero-fill-project" && e.Level == Severity.Error)
+            .ToList();
+
+        // The combination was seen in the last day, so all four windows are reported,
+        // the quiet ones with a zero, so the series does not disappear.
+        samples.Should().HaveCount(4);
+        samples.Single(e => e.Window == MetricsDefaults.FiveMinutes).Count.Should().Be(0);
+        samples.Single(e => e.Window == MetricsDefaults.FifteenMinutes).Count.Should().Be(0);
+        samples.Single(e => e.Window == MetricsDefaults.OneHour).Count.Should().Be(1);
+        samples.Single(e => e.Window == MetricsDefaults.OneDay).Count.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetSnapshot_ReportsAZeroFilledProjectSeriesForEveryProject()
+    {
+        var project = await SeedProjectAsync("metrics-silent-project-events");
+        var (_, service, _) = CreateService();
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        // A project with no events still reports a series, so a silence rule can fire.
+        snapshot.ProjectEvents.Should().Contain(e =>
+            e.Project == "metrics-silent-project-events" &&
+            e.ProjectId == project.Id &&
+            e.Level == Severity.Error &&
+            e.Window == MetricsDefaults.OneHour &&
+            e.Count == 0);
+    }
+
+    [Fact]
+    public async Task GetSnapshot_ReportsTheDiscardedEnvelopeCounterFromTheProcessCounter()
+    {
+        var (_, service, metrics) = CreateService();
+        metrics.SetSnapshot(new SigilMetricsSnapshot(
+            0,
+            0,
+            null,
+            new Dictionary<string, long> { ["client_report"] = 42 }));
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        snapshot.DiscardedEnvelopeTotals.Should().Contain(d => d.Type == "client_report" && d.Count == 42);
     }
 
     [Fact]
@@ -380,11 +443,11 @@ public class MetricsQueryServiceTests(TestDatabaseFixture fixture)
     public async Task GetSnapshot_ExcludesDiscardedEnvelopesFromTheBacklogAndTheOldestPendingAge()
     {
         var project = await SeedProjectAsync("metrics-discarded-project");
-        var (db, service, _) = CreateService();
+        var (db, service, metrics) = CreateService();
 
         long backlogBefore = (await service.GetSnapshotAsync()).DigestionBacklog;
 
-        var service2 = new RawEnvelopeService(db, new FixedDateTime(_now));
+        var service2 = new RawEnvelopeService(db, new FixedDateTime(_now), metrics);
         await service2.StoreAsync(project.Id, ClientReportEnvelope(), _now.AddMinutes(-30));
 
         var discarded = await db.RawEnvelopes
@@ -406,9 +469,9 @@ public class MetricsQueryServiceTests(TestDatabaseFixture fixture)
     public async Task GetSnapshot_CountsDiscardedEnvelopesByItemType()
     {
         var project = await SeedProjectAsync("metrics-discarded-count-project");
-        var (db, service, _) = CreateService();
+        var (db, service, metrics) = CreateService();
 
-        var service2 = new RawEnvelopeService(db, new FixedDateTime(_now));
+        var service2 = new RawEnvelopeService(db, new FixedDateTime(_now), metrics);
         await service2.StoreAsync(project.Id, ClientReportEnvelope(), _now);
         await service2.StoreAsync(project.Id, ClientReportEnvelope(), _now);
         await service2.StoreAsync(project.Id, TransactionEnvelope(), _now);
@@ -496,7 +559,7 @@ public class MetricsQueryServiceTests(TestDatabaseFixture fixture)
     {
         var (_, service, metrics) = CreateService();
         var counterValue = new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        metrics.SetSnapshot(new SigilMetricsSnapshot(41, 7, counterValue));
+        metrics.SetSnapshot(new SigilMetricsSnapshot(41, 7, counterValue, new Dictionary<string, long>()));
 
         MetricsSnapshot snapshot = await service.GetSnapshotAsync();
 

@@ -49,6 +49,20 @@ public static class PrometheusExpositionWriter
                     },
                     e.Count)));
 
+        Family(sb, "sigil_project_events", "gauge",
+            "Events received within the window, by project and level. One series per project, level and window, " +
+            "reported even when the count is zero, so a series does not disappear when a project goes quiet.",
+            snapshot.ProjectEvents.Select(e =>
+                Sample(
+                    new[]
+                    {
+                        Label("project", e.Project),
+                        Label("project_id", Number(e.ProjectId)),
+                        Label("level", SeverityName(e.Level)),
+                        Label("window", WindowName(e.Window)),
+                    },
+                    e.Count)));
+
         Family(sb, "sigil_events_ingested_total", "counter",
             "Events accepted into the ingestion pipeline since process start.",
             [Sample([], snapshot.EventsIngested)]);
@@ -65,10 +79,16 @@ public static class PrometheusExpositionWriter
             "Age of the oldest envelope still awaiting digestion, in seconds. Zero when the queue is empty.",
             [Sample([], snapshot.DigestionOldestPendingSeconds)]);
 
-        Family(sb, "sigil_envelopes_discarded_total", "counter",
+        Family(sb, "sigil_envelopes_discarded", "gauge",
             "Envelopes discarded because Sigil does not process their item type, by envelope item type. " +
             "Counts the discarded envelopes still held in the database; retention removes older rows.",
             snapshot.DiscardedEnvelopes.Select(d =>
+                Sample(new[] { Label("type", d.Type) }, d.Count)));
+
+        Family(sb, "sigil_envelopes_discarded_total", "counter",
+            "Envelopes discarded because Sigil does not process their item type, by envelope item type. " +
+            "Counts the envelopes discarded since process start.",
+            snapshot.DiscardedEnvelopeTotals.Select(d =>
                 Sample(new[] { Label("type", d.Type) }, d.Count)));
 
         Family(sb, "sigil_alert_deliveries_total", "counter",
@@ -169,10 +189,12 @@ public static class PrometheusExpositionWriter
     /// <summary>Help text of the sigil_events family.</summary>
     private static string EventsHelp() =>
         "Events received within the window, by project, level, environment and issue status. " +
-        "One series per observed combination, combinations without events are not reported. " +
+        "Every combination seen in the last 24 hours reports all four windows, including the ones with no events, " +
+        "so a series does not disappear while it is quiet. " +
         $"Environment values are capped at the {MetricsDefaults.EnvironmentLabelLimit} most frequent values per project, " +
         $"the remaining values are reported as {MetricsDefaults.EnvironmentOtherLabel} " +
-        $"and events without an environment tag as {MetricsDefaults.EnvironmentMissingLabel}.";
+        $"and events without an environment tag as {MetricsDefaults.EnvironmentMissingLabel}. " +
+        "Use sigil_project_events for a series that outlives a day of silence.";
 
     private static void Family(StringBuilder sb, string name, string type, string help, IEnumerable<(string Labels, string Value)> samples)
     {

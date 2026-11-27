@@ -11,10 +11,12 @@ public class PrometheusExpositionWriterTests
     private static MetricsSnapshot Snapshot(
         IReadOnlyList<IssueCountSample>? issues = null,
         IReadOnlyList<EventCountSample>? events = null,
+        IReadOnlyList<ProjectEventCountSample>? projectEvents = null,
         IReadOnlyList<AlertDeliverySample>? deliveries = null,
         IReadOnlyList<NewIssueCountSample>? newIssues = null,
         IReadOnlyList<ReleaseInfoSample>? releases = null,
         IReadOnlyList<EnvelopeDiscardSample>? discarded = null,
+        IReadOnlyList<EnvelopeDiscardSample>? discardedTotals = null,
         long ingested = 0,
         long dropped = 0,
         long backlog = 0,
@@ -25,10 +27,12 @@ public class PrometheusExpositionWriterTests
         new(
             issues ?? [],
             events ?? [],
+            projectEvents ?? [],
             deliveries ?? [],
             newIssues ?? [],
             releases ?? [],
             discarded ?? [],
+            discardedTotals ?? [],
             ingested,
             dropped,
             backlog,
@@ -62,6 +66,7 @@ public class PrometheusExpositionWriterTests
         lines.Should().Contain("# TYPE sigil_events_dropped_total counter");
         lines.Should().Contain("# TYPE sigil_digestion_backlog gauge");
         lines.Should().Contain("# TYPE sigil_digestion_oldest_pending_seconds gauge");
+        lines.Should().Contain("# TYPE sigil_envelopes_discarded gauge");
         lines.Should().Contain("# TYPE sigil_envelopes_discarded_total counter");
         lines.Should().Contain("# TYPE sigil_alert_deliveries_total counter");
         lines.Should().Contain("# TYPE sigil_new_issues gauge");
@@ -69,6 +74,7 @@ public class PrometheusExpositionWriterTests
         lines.Should().Contain("# TYPE sigil_release_first_seen_timestamp_seconds gauge");
         lines.Should().Contain("# TYPE sigil_last_ingestion_timestamp_seconds gauge");
         lines.Should().Contain("# TYPE sigil_build_info gauge");
+        lines.Should().Contain("# TYPE sigil_project_events gauge");
     }
 
     [Fact]
@@ -76,8 +82,8 @@ public class PrometheusExpositionWriterTests
     {
         string[] lines = Lines(PrometheusExpositionWriter.Write(Snapshot()));
 
-        lines.Count(l => l.StartsWith("# TYPE ")).Should().Be(13);
-        lines.Count(l => l.StartsWith("# HELP ")).Should().Be(13);
+        lines.Count(l => l.StartsWith("# TYPE ")).Should().Be(15);
+        lines.Count(l => l.StartsWith("# HELP ")).Should().Be(15);
     }
 
     [Fact]
@@ -310,11 +316,12 @@ public class PrometheusExpositionWriterTests
     }
 
     [Fact]
-    public void Write_ExplainsThatOnlyObservedEventCombinationsAreReported()
+    public void Write_ExplainsThatEventCombinationsReportEveryWindow()
     {
         string text = PrometheusExpositionWriter.Write(Snapshot());
 
-        text.Should().Contain("One series per observed combination, combinations without events are not reported.");
+        text.Should().Contain("reports all four windows, including the ones with no events");
+        text.Should().Contain("Use sigil_project_events for a series that outlives a day of silence.");
     }
 
     [Fact]
@@ -534,7 +541,7 @@ public class PrometheusExpositionWriterTests
     }
 
     [Fact]
-    public void Write_RendersDiscardedEnvelopesByItemType()
+    public void Write_RendersDiscardedEnvelopesHeldInTheDatabaseAsAGauge()
     {
         string text = PrometheusExpositionWriter.Write(Snapshot(discarded:
         [
@@ -542,8 +549,34 @@ public class PrometheusExpositionWriterTests
             new EnvelopeDiscardSample("transaction", 4),
         ]));
 
-        text.Should().Contain("sigil_envelopes_discarded_total{type=\"client_report\"} 12");
-        text.Should().Contain("sigil_envelopes_discarded_total{type=\"transaction\"} 4");
+        text.Should().Contain("sigil_envelopes_discarded{type=\"client_report\"} 12");
+        text.Should().Contain("sigil_envelopes_discarded{type=\"transaction\"} 4");
+    }
+
+    [Fact]
+    public void Write_RendersDiscardedEnvelopesSinceProcessStartAsACounter()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(discardedTotals:
+        [
+            new EnvelopeDiscardSample("client_report", 90),
+            new EnvelopeDiscardSample("transaction", 31),
+        ]));
+
+        text.Should().Contain("sigil_envelopes_discarded_total{type=\"client_report\"} 90");
+        text.Should().Contain("sigil_envelopes_discarded_total{type=\"transaction\"} 31");
+    }
+
+    [Fact]
+    public void Write_RendersProjectEventsWithProjectLevelAndWindow()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(projectEvents:
+        [
+            new ProjectEventCountSample("web", 12, Severity.Error, MetricsDefaults.OneHour, 5),
+            new ProjectEventCountSample("web", 12, Severity.Error, MetricsDefaults.FiveMinutes, 0),
+        ]));
+
+        text.Should().Contain("sigil_project_events{project=\"web\",project_id=\"12\",level=\"error\",window=\"1h\"} 5");
+        text.Should().Contain("sigil_project_events{project=\"web\",project_id=\"12\",level=\"error\",window=\"5m\"} 0");
     }
 
     // ── New issues ────────────────────────────────────────────────────────────

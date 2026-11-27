@@ -90,6 +90,7 @@ internal class DigestionWorker(
                 if (unsupportedType is not null)
                 {
                     discarded.Add((raw.Id, EnvelopeItemTypes.UnsupportedError(unsupportedType)));
+                    metrics.RecordEnvelopeDiscarded(EnvelopeItemTypes.Normalize(unsupportedType));
                     continue;
                 }
 

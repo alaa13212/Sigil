@@ -28,6 +28,8 @@ internal class MetricsQueryService(SigilDbContext dbContext, IDateTime dateTime,
 
         List<EventCountSample> events = await BuildEventSamplesAsync(since5m, since15m, since1h, since24h, ct);
 
+        List<ProjectEventCountSample> projectEvents = await BuildProjectEventSamplesAsync(events, ct);
+
         List<NewIssueCountSample> newIssues = await BuildNewIssueSamplesAsync(since5m, since15m, since1h, since24h, ct);
 
         List<AlertDeliverySample> deliveries = await dbContext.AlertHistory
@@ -40,6 +42,13 @@ internal class MetricsQueryService(SigilDbContext dbContext, IDateTime dateTime,
 
         List<EnvelopeDiscardSample> discarded = await BuildDiscardedEnvelopeSamplesAsync(ct);
 
+        SigilMetricsSnapshot counters = metrics.GetSnapshot();
+
+        List<EnvelopeDiscardSample> discardedTotals = counters.EnvelopesDiscarded
+            .OrderBy(c => c.Key, StringComparer.Ordinal)
+            .Select(c => new EnvelopeDiscardSample(c.Key, c.Value))
+            .ToList();
+
         long backlog = await dbContext.RawEnvelopes
             .AsNoTracking()
             .CountAsync(r => r.Error == null, ct);
@@ -48,17 +57,17 @@ internal class MetricsQueryService(SigilDbContext dbContext, IDateTime dateTime,
 
         DateTime? persistedIngestion = await GetPersistedIngestionAsync(ct);
 
-        SigilMetricsSnapshot counters = metrics.GetSnapshot();
-
         DateTime? lastIngestion = Later(counters.LastIngestionUtc, persistedIngestion);
 
         return new MetricsSnapshot(
             issues,
             events,
+            projectEvents,
             deliveries,
             newIssues,
             releases,
             discarded,
+            discardedTotals,
             counters.EventsIngested,
             counters.EventsDropped,
             backlog,
@@ -69,8 +78,9 @@ internal class MetricsQueryService(SigilDbContext dbContext, IDateTime dateTime,
     }
 
     /// <summary>
-    /// Counts events per project, level, window, environment and issue status. Only observed
-    /// combinations are reported, the label cross-product is unbounded.
+    /// Counts events per project, level, window, environment and issue status. Every combination
+    /// seen in the longest window reports all four windows, including the ones with no events, so
+    /// a series does not disappear while its combination is still observed.
     /// </summary>
     private async Task<List<EventCountSample>> BuildEventSamplesAsync(
         DateTime since5m,
@@ -124,10 +134,46 @@ internal class MetricsQueryService(SigilDbContext dbContext, IDateTime dateTime,
 
             foreach ((TimeSpan window, long count) in Windows(row.Count5m, row.Count15m, row.Count1h, row.Count24h))
             {
-                if (count <= 0)
-                    continue;
-
                 samples.Add(new EventCountSample(row.Name, row.ProjectId, row.Level, window, environment, row.Status, count));
+            }
+        }
+
+        return samples;
+    }
+
+    /// <summary>
+    /// Counts events per project, level and window without the environment and status breakdown.
+    /// Every project reports every level and window, including the ones with no events, so the
+    /// series outlives a day of silence.
+    /// </summary>
+    private async Task<List<ProjectEventCountSample>> BuildProjectEventSamplesAsync(
+        IReadOnlyList<EventCountSample> events,
+        CancellationToken ct)
+    {
+        var projectRows = await dbContext.Projects
+            .AsNoTracking()
+            .OrderBy(p => p.Name)
+            .Select(p => new { p.Id, p.Name })
+            .ToListAsync(ct);
+
+        var counts = new Dictionary<(int ProjectId, Severity Level, TimeSpan Window), long>();
+
+        foreach (EventCountSample sample in events)
+        {
+            var key = (sample.ProjectId, sample.Level, sample.Window);
+            counts[key] = counts.GetValueOrDefault(key) + sample.Count;
+        }
+
+        var samples = new List<ProjectEventCountSample>();
+        foreach (var project in projectRows)
+        {
+            foreach (Severity level in Enum.GetValues<Severity>())
+            {
+                foreach (TimeSpan window in MetricsDefaults.EventWindows)
+                {
+                    var key = (project.Id, level, window);
+                    samples.Add(new ProjectEventCountSample(project.Name, project.Id, level, window, counts.GetValueOrDefault(key)));
+                }
             }
         }
 
