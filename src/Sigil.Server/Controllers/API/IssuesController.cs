@@ -116,6 +116,24 @@ public class IssuesController(
         return Ok(new { issue.Id, issue.Priority });
     }
 
+    [Authorize(Policy = SigilPermissions.CanEditIssue)]
+    [HttpPost("api/projects/{projectId:int}/issues/bulk")]
+    public async Task<IActionResult> BulkUpdate(int projectId, [FromBody] BulkIssueActionRequest request)
+    {
+        var userId = GetUserId();
+        if (userId is null) return Unauthorized();
+
+        try
+        {
+            var updated = await issueService.BulkUpdateIssuesAsync(projectId, request, userId.Value);
+            return Ok(new { updated });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
     [Authorize(Policy = SigilPermissions.CanDeleteIssue)]
     [HttpDelete("api/issues/{id:int}")]
     public async Task<IActionResult> Delete(int id)

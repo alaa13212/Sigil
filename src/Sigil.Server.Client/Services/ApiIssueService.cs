@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Web;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models;
@@ -95,6 +96,34 @@ public class ApiIssueService(HttpClient http) : IIssueService
         return response.IsSuccessStatusCode;
     }
 
+    public async Task<int> BulkUpdateIssuesAsync(int projectId, BulkIssueActionRequest request, Guid userId)
+    {
+        var response = await http.PostAsJsonAsync($"api/projects/{projectId}/issues/bulk", request);
+
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException(
+                await ReadErrorMessageAsync(response) ?? "The bulk action was rejected.",
+                null,
+                response.StatusCode);
+
+        var result = await response.Content.ReadFromJsonAsync<BulkUpdateResult>();
+        return result?.Updated ?? 0;
+    }
+
+    private static async Task<string?> ReadErrorMessageAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            using var document = JsonDocument.Parse(body);
+            return document.RootElement.TryGetProperty("error", out var error) ? error.GetString() : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     public async Task<List<IssueSummary>> GetSimilarIssuesAsync(int issueId)
     {
         return await http.GetFromJsonAsync<List<IssueSummary>>($"api/issues/{issueId}/similar") ?? [];
@@ -119,4 +148,6 @@ public class ApiIssueService(HttpClient http) : IIssueService
         var response = await http.PostAsJsonAsync($"api/issues/histogram/bulk?days={days}&granularity={granularity}", issueIds);
         return await response.Content.ReadFromJsonAsync<Dictionary<int, TimeSeries>>() ?? [];
     }
+
+    private record BulkUpdateResult(int Updated);
 }

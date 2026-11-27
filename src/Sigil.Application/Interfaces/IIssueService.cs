@@ -22,6 +22,9 @@ public interface IIssueService
     Task<Issue> UpdateIssuePriorityAsync(int issueId, Priority priority, Guid? userId = null);
     Task<bool> DeleteIssueAsync(int issueId);
 
+    /// <summary>Applies one action to a batch of issues and returns how many were affected.</summary>
+    Task<int> BulkUpdateIssuesAsync(int projectId, BulkIssueActionRequest request, Guid userId);
+
     // Discovery
     Task<List<IssueSummary>> GetSimilarIssuesAsync(int issueId);
 

@@ -3,11 +3,14 @@
 @using System.Web
 @using Sigil.Application.Models.Shared
 @using Sigil.Application.Models.Issues
+@using Sigil.Application.Models.Teams
 @using Sigil.Domain
 @using Sigil.Server.Client.Services
 @inject IIssueService IssueService
 @inject IBookmarkService BookmarkService
 @inject IRecommendationService RecommendationService
+@inject IProjectService ProjectService
+@inject ITeamService TeamService
 @inject NavigationManager Navigation
 
 <PageTitle>Issues — Sigil</PageTitle>
@@ -120,10 +123,44 @@
     }
     else
     {
+        <fieldset class="fieldset" disabled="@(!HasSelection)">
+            <div class="flex flex-wrap items-center gap-2 p-3 bg-base-200 rounded-lg">
+                <span class="text-sm font-medium">@_selected.Count selected</span>
+
+                <button type="button" class="btn btn-primary btn-sm" @onclick="() => RunBulkStatus(IssueStatus.Resolved)">Resolve</button>
+                <button type="button" class="btn btn-sm" @onclick="() => RunBulkStatus(IssueStatus.Ignored)">Ignore</button>
+                <button type="button" class="btn btn-sm" @onclick="() => RunBulkStatus(IssueStatus.Ignored, true)">Ignore + future events</button>
+                <button type="button" class="btn btn-sm" @onclick="RunBulkBookmark">Bookmark</button>
+
+                <select class="select select-sm w-48" @onchange="OnAssigneeChanged">
+                    <option value="">Assign to…</option>
+                    @foreach (var member in _assignees)
+                    {
+                        <option value="@member.UserId">@(member.DisplayName ?? member.Email ?? "Unnamed member")</option>
+                    }
+                </select>
+                <button type="button" class="btn btn-sm" @onclick="RunBulkAssign" disabled="@(!HasAssignee)">Assign</button>
+                <button type="button" class="btn btn-sm" @onclick="RunBulkUnassign">Unassign</button>
+
+                <button type="button" class="btn btn-ghost btn-sm" @onclick="ClearSelection">Clear</button>
+
+                @if (!string.IsNullOrEmpty(_bulkError))
+                {
+                    <span class="text-sm text-error">@_bulkError</span>
+                }
+            </div>
+        </fieldset>
+
         <div class="overflow-x-auto">
             <table class="table table-zebra table-sm">
                 <thead>
                     <tr>
+                        <th class="w-8">
+                            <input type="checkbox" class="checkbox checkbox-sm"
+                                   checked="@AllOnPageSelected"
+                                   @onchange="e => ToggleSelectAll((bool)(e.Value ?? false))"
+                                   title="Select every issue on this page" />
+                        </th>
                         <th class="w-8"></th>
                         <th>Issue</th>
                         <SortableHeader Label="Severity"
@@ -161,7 +198,12 @@
                         var isMerged = issue.MergeSetId.HasValue;
                         var targetUrl = $"/projects/{ProjectId}/issues/{issue.Id}";
                         var isBookmarked = bookmarkedIssueIds.Contains(issue.Id);
-                        <tr class="hover:bg-base-300 relative">
+                        <tr class="hover:bg-base-300 relative @(_selected.Contains(issue.Id) ? "bg-primary/5" : "")">
+                            <td @onclick:stopPropagation="true">
+                                <input type="checkbox" class="checkbox checkbox-sm"
+                                       checked="@_selected.Contains(issue.Id)"
+                                       @onchange="e => ToggleSelect(issue.Id, (bool)(e.Value ?? false))" />
+                            </td>
                             <td @onclick:stopPropagation="true">
                                 <button class="btn btn-ghost btn-xs p-0" @onclick="() => ToggleIssueBookmark(issue.Id)"
                                         title="@(isBookmarked ? "Remove bookmark" : "Bookmark")">
@@ -172,7 +214,7 @@
                                 </button>
                             </td>
                             <td>
-                                <a href="@targetUrl" class="stretched-link after:start-12! cursor-pointer"></a>
+                                <a href="@targetUrl" class="stretched-link after:start-20! cursor-pointer"></a>
                                 <div class="font-semibold flex items-center gap-1.5">
                                     @if (issue.IsUnviewed)
                                     {
@@ -326,6 +368,20 @@
     private HashSet<int> bookmarkedIssueIds = [];
     private Guid currentUserId;
 
+    // Bulk selection: IDs of the issues ticked on the current page
+    private HashSet<int> _selected = [];
+    private string? _bulkError;
+    private bool _assigneesLoaded;
+    private List<TeamMemberResponse> _assignees = [];
+    private Guid? _assigneeId;
+
+    private bool HasSelection => _selected.Count > 0;
+
+    private bool HasAssignee => _assigneeId.HasValue;
+
+    private bool AllOnPageSelected =>
+        Response is not null && Response.Items.Count > 0 && Response.Items.All(issue => _selected.Contains(issue.Id));
+
     // Histograms: issueId → daily event counts for last 14 days
     private Dictionary<int, TimeSeries> _histograms = [];
 
@@ -371,6 +427,7 @@
             return;
         }
         _lastQueryState = queryState;
+        _selected.Clear();
 
         await LoadIssues();
         StateHasChanged();
@@ -559,6 +616,97 @@
             bookmarkedIssueIds.Remove(issueId);
             if (BookmarkedParam is true)
                 await LoadIssues();
+        }
+    }
+
+    private async Task ToggleSelect(int issueId, bool selected)
+    {
+        if (selected)
+            _selected.Add(issueId);
+        else
+            _selected.Remove(issueId);
+
+        await EnsureAssigneesAsync();
+    }
+
+    private async Task ToggleSelectAll(bool selected)
+    {
+        if (Response is null) return;
+
+        foreach (var issue in Response.Items)
+        {
+            if (selected)
+                _selected.Add(issue.Id);
+            else
+                _selected.Remove(issue.Id);
+        }
+
+        await EnsureAssigneesAsync();
+    }
+
+    private void ClearSelection()
+    {
+        _selected.Clear();
+        _bulkError = null;
+    }
+
+    private void OnAssigneeChanged(ChangeEventArgs e)
+    {
+        _assigneeId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+    }
+
+    private Task RunBulkStatus(IssueStatus status, bool ignoreFutureEvents = false) =>
+        RunBulk(new BulkIssueActionRequest(_selected.ToList(), Status: status, IgnoreFutureEvents: ignoreFutureEvents));
+
+    private Task RunBulkBookmark() =>
+        RunBulk(new BulkIssueActionRequest(_selected.ToList(), Bookmarked: true));
+
+    private Task RunBulkAssign() =>
+        RunBulk(new BulkIssueActionRequest(_selected.ToList(), AssignToUserId: _assigneeId));
+
+    private Task RunBulkUnassign() =>
+        RunBulk(new BulkIssueActionRequest(_selected.ToList(), Unassign: true));
+
+    private async Task RunBulk(BulkIssueActionRequest request)
+    {
+        _bulkError = null;
+        try
+        {
+            await IssueService.BulkUpdateIssuesAsync(ProjectId, request, currentUserId);
+            await LoadIssues();
+            _selected.Clear();
+        }
+        catch (HttpRequestException ex)
+        {
+            _bulkError = ex.StatusCode switch
+            {
+                System.Net.HttpStatusCode.Forbidden => "You do not have permission to change these issues.",
+                System.Net.HttpStatusCode.BadRequest => ex.Message,
+                _ => "The bulk action failed.",
+            };
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            _bulkError = ex.Message;
+        }
+    }
+
+    private async Task EnsureAssigneesAsync()
+    {
+        if (_assigneesLoaded || !HasSelection) return;
+        _assigneesLoaded = true;
+
+        try
+        {
+            var project = await ProjectService.GetProjectDetailAsync(ProjectId);
+            if (project?.TeamId is not { } teamId) return;
+
+            var team = await TeamService.GetTeamDetailAsync(teamId);
+            _assignees = team?.Members ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException)
+        {
+            _assignees = [];
         }
     }
 }
