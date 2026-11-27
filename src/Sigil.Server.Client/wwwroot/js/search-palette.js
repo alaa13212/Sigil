@@ -1,6 +1,8 @@
 let _dotNetRef = null;
 let _lastShiftTime = 0;
+let _shiftHeld = false;
 let _keydownHandler = null;
+let _keyupHandler = null;
 
 export function register(dotNetRef) {
     _dotNetRef = dotNetRef;
@@ -35,6 +37,10 @@ export function register(dotNetRef) {
 
         // Double-Shift (IntelliJ-style)
         if (e.key === 'Shift' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            _shiftHeld = true;
+            if (e.repeat) {
+                return;
+            }
             const now = Date.now();
             if (now - _lastShiftTime < 400) {
                 e.preventDefault();
@@ -53,13 +59,24 @@ export function register(dotNetRef) {
         }
     };
 
+    _keyupHandler = (e) => {
+        if (e.key === 'Shift') {
+            _shiftHeld = false;
+        }
+    };
+
     document.addEventListener('keydown', _keydownHandler);
+    document.addEventListener('keyup', _keyupHandler);
 }
 
 export function unregister() {
     if (_keydownHandler) {
         document.removeEventListener('keydown', _keydownHandler);
         _keydownHandler = null;
+    }
+    if (_keyupHandler) {
+        document.removeEventListener('keyup', _keyupHandler);
+        _keyupHandler = null;
     }
     _dotNetRef = null;
 }
