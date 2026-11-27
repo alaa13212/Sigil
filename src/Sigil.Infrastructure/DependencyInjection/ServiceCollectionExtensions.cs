@@ -67,6 +67,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAsyncStartupInitializer>(sp => (IAsyncStartupInitializer) sp.GetRequiredService<IAppConfigService>());
         services.AddScoped<IAppConfigEditorService, AppConfigEditorService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<SamlConnectionService>();
+        services.AddScoped<ISamlConnectionService>(UseExisting<SamlConnectionService>);
+        services.AddScoped<ISamlRuntimeConfigurationService>(UseExisting<SamlConnectionService>);
+        services.AddScoped<ISamlLoginService, SamlLoginService>();
         services.AddScoped<TeamService>();
         services.AddScoped<ITeamService>(UseExisting<TeamService>);
         services.AddScoped<ITeamRoleService>(UseExisting<TeamService>);

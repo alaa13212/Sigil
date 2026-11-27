@@ -1,8 +1,10 @@
 @page "/login"
 @using Sigil.Application.Models.Auth
+@using Sigil.Application.Models.Saml
 @layout SetupLayout
 @attribute [AllowAnonymous]
 @inject IAuthService AuthService
+@inject ISamlConnectionService SamlConnectionService
 @inject NavigationManager Navigation
 
 <PageTitle>Sign In — Sigil</PageTitle>
@@ -35,6 +37,20 @@
             </EditForm>
             <div class="divider">OR</div>
             <PasskeyLoginButton ReturnUrl="@ReturnUrl" />
+
+            @if (samlConnections.Count > 0)
+            {
+                <div class="divider">OR</div>
+                <div class="space-y-2">
+                    @foreach (var connection in samlConnections)
+                    {
+                        <button type="button" class="btn btn-outline w-full"
+                                @onclick="() => SignInWithSaml(connection)">
+                            Sign in with @((connection.DisplayName ?? connection.Name))
+                        </button>
+                    }
+                </div>
+            }
         </div>
     </div>
 </div>
@@ -43,10 +59,26 @@
     [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
     [SupplyParameterFromForm] private LoginRequest? Model { get; set; }
     private string? errorMessage;
+    private List<SamlLoginOptionResponse> samlConnections = [];
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         Model ??= new LoginRequest();
+
+        try
+        {
+            samlConnections = await SamlConnectionService.GetEnabledConnectionsAsync();
+        }
+        catch
+        {
+            samlConnections = [];
+        }
+    }
+
+    private void SignInWithSaml(SamlLoginOptionResponse connection)
+    {
+        string target = !string.IsNullOrEmpty(ReturnUrl) && ReturnUrl.StartsWith('/') ? ReturnUrl : "/";
+        Navigation.NavigateTo($"/saml/login/{connection.Id}?returnUrl={Uri.EscapeDataString(target)}", forceLoad: true);
     }
 
     private async Task LoginUser()

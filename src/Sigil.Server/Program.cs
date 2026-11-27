@@ -5,15 +5,19 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Sigil.Application.Authorization;
 using Sigil.Application.DependencyInjection;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Auth;
 using Sigil.Infrastructure.DependencyInjection;
 using Sigil.Server.Auth;
+using Sigil.Server.Auth.Saml;
 using Sigil.Server.Authorization;
 using Sigil.Server.Components;
 using Sigil.Server.Middleware;
+using Sustainsys.Saml2.AspNetCore2;
 
 // Force invariant culture to ensure Gregorian calendar and consistent date formatting
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
@@ -120,6 +124,30 @@ builder.Services.AddScoped<IAuthorizationHandler, SetupNotCompleteHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, SigilPermissionHandler>();
 builder.Services.AddScoped<AuthenticationStateProvider, PersistingServerAuthenticationStateProvider>();
 builder.Services.AddCascadingAuthenticationState();
+
+// SAML service provider
+builder.Services.AddSingleton<Saml2OptionsCache>();
+builder.Services.Replace(ServiceDescriptor.Singleton<IOptionsMonitorCache<Saml2Options>>(
+    sp => sp.GetRequiredService<Saml2OptionsCache>()));
+builder.Services.AddSingleton<SamlOptionsConfigurator>();
+builder.Services.AddSingleton<IConfigureOptions<Saml2Options>>(
+    sp => sp.GetRequiredService<SamlOptionsConfigurator>());
+builder.Services.AddSingleton<SamlConnectionRegistry>();
+builder.Services.AddSingleton<IAsyncStartupInitializer>(
+    sp => (IAsyncStartupInitializer)sp.GetRequiredService<SamlConnectionRegistry>());
+builder.Services.AddHostedService<SamlMetadataRefreshWorker>();
+builder.Services.AddAuthentication()
+    .AddCookie(SamlConstants.ExternalScheme, options =>
+    {
+        options.Cookie.Name = "Saml2.External";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.Cookie.IsEssential = true;
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
+        options.SlidingExpiration = false;
+    })
+    .AddSaml2(SamlConstants.Scheme, _ => { });
 
 builder.Services.AddHealthChecks();
 

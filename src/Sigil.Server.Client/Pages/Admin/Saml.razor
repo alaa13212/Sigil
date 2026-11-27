@@ -1,0 +1,425 @@
+@page "/admin/settings/saml"
+@attribute [Authorize]
+@layout AdminSettingsLayout
+@using Sigil.Application.Models.Saml
+@using Sigil.Domain.Enums
+@inject ISamlConnectionService SamlConnectionService
+
+<PageTitle>SAML — Sigil</PageTitle>
+
+<div class="max-w-4xl space-y-8">
+    <section class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-bold">SAML Connections</h2>
+            <button class="btn btn-primary btn-sm" @onclick="OpenCreate">+ New Connection</button>
+        </div>
+
+        <div class="card bg-base-100">
+            <div class="card-body p-4 text-sm space-y-2">
+                <h3 class="font-semibold">Register Sigil with your identity provider</h3>
+                <p class="opacity-70">
+                    Give these values to your identity provider. The metadata url contains the service provider
+                    certificate and endpoints, so most providers only need the metadata url.
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                        <div class="text-xs uppercase opacity-60">Entity ID</div>
+                        <code class="text-xs break-all">@endpoints.EntityId</code>
+                    </div>
+                    <div>
+                        <div class="text-xs uppercase opacity-60">Metadata URL</div>
+                        <code class="text-xs break-all">@endpoints.MetadataUrl</code>
+                    </div>
+                    <div>
+                        <div class="text-xs uppercase opacity-60">Assertion Consumer URL</div>
+                        <code class="text-xs break-all">@endpoints.AcsUrl</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (loading)
+        {
+            <div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>
+        }
+        else if (connections.Count == 0)
+        {
+            <EmptyState Title="No SAML connections"
+                        Description="Add an identity provider to let users sign in with single sign-on." />
+        }
+        else
+        {
+            <div class="space-y-3">
+                @foreach (var connection in connections)
+                {
+                    <div class="card bg-base-100">
+                        <div class="card-body p-4">
+                            <div class="flex items-center justify-between gap-4">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="font-semibold">@connection.Name</span>
+                                        @if (connection.IsEnabled)
+                                        {
+                                            <span class="badge badge-sm badge-success">Enabled</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-sm">Disabled</span>
+                                        }
+                                        @if (!connection.HasMetadata)
+                                        {
+                                            <span class="badge badge-sm badge-warning">No metadata</span>
+                                        }
+                                    </div>
+                                    <div class="text-xs opacity-60 mt-1 break-all">@connection.EntityId</div>
+                                    <div class="text-xs opacity-60 mt-1">
+                                        @connection.GroupMappings.Count group mapping(s)
+                                        @if (connection.MetadataFetchedAt is not null)
+                                        {
+                                            <span> · metadata fetched @connection.MetadataFetchedAt.Value.ToString("yyyy-MM-dd HH:mm") UTC</span>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(connection.MetadataError))
+                                    {
+                                        <div class="text-xs text-error mt-1">@connection.MetadataError</div>
+                                    }
+                                </div>
+                                <div class="flex gap-1 shrink-0">
+                                    <button class="btn btn-ghost btn-xs" @onclick="() => RefreshMetadata(connection)">Refresh metadata</button>
+                                    <button class="btn btn-ghost btn-xs" @onclick="() => OpenEdit(connection)">Edit</button>
+                                    <button class="btn btn-ghost btn-xs text-error" @onclick="() => DeleteConnection(connection)">Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    <section class="space-y-4">
+        <h2 class="text-lg font-bold">Access Requests</h2>
+
+        @if (pendingUsers.Count == 0)
+        {
+            <EmptyState Title="No pending requests" Description="Users signing in through SAML appear here for approval." />
+        }
+        else
+        {
+            <div class="space-y-3">
+                @foreach (var user in pendingUsers)
+                {
+                    <div class="card bg-base-100">
+                        <div class="card-body p-4 flex flex-row items-center justify-between gap-4">
+                            <div class="min-w-0">
+                                <div class="font-semibold">@(user.DisplayName ?? user.Email)</div>
+                                <div class="text-xs opacity-60 break-all">@user.Email</div>
+                                <div class="text-xs opacity-60">
+                                    @if (!string.IsNullOrEmpty(user.ConnectionName))
+                                    {
+                                        <span>via @user.ConnectionName · </span>
+                                    }
+                                    <span>requested @user.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC</span>
+                                </div>
+                            </div>
+                            <div class="flex gap-1 shrink-0">
+                                <button class="btn btn-primary btn-xs" @onclick="() => Approve(user)">Approve</button>
+                                <button class="btn btn-ghost btn-xs text-error" @onclick="() => Reject(user)">Reject</button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+</div>
+
+@if (showModal)
+{
+    <ModalBase IsOpen="true" OnClose="CloseModal"
+               Title="@(editingConnection is null ? "New SAML Connection" : "Edit SAML Connection")"
+               Size="ModalSize.Large">
+        <form class="space-y-4" @onsubmit="SaveConnection" @onsubmit:preventDefault>
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Name</legend>
+                <input class="input input-bordered w-full" @bind="formName" placeholder="e.g. Okta" />
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Display name</legend>
+                <input class="input input-bordered w-full" @bind="formDisplayName" placeholder="Shown on the sign-in page" />
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Identity provider entity ID</legend>
+                <input class="input input-bordered w-full font-mono text-sm" @bind="formEntityId"
+                       placeholder="https://example.okta.com/app/x/sso/saml/metadata" />
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Metadata URL</legend>
+                <input class="input input-bordered w-full font-mono text-sm" @bind="formMetadataUrl"
+                       placeholder="https://example.okta.com/app/x/sso/saml/metadata" />
+                <p class="label text-xs">The metadata is downloaded when you save and refreshed every 30 minutes.</p>
+            </fieldset>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Email claim</legend>
+                    <input class="input input-bordered w-full" @bind="formEmailClaim" placeholder="email" />
+                </fieldset>
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Name claim</legend>
+                    <input class="input input-bordered w-full" @bind="formNameClaim" placeholder="name" />
+                </fieldset>
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Groups claim</legend>
+                    <input class="input input-bordered w-full" @bind="formGroupsClaim" placeholder="groups" />
+                </fieldset>
+            </div>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Default team</legend>
+                <input class="input input-bordered w-full" @bind="formDefaultTeam" placeholder="Team for users without a matching group" />
+                <p class="label text-xs">The team is created on demand when it does not exist.</p>
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Group mappings</legend>
+                <div class="space-y-2">
+                    @foreach (var mapping in formMappings)
+                    {
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+                            <div class="md:col-span-4">
+                                <input class="input input-bordered w-full" @bind="mapping.GroupName" placeholder="Group" />
+                            </div>
+                            <div class="md:col-span-4">
+                                <input class="input input-bordered w-full" @bind="mapping.TeamName" placeholder="Team" />
+                            </div>
+                            <div class="md:col-span-2">
+                                <EnumSelect TEnum="TeamRole" @bind-Value="mapping.Role" Class="select select-bordered w-full" />
+                            </div>
+                            <div class="md:col-span-1 flex items-center gap-1">
+                                <input type="checkbox" class="checkbox checkbox-sm" @bind="mapping.GrantsGlobalAdmin" title="Global admin" />
+                            </div>
+                            <div class="md:col-span-1 flex justify-end">
+                                <button type="button" class="btn btn-ghost btn-xs text-error" @onclick="() => RemoveMapping(mapping)">Remove</button>
+                            </div>
+                        </div>
+                    }
+                    <button type="button" class="btn btn-ghost btn-xs" @onclick="AddMapping">+ Add mapping</button>
+                </div>
+                <p class="label text-xs">
+                    A group grants membership of the named team with the selected role. Teams are created on demand.
+                    The global admin checkbox grants the Sigil admin role.
+                </p>
+            </fieldset>
+
+            <fieldset class="fieldset">
+                <legend class="fieldset-legend">Enabled</legend>
+                <input type="checkbox" class="checkbox" @bind="formEnabled" />
+            </fieldset>
+
+            @if (!string.IsNullOrEmpty(formError))
+            {
+                <div class="alert alert-error text-sm">@formError</div>
+            }
+
+            <div class="modal-action">
+                <button type="button" class="btn btn-ghost" @onclick="CloseModal">Cancel</button>
+                <button type="submit" class="btn btn-primary" disabled="@formSaving">
+                    @(formSaving ? "Saving…" : (editingConnection is null ? "Create" : "Save"))
+                </button>
+            </div>
+        </form>
+    </ModalBase>
+}
+
+@code {
+    private List<SamlConnectionResponse> connections = [];
+    private List<SamlPendingUserResponse> pendingUsers = [];
+    private SamlEndpointsResponse endpoints = new(SamlDefaults.DefaultEntityId, SamlDefaults.ModulePath, SamlDefaults.ModulePath + "/Acs");
+    private bool loading = true;
+
+    private bool showModal;
+    private SamlConnectionResponse? editingConnection;
+    private string formName = "";
+    private string formDisplayName = "";
+    private string formEntityId = "";
+    private string formMetadataUrl = "";
+    private string formEmailClaim = "email";
+    private string formNameClaim = "name";
+    private string formGroupsClaim = "groups";
+    private string formDefaultTeam = "";
+    private bool formEnabled = true;
+    private List<GroupMappingForm> formMappings = [];
+    private string formError = "";
+    private bool formSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        connections = await SamlConnectionService.GetConnectionsAsync();
+        pendingUsers = await SamlConnectionService.GetPendingUsersAsync();
+        endpoints = await SamlConnectionService.GetEndpointsAsync();
+        loading = false;
+    }
+
+    private void OpenCreate()
+    {
+        editingConnection = null;
+        formName = "";
+        formDisplayName = "";
+        formEntityId = "";
+        formMetadataUrl = "";
+        formEmailClaim = "email";
+        formNameClaim = "name";
+        formGroupsClaim = "groups";
+        formDefaultTeam = "";
+        formEnabled = true;
+        formMappings = [];
+        formError = "";
+        showModal = true;
+    }
+
+    private void OpenEdit(SamlConnectionResponse connection)
+    {
+        editingConnection = connection;
+        formName = connection.Name;
+        formDisplayName = connection.DisplayName ?? "";
+        formEntityId = connection.EntityId;
+        formMetadataUrl = connection.MetadataUrl ?? "";
+        formEmailClaim = connection.EmailClaimType;
+        formNameClaim = connection.NameClaimType;
+        formGroupsClaim = connection.GroupsClaimType;
+        formDefaultTeam = connection.DefaultTeamName ?? "";
+        formEnabled = connection.IsEnabled;
+        formMappings = connection.GroupMappings
+            .Select(m => new GroupMappingForm
+            {
+                GroupName = m.GroupName,
+                TeamName = m.TeamName ?? "",
+                Role = m.Role,
+                GrantsGlobalAdmin = m.GrantsGlobalAdmin
+            })
+            .ToList();
+        formError = "";
+        showModal = true;
+    }
+
+    private void CloseModal() => showModal = false;
+
+    private void AddMapping() => formMappings.Add(new GroupMappingForm());
+
+    private void RemoveMapping(GroupMappingForm mapping) => formMappings.Remove(mapping);
+
+    private async Task SaveConnection()
+    {
+        if (string.IsNullOrWhiteSpace(formName))
+        {
+            formError = "Name is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(formEntityId))
+        {
+            formError = "The identity provider entity id is required.";
+            return;
+        }
+
+        var request = new SamlConnectionRequest(
+            formName,
+            formEntityId,
+            formDisplayName,
+            formMetadataUrl,
+            formEnabled,
+            formEmailClaim,
+            formNameClaim,
+            formGroupsClaim,
+            formDefaultTeam,
+            formMappings
+                .Where(m => !string.IsNullOrWhiteSpace(m.GroupName))
+                .Select(m => new SamlGroupMappingRequest(m.GroupName, m.TeamName, m.Role, m.GrantsGlobalAdmin))
+                .ToList());
+
+        formSaving = true;
+        formError = "";
+        try
+        {
+            if (editingConnection is null)
+            {
+                var created = await SamlConnectionService.CreateConnectionAsync(request);
+                connections.Add(created);
+            }
+            else
+            {
+                var updated = await SamlConnectionService.UpdateConnectionAsync(editingConnection.Id, request);
+                if (updated is not null)
+                {
+                    var idx = connections.FindIndex(c => c.Id == editingConnection.Id);
+                    if (idx >= 0) connections[idx] = updated;
+                }
+            }
+
+            showModal = false;
+        }
+        catch (Exception ex)
+        {
+            formError = ex.Message;
+        }
+        finally
+        {
+            formSaving = false;
+        }
+    }
+
+    private async Task DeleteConnection(SamlConnectionResponse connection)
+    {
+        var deleted = await SamlConnectionService.DeleteConnectionAsync(connection.Id);
+        if (deleted)
+        {
+            connections.Remove(connection);
+        }
+    }
+
+    private async Task RefreshMetadata(SamlConnectionResponse connection)
+    {
+        try
+        {
+            await SamlConnectionService.RefreshMetadataAsync(connection.Id);
+
+            var updated = await SamlConnectionService.GetConnectionAsync(connection.Id);
+            if (updated is not null)
+            {
+                var idx = connections.FindIndex(c => c.Id == connection.Id);
+                if (idx >= 0) connections[idx] = updated;
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task Approve(SamlPendingUserResponse user)
+    {
+        if (await SamlConnectionService.ApproveUserAsync(user.UserId))
+        {
+            pendingUsers.Remove(user);
+        }
+    }
+
+    private async Task Reject(SamlPendingUserResponse user)
+    {
+        if (await SamlConnectionService.RejectUserAsync(user.UserId))
+        {
+            pendingUsers.Remove(user);
+        }
+    }
+
+    private class GroupMappingForm
+    {
+        public string GroupName { get; set; } = "";
+        public string TeamName { get; set; } = "";
+        public TeamRole Role { get; set; } = TeamRole.Member;
+        public bool GrantsGlobalAdmin { get; set; }
+    }
+}

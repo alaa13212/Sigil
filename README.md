@@ -36,6 +36,7 @@ Open **http://localhost:8080** and complete the setup wizard to create your admi
 
 - **Email/password authentication** cookie-based sessions for the UI
 - **Passkey Authentication**: Login with a one-time passkey or with a **YubiKey**
+- **SAML single sign-on**: sign in through an external identity provider (Okta, Entra ID, Keycloak, ADFS, …)
 
 ### Web UI
 
@@ -84,6 +85,32 @@ Open **http://localhost:8080** and complete the setup wizard to create your admi
 Sigil accepts events from any Sentry SDK. After creating a project, copy its DSN from the project settings page or the setup wizard.
 
 ## Configuration
+
+### Single Sign-On (SAML)
+
+Sigil acts as a SAML service provider. Connections are configured at runtime in **Settings → SAML**, no
+restart or redeploy needed:
+
+1. Add a connection with the identity provider's entity id and metadata URL. The metadata is downloaded
+   immediately and refreshed every 30 minutes, so certificate rollovers are picked up automatically.
+2. Register Sigil with the identity provider using the values shown on the same page:
+
+   | Value         | URL                                    |
+   |---------------|----------------------------------------|
+   | Metadata URL  | `{host url}/saml/sp`                   |
+   | ACS URL       | `{host url}/saml/sp/Acs`               |
+   | Entity id     | `{host url}/saml/sp`                   |
+
+3. Map identity provider groups to Sigil teams and roles. Teams are created on demand when a group
+   references a team that does not exist yet, and a group can grant the global admin role.
+
+Sign-in is offered for every enabled connection on the login page. A user signing in through SAML for the
+first time is created with pending access and has to be approved by an administrator in **Settings → SAML**
+before they can use Sigil.
+
+> Serve the instance over HTTPS when the identity provider is on another site. Browsers only send the
+> cross-site assertion cookie over HTTPS, so a plain HTTP instance can only complete a sign-in with an
+> identity provider that shares the same site.
 
 Configuration via environment variables (see `.env.example`):
 
