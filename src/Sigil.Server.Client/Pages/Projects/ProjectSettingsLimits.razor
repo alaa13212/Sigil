@@ -1,8 +1,9 @@
 @page "/projects/{ProjectId:int}/settings/limits"
 @attribute [Authorize]
 @using Sigil.Domain
+@using Sigil.Application.Models.Projects
 @inject IProjectConfigEditorService ProjectConfigService
-@inject IAppConfigEditorService AppConfigService
+@inject IProjectLimitsService ProjectLimitsService
 
 @layout ProjectSettingsLayout
 
@@ -12,6 +13,15 @@
 {
     <div class="flex justify-center py-16">
         <span class="loading loading-spinner loading-lg"></span>
+    </div>
+}
+else if (loadError is not null)
+{
+    <div class="max-w-2xl space-y-4">
+        <div class="alert alert-error text-sm">
+            <span>@loadError</span>
+        </div>
+        <button class="btn btn-sm" @onclick="LoadAsync">Retry</button>
     </div>
 }
 else
@@ -46,7 +56,7 @@ else
                              Value="@GetProject(ProjectConfigKeys.RateLimitMaxEventsPerWindow)"
                              OnSave='v => SaveProject(ProjectConfigKeys.RateLimitMaxEventsPerWindow, v)'
                              Saving="@IsSaving(ProjectConfigKeys.RateLimitMaxEventsPerWindow)"
-                             GlobalDefault="@GetGlobal(AppConfigKeys.RateLimitDefaultProjectLimit, "50000")"
+                             GlobalDefault="@rateLimitDefault"
                              InputType="number" />
             </div>
         </div>
@@ -55,19 +65,28 @@ else
         <div class="card bg-base-100">
             <div class="card-body p-5 space-y-3">
                 <h2 class="font-semibold">Event Retention</h2>
+
+                <div class="alert alert-info text-sm flex-col items-start gap-1">
+                    <span class="font-semibold">What is enforced right now</span>
+                    @foreach (var line in notice)
+                    {
+                        <span>@line</span>
+                    }
+                </div>
+
                 <ConfigField Label="Max event age (days, override)"
                              Description="Events older than this are deleted"
                              Value="@GetProject(ProjectConfigKeys.RetentionMaxAgeDays)"
                              OnSave='v => SaveProject(ProjectConfigKeys.RetentionMaxAgeDays, v)'
                              Saving="@IsSaving(ProjectConfigKeys.RetentionMaxAgeDays)"
-                             GlobalDefault="@GetGlobal(AppConfigKeys.RetentionDefaultMaxAgeDays, "90")"
+                             GlobalDefault="@retentionMaxAgeDaysDefault"
                              InputType="number" />
                 <ConfigField Label="Max event count (override)"
                              Description="When exceeded, the oldest events are deleted first"
                              Value="@GetProject(ProjectConfigKeys.RetentionMaxEventCount)"
                              OnSave='v => SaveProject(ProjectConfigKeys.RetentionMaxEventCount, v)'
                              Saving="@IsSaving(ProjectConfigKeys.RetentionMaxEventCount)"
-                             GlobalDefault="@GetGlobal(AppConfigKeys.RetentionDefaultMaxEvents, "1000000")"
+                             GlobalDefault="@retentionMaxEventsDefault"
                              InputType="number" />
             </div>
         </div>
@@ -78,20 +97,47 @@ else
     [Parameter] public int ProjectId { get; set; }
 
     private Dictionary<string, string?> _projectConfig = [];
-    private Dictionary<string, string?> _globalConfig = [];
     private HashSet<string> _savingKeys = [];
+    private IReadOnlyList<string> notice = [];
+    private string rateLimitDefault = "";
+    private string retentionMaxAgeDaysDefault = "";
+    private string retentionMaxEventsDefault = "";
+    private string? loadError;
     private bool loading = true;
 
-    protected override async Task OnParametersSetAsync()
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
     {
         loading = true;
-        _projectConfig = await ProjectConfigService.GetAllAsync(ProjectId);
-        _globalConfig = await AppConfigService.GetAllAsync();
-        loading = false;
+        loadError = null;
+
+        try
+        {
+            _projectConfig = await ProjectConfigService.GetAllAsync(ProjectId);
+            await LoadLimitsAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or InvalidOperationException)
+        {
+            loadError = "The project limits could not be loaded.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task LoadLimitsAsync()
+    {
+        ProjectLimitsResponse limits = await ProjectLimitsService.GetAsync(ProjectId);
+
+        notice = ProjectLimitsNotice.Describe(limits);
+        rateLimitDefault = limits.RateLimitDefaultProjectLimit.ToString();
+        retentionMaxAgeDaysDefault = limits.RetentionDefaultMaxAgeDays.ToString();
+        retentionMaxEventsDefault = limits.RetentionDefaultMaxEvents.ToString();
     }
 
     private string? GetProject(string key) => _projectConfig.GetValueOrDefault(key);
-    private string? GetGlobal(string key, string fallback) => _globalConfig.GetValueOrDefault(key) ?? fallback;
     private bool IsSaving(string key) => _savingKeys.Contains(key);
 
     private async Task SaveProject(string key, string? value)
@@ -101,6 +147,7 @@ else
         {
             await ProjectConfigService.SetAsync(ProjectId, key, value);
             _projectConfig[key] = value;
+            await LoadLimitsAsync();
         }
         finally
         {
