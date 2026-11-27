@@ -78,12 +78,18 @@ else
         <table class="table table-zebra table-sm">
             <thead>
                 <tr>
-                    @Header("Time", EventSortBy.Timestamp)
+                    <SortableHeader Label="Time"
+                                    Active="@(Query.SortBy == EventSortBy.Timestamp)"
+                                    Descending="@Query.SortDescending"
+                                    OnClick="@(() => ToggleSort(EventSortBy.Timestamp))" />
                     <th>Exception</th>
                     <th>Message</th>
                     <th>Culprit</th>
                     <th>Logger</th>
-                    @Header("Severity", EventSortBy.Level)
+                    <SortableHeader Label="Severity"
+                                    Active="@(Query.SortBy == EventSortBy.Level)"
+                                    Descending="@Query.SortDescending"
+                                    OnClick="@(() => ToggleSort(EventSortBy.Level))" />
                     <th>Release</th>
                     <th>Event ID</th>
                 </tr>
@@ -194,18 +200,6 @@ else
             _releases = [];
         }
     }
-
-    private RenderFragment Header(string label, EventSortBy sortBy) =>
-        @<th>
-            <button type="button" class="inline-flex items-center gap-1 hover:text-primary"
-                    @onclick="() => ToggleSort(sortBy)">
-                @label
-                @if (Query.SortBy == sortBy)
-                {
-                    <span aria-hidden="true">@(Query.SortDescending ? "▼" : "▲")</span>
-                }
-            </button>
-        </th>;
 
     private Task Emit(EventQueryParams next) => QueryChanged.InvokeAsync(next with { Page = 1 });
 

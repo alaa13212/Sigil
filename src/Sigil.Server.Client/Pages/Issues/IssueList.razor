@@ -74,7 +74,7 @@
 
         <!-- Sort -->
         <label class="select select-sm w-48">
-            <span class="label">Sort</span>
+            <span class="label">Sort @(SortDescending ? "▼" : "▲")</span>
             <select value="@Sort" @onchange="OnSortChanged">
                 @foreach (var opt in sortOptions)
                 {
@@ -126,12 +126,32 @@
                     <tr>
                         <th class="w-8"></th>
                         <th>Issue</th>
-                        <th>Severity</th>
+                        <SortableHeader Label="Severity"
+                                        Active="@(Sort == IssueSortBy.Level)"
+                                        Descending="@SortDescending"
+                                        Disabled="@SearchHasFreeText"
+                                        Title="@SortTitle"
+                                        OnClick="@(() => ToggleSort(IssueSortBy.Level))" />
                         <th>Status</th>
-                        <th>Priority</th>
-                        <th class="text-right">Events</th>
+                        <SortableHeader Label="Priority"
+                                        Active="@(Sort == IssueSortBy.Priority)"
+                                        Descending="@SortDescending"
+                                        Disabled="@SearchHasFreeText"
+                                        Title="@SortTitle"
+                                        OnClick="@(() => ToggleSort(IssueSortBy.Priority))" />
+                        <SortableHeader Label="Events" Class="text-right"
+                                        Active="@(Sort == IssueSortBy.OccurrenceCount)"
+                                        Descending="@SortDescending"
+                                        Disabled="@SearchHasFreeText"
+                                        Title="@SortTitle"
+                                        OnClick="@(() => ToggleSort(IssueSortBy.OccurrenceCount))" />
                         <th class="w-28">Last 14d</th>
-                        <th>Last Seen</th>
+                        <SortableHeader Label="Last Seen"
+                                        Active="@(Sort == IssueSortBy.LastSeen)"
+                                        Descending="@SortDescending"
+                                        Disabled="@SearchHasFreeText"
+                                        Title="@SortTitle"
+                                        OnClick="@(() => ToggleSort(IssueSortBy.LastSeen))" />
                         <th>Assigned</th>
                     </tr>
                 </thead>
@@ -227,6 +247,7 @@
     [SupplyParameterFromQuery(Name = "bookmarked")] public bool? BookmarkedParam { get; set; }
     [SupplyParameterFromQuery(Name = "level")] public string? LevelQuery { get; set; }
     [SupplyParameterFromQuery(Name = "sort")] public string? SortQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "dir")] public string? DirectionQuery { get; set; }
     [SupplyParameterFromQuery(Name = "since")] public string? SinceQuery { get; set; }
     [SupplyParameterFromQuery(Name = "until")] public string? UntilQuery { get; set; }
 
@@ -240,6 +261,12 @@
     {
         get => QueryValue.Enum<IssueSortBy>(SortQuery);
         set => SortQuery = value?.ToString();
+    }
+
+    private IssueSortDirection? DirectionParam
+    {
+        get => QueryValue.Enum<IssueSortDirection>(DirectionQuery);
+        set => DirectionQuery = value?.ToString();
     }
 
     private DateTimeOffset? SinceParam
@@ -280,10 +307,18 @@
 
     private IssueSortBy Sort => SortParam ?? IssueSortBy.LastSeen;
 
+    private bool SortDescending => DirectionParam is not IssueSortDirection.Ascending;
+
+    private bool SearchHasFreeText => !string.IsNullOrWhiteSpace(IssueSearchParser.Parse(SearchParam).FreeText);
+
+    private string SortTitle => SearchHasFreeText
+        ? "Search results are ranked by relevance, not by this column."
+        : "Sort by this column.";
+
     /// <summary>One chip per filter the listing is showing.</summary>
     private IReadOnlyList<ActiveFilterChip> ActiveChips => IssueFilterChips.Describe(
         new IssueFilterState(StatusFilter, LevelParam, SortParam, BookmarkedParam is true,
-            SinceParam, UntilParam, SearchParam),
+            SinceParam, UntilParam, SearchParam, DirectionParam),
         DefaultStatus,
         DateTimeOffset.UtcNow);
 
@@ -353,7 +388,7 @@
                 Status = StatusFilter,
                 Level = LevelParam,
                 SortBy = Sort,
-                SortDescending = true,
+                SortDescending = SortDescending,
                 Search = string.IsNullOrWhiteSpace(SearchParam) ? null : SearchParam,
                 Since = SinceParam,
                 Until = UntilParam,
@@ -405,8 +440,24 @@
         if (Enum.TryParse<IssueSortBy>(e.Value?.ToString(), out var sort))
         {
             SortParam = sort == IssueSortBy.LastSeen ? null : sort;
+            DirectionParam = null;
             NavigateToFilters();
         }
+    }
+
+    private void ToggleSort(IssueSortBy sort)
+    {
+        if (Sort == sort)
+        {
+            DirectionParam = SortDescending ? IssueSortDirection.Ascending : null;
+        }
+        else
+        {
+            SortParam = sort == IssueSortBy.LastSeen ? null : sort;
+            DirectionParam = null;
+        }
+
+        NavigateToFilters();
     }
 
     private void OnRangeChanged(DateRange range)
@@ -448,6 +499,7 @@
                 break;
             case ActiveFilterKind.Sort:
                 SortParam = null;
+                DirectionParam = null;
                 NavigateToFilters();
                 break;
             case ActiveFilterKind.Bookmarked:
@@ -477,6 +529,7 @@
         if (StatusFilter is { } status) qs["status"] = status.ToString();
         if (LevelParam is { } level) qs["level"] = level.ToString();
         if (SortParam is { } sort) qs["sort"] = sort.ToString();
+        if (DirectionParam is { } direction) qs["dir"] = direction.ToString();
         if (BookmarkedParam is true) qs["bookmarked"] = "true";
         if (SinceParam is { } since) qs["since"] = UtcDateRangeInput.ToQueryValue(since);
         if (UntilParam is { } until) qs["until"] = UtcDateRangeInput.ToQueryValue(until);

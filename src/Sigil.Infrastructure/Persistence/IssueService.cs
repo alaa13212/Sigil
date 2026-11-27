@@ -198,6 +198,9 @@ internal class IssueService(
                 IssueSortBy.Priority => query.SortDescending
                     ? q.OrderByDescending(i => i.Priority)
                     : q.OrderBy(i => i.Priority),
+                IssueSortBy.Level => query.SortDescending
+                    ? q.OrderByDescending(i => i.Level)
+                    : q.OrderBy(i => i.Level),
                 _ => query.SortDescending
                     ? q.OrderByDescending(i => i.MergeSet != null ? i.MergeSet.LastSeen : i.LastSeen)
                     : q.OrderBy(i => i.MergeSet != null ? i.MergeSet.LastSeen : i.LastSeen),

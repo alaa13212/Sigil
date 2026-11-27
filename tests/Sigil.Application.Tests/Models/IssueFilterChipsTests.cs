@@ -15,8 +15,9 @@ public class IssueFilterChipsTests
         bool bookmarked = false,
         DateTimeOffset? since = null,
         DateTimeOffset? until = null,
-        string? search = null) =>
-        new(status, level, sort, bookmarked, since, until, search);
+        string? search = null,
+        IssueSortDirection? sortDirection = null) =>
+        new(status, level, sort, bookmarked, since, until, search, sortDirection);
 
     [Fact]
     public void Describe_NoFilters_ProducesNoChips()
@@ -60,7 +61,25 @@ public class IssueFilterChipsTests
         var chips = IssueFilterChips.Describe(State(sort: IssueSortBy.OccurrenceCount), IssueStatus.Open, Now);
 
         chips.Should().ContainSingle().Which.Kind.Should().Be(ActiveFilterKind.Sort);
-        chips[0].Label.Should().Be("Occurrences");
+        chips[0].Label.Should().Be("Occurrences descending");
+    }
+
+    [Fact]
+    public void Describe_AscendingSort_NamesTheDirection()
+    {
+        var chips = IssueFilterChips.Describe(
+            State(sort: IssueSortBy.OccurrenceCount, sortDirection: IssueSortDirection.Ascending), IssueStatus.Open, Now);
+
+        chips[0].Label.Should().Be("Occurrences ascending");
+    }
+
+    [Fact]
+    public void Describe_SeveritySort_ProducesASeverityChip()
+    {
+        var chips = IssueFilterChips.Describe(State(sort: IssueSortBy.Level), IssueStatus.Open, Now);
+
+        chips.Should().ContainSingle().Which.Kind.Should().Be(ActiveFilterKind.Sort);
+        chips[0].Label.Should().Be("Severity descending");
     }
 
     [Fact]
