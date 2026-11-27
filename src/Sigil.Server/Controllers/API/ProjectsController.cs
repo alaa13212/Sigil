@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Sigil.Application.Authorization;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Projects;
+using Sigil.Server.Auth;
 using Sigil.Server.Framework;
 
 namespace Sigil.Server.Controllers.API;
@@ -15,7 +16,13 @@ public class ProjectsController(IProjectService projectService, IProjectEntityAc
     [HttpGet]
     public async Task<IActionResult> List()
     {
-        return Ok(await projectService.GetProjectListAsync());
+        var projects = await projectService.GetProjectListAsync();
+
+        // The ingestion key is a secret, so a script token receives the list without it.
+        if (User.Identity?.AuthenticationType == ApiTokenAuthenticationHandler.SchemeName)
+            projects = projects.Select(project => project with { ApiKey = "" }).ToList();
+
+        return Ok(projects);
     }
 
     [HttpGet("overviews")]
@@ -25,6 +32,7 @@ public class ProjectsController(IProjectService projectService, IProjectEntityAc
     }
 
     [Authorize(Policy = SigilPermissions.CanViewProject)]
+    [CookieOnly]
     [HttpGet("{projectId:int}")]
     public async Task<IActionResult> Get(int projectId)
     {

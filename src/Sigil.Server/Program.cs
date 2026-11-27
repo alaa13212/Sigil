@@ -122,6 +122,18 @@ builder.Services.AddScoped<IAuthorizationHandler, SigilPermissionHandler>();
 builder.Services.AddScoped<AuthenticationStateProvider, PersistingServerAuthenticationStateProvider>();
 builder.Services.AddCascadingAuthenticationState();
 
+// Authentication dispatch: API tokens for read-only API calls, UI cookie everywhere else
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = ApiTokenAuthenticationPolicy.SchemeName;
+    options.DefaultChallengeScheme = ApiTokenAuthenticationPolicy.SchemeName;
+})
+.AddPolicyScheme(ApiTokenAuthenticationPolicy.SchemeName, "Sigil API token or cookie", options =>
+{
+    options.ForwardDefaultSelector = ApiTokenAuthenticationPolicy.SelectScheme;
+})
+.AddScheme<ApiTokenAuthenticationOptions, ApiTokenAuthenticationHandler>(ApiTokenAuthenticationHandler.SchemeName, _ => { });
+
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();

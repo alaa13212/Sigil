@@ -46,6 +46,7 @@ internal class SigilDbContext(DbContextOptions<SigilDbContext> options) : Identi
     public DbSet<SourceMap> SourceMaps => Set<SourceMap>();
     public DbSet<IssueTrackerConfig> IssueTrackerConfigs => Set<IssueTrackerConfig>();
     public DbSet<ExternalIssueLink> ExternalIssueLinks => Set<ExternalIssueLink>();
+    public DbSet<ApiToken> ApiTokens => Set<ApiToken>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
