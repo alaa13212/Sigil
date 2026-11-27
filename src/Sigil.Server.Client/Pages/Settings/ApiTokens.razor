@@ -1,0 +1,243 @@
+@page "/settings/api-tokens"
+@attribute [Authorize]
+@using Sigil.Application.Models.ApiTokens
+@inject IApiTokenService TokenService
+
+<PageTitle>API Tokens — Sigil</PageTitle>
+
+<div class="max-w-3xl mx-auto p-6">
+    <h1 class="text-2xl font-bold mb-2">API Tokens</h1>
+    <p class="text-sm opacity-70 mb-6">
+        API tokens let scripts read data from Sigil. Send one as an
+        <code>Authorization: Bearer &lt;token&gt;</code> header. Tokens are read-only:
+        they never authorize a request that changes data.
+    </p>
+
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="alert @(_isError ? "alert-error" : "alert-success") mb-4">@_message</div>
+    }
+
+    @if (_createdToken is not null)
+    {
+        <div class="card bg-base-100 border border-warning mb-6">
+            <div class="card-body">
+                <h2 class="card-title text-lg">Copy your token now</h2>
+                <p class="text-sm opacity-70">This is the only time the token is shown. It cannot be recovered later.</p>
+                <div class="flex items-center gap-2">
+                    <code class="flex-1 break-all bg-base-200 rounded p-2 text-sm">@_createdToken</code>
+                    <CopyButton Text="@_createdToken" Label="Copy" Class="btn btn-primary btn-sm" />
+                </div>
+                <div>
+                    <button class="btn btn-ghost btn-sm" @onclick="DismissCreatedToken">Done</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="card bg-base-100 mb-6">
+        <div class="card-body">
+            <h2 class="card-title text-lg">Create a token</h2>
+            <form class="flex gap-2 items-end" @onsubmit="CreateToken" @onsubmit:preventDefault>
+                <fieldset class="fieldset flex-1">
+                    <legend class="fieldset-legend">Token name</legend>
+                    <input type="text" class="input w-full" placeholder="e.g. Grafana dashboard"
+                           @bind="_newTokenName" @bind:event="oninput"/>
+                </fieldset>
+                <fieldset class="fieldset">
+                    <legend class="fieldset-legend">Expires</legend>
+                    <select class="select" @bind="_expiryChoice">
+                        <option value="never">Never</option>
+                        <option value="30">30 days</option>
+                        <option value="90">90 days</option>
+                        <option value="365">1 year</option>
+                    </select>
+                </fieldset>
+                <button type="submit" class="btn btn-primary mb-1" disabled="@(_creating || string.IsNullOrWhiteSpace(_newTokenName))">
+                    @if (_creating)
+                    {
+                        <span class="loading loading-spinner loading-sm"></span>
+                    }
+                    Create
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <h2 class="text-lg font-semibold mb-3">Your tokens</h2>
+
+    @if (_loading)
+    {
+        <div class="flex justify-center p-8">
+            <span class="loading loading-spinner loading-lg"></span>
+        </div>
+    }
+    else if (_tokens is null || _tokens.Count == 0)
+    {
+        <div class="text-center py-8 opacity-60">
+            No API tokens yet. Create one above to let a script read your data.
+        </div>
+    }
+    else
+    {
+        <div class="overflow-x-auto">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Created</th>
+                        <th>Last Used</th>
+                        <th>Expires</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var token in _tokens)
+                    {
+                        <tr>
+                            <td class="font-medium">@token.Name</td>
+                            <td class="text-sm opacity-70">@token.CreatedAt.ToLocalTime().ToString("MMM d, yyyy")</td>
+                            <td class="text-sm opacity-70">@(token.LastUsedAt?.ToLocalTime().ToString("MMM d, yyyy h:mm tt") ?? "Never")</td>
+                            <td class="text-sm opacity-70">@(token.ExpiresAt?.ToLocalTime().ToString("MMM d, yyyy") ?? "Never")</td>
+                            <td class="text-sm">
+                                @if (token.RevokedAt is not null)
+                                {
+                                    <span class="badge badge-ghost">Revoked</span>
+                                }
+                                else if (token.ExpiresAt is not null && token.ExpiresAt <= DateTime.UtcNow)
+                                {
+                                    <span class="badge badge-ghost">Expired</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-success badge-outline">Active</span>
+                                }
+                            </td>
+                            <td>
+                                @if (token.RevokedAt is null)
+                                {
+                                    <button class="btn btn-ghost btn-sm text-error" @onclick="() => RevokeToken(token.Id)"
+                                            disabled="@_revoking">
+                                        Revoke
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ApiTokenSummary>? _tokens;
+    private string _newTokenName = "";
+    private string _expiryChoice = "never";
+    private string? _createdToken;
+    private string? _message;
+    private bool _isError;
+    private bool _loading = true;
+    private bool _creating;
+    private bool _revoking;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTokens();
+    }
+
+    private async Task LoadTokens()
+    {
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            _tokens = await TokenService.ListAsync(Guid.Empty);
+        }
+        catch (Exception ex)
+        {
+            _tokens = [];
+            ShowMessage($"Error: {ex.Message}", true);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CreateToken()
+    {
+        if (string.IsNullOrWhiteSpace(_newTokenName)) return;
+
+        _creating = true;
+        _message = null;
+        StateHasChanged();
+
+        try
+        {
+            var created = await TokenService.CreateAsync(Guid.Empty, _newTokenName.Trim(), ResolveExpiry());
+            _createdToken = created.Token;
+            _newTokenName = "";
+            await LoadTokens();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error: {ex.Message}", true);
+        }
+        finally
+        {
+            _creating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RevokeToken(int id)
+    {
+        _revoking = true;
+        _message = null;
+        StateHasChanged();
+
+        try
+        {
+            if (await TokenService.RevokeAsync(Guid.Empty, id))
+            {
+                ShowMessage("Token revoked.", false);
+                await LoadTokens();
+            }
+            else
+            {
+                ShowMessage("Failed to revoke the token.", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error: {ex.Message}", true);
+        }
+        finally
+        {
+            _revoking = false;
+            StateHasChanged();
+        }
+    }
+
+    private void DismissCreatedToken()
+    {
+        _createdToken = null;
+    }
+
+    private DateTime? ResolveExpiry()
+    {
+        if (!int.TryParse(_expiryChoice, out int days))
+            return null;
+
+        return DateTime.UtcNow.AddDays(days);
+    }
+
+    private void ShowMessage(string message, bool isError)
+    {
+        _message = message;
+        _isError = isError;
+    }
+}
