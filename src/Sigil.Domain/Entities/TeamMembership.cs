@@ -13,5 +13,7 @@ public class TeamMembership
     public int TeamId { get; set; }
     public Team? Team { get; set; }
 
+    public Guid? SamlConnectionId { get; set; }
+
     public TeamRole Role { get; set; }
 }

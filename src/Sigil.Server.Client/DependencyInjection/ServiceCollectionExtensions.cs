@@ -42,5 +42,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISourceMapService, ApiSourceMapService>();
         services.AddScoped<IIssueTrackerService, ApiIssueTrackerService>();
         services.AddScoped<IApiTokenService, ApiTokenClient>();
+        services.AddScoped<ISamlConnectionService, ApiSamlConnectionService>();
     }
 }

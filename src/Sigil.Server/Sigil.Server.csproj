@@ -20,11 +20,16 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.15"/>
+        <PackageReference Include="Sustainsys.Saml2.AspNetCore2" Version="2.11.2"/>
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\Sigil.Application\Sigil.Application.csproj" />
         <ProjectReference Include="..\Sigil.Infrastructure\Sigil.Infrastructure.csproj" />
         <ProjectReference Include="..\Sigil.Server.Client\Sigil.Server.Client.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Sigil.Server.Tests" />
     </ItemGroup>
 </Project>

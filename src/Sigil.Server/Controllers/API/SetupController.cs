@@ -2,13 +2,16 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sigil.Application.Interfaces;
 using Sigil.Application.Models.Auth;
+using Sigil.Server.Auth.Saml;
 using Sigil.Server.Framework;
 
 namespace Sigil.Server.Controllers.API;
 
 [ApiController]
 [Route("api/setup")]
-public class SetupController(ISetupService setupService) : SigilController
+public class SetupController(
+    ISetupService setupService,
+    Saml2OptionsCache samlOptionsCache) : SigilController
 {
     [HttpGet("status")]
     [AllowAnonymous]
@@ -37,6 +40,12 @@ public class SetupController(ISetupService setupService) : SigilController
     public async Task<IActionResult> Initialize([FromBody] SetupRequest request)
     {
         var result = await setupService.InitializeAsync(request);
+
+        if (result.Succeeded)
+        {
+            samlOptionsCache.Invalidate();
+        }
+
         return result.Succeeded ? Ok(result) : BadRequest(new { errors = result.Errors });
     }
 

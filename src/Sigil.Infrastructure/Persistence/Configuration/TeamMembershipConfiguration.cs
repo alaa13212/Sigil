@@ -9,5 +9,10 @@ internal class TeamMembershipConfiguration : IEntityTypeConfiguration<TeamMember
     public void Configure(EntityTypeBuilder<TeamMembership> builder)
     {
         builder.HasKey(e => new { e.UserId, e.TeamId });
+
+        builder.HasOne<SamlConnection>()
+            .WithMany()
+            .HasForeignKey(e => e.SamlConnectionId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

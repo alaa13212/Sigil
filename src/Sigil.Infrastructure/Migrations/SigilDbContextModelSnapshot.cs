@@ -1203,6 +1203,104 @@ namespace Sigil.infrastructure.Migrations
                     b.ToTable("Releases");
                 });
 
+            modelBuilder.Entity("Sigil.Domain.Entities.SamlConnection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DefaultTeamName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("EmailClaimType")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("EntityId")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("GroupsClaimType")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("MetadataError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("MetadataFetchedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MetadataUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("MetadataXml")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("NameClaimType")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SamlConnections", (string)null);
+                });
+
+            modelBuilder.Entity("Sigil.Domain.Entities.SamlGroupMapping", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("GrantsGlobalAdmin")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("GroupName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SamlConnectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TeamName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SamlConnectionId");
+
+                    b.ToTable("SamlGroupMappings", (string)null);
+                });
+
             modelBuilder.Entity("Sigil.Domain.Entities.SharedIssueLink", b =>
                 {
                     b.Property<Guid>("Token")
@@ -1473,7 +1571,12 @@ namespace Sigil.infrastructure.Migrations
                     b.Property<int>("Role")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("SamlConnectionId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("UserId", "TeamId");
+
+                    b.HasIndex("SamlConnectionId");
 
                     b.HasIndex("TeamId");
 
@@ -1574,6 +1677,22 @@ namespace Sigil.infrastructure.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<Guid?>("SamlAdminConnectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SamlConnectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SamlGroups")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SamlNameId")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("SamlStatus")
+                        .HasColumnType("integer");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
 
@@ -1595,6 +1714,8 @@ namespace Sigil.infrastructure.Migrations
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
+
+                    b.HasIndex("SamlConnectionId");
 
                     b.ToTable("Users", (string)null);
                 });
@@ -2105,6 +2226,17 @@ namespace Sigil.infrastructure.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("Sigil.Domain.Entities.SamlGroupMapping", b =>
+                {
+                    b.HasOne("Sigil.Domain.Entities.SamlConnection", "SamlConnection")
+                        .WithMany("GroupMappings")
+                        .HasForeignKey("SamlConnectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SamlConnection");
+                });
+
             modelBuilder.Entity("Sigil.Domain.Entities.SharedIssueLink", b =>
                 {
                     b.HasOne("Sigil.Domain.Entities.User", "CreatedBy")
@@ -2170,6 +2302,11 @@ namespace Sigil.infrastructure.Migrations
 
             modelBuilder.Entity("Sigil.Domain.Entities.TeamMembership", b =>
                 {
+                    b.HasOne("Sigil.Domain.Entities.SamlConnection", null)
+                        .WithMany()
+                        .HasForeignKey("SamlConnectionId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("Sigil.Domain.Entities.Team", "Team")
                         .WithMany("Members")
                         .HasForeignKey("TeamId")
@@ -2196,6 +2333,16 @@ namespace Sigil.infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("Sigil.Domain.Entities.User", b =>
+                {
+                    b.HasOne("Sigil.Domain.Entities.SamlConnection", "SamlConnection")
+                        .WithMany("Users")
+                        .HasForeignKey("SamlConnectionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("SamlConnection");
                 });
 
             modelBuilder.Entity("Sigil.Domain.Entities.UserIssueState", b =>
@@ -2287,6 +2434,13 @@ namespace Sigil.infrastructure.Migrations
                     b.Navigation("Events");
 
                     b.Navigation("SourceMaps");
+                });
+
+            modelBuilder.Entity("Sigil.Domain.Entities.SamlConnection", b =>
+                {
+                    b.Navigation("GroupMappings");
+
+                    b.Navigation("Users");
                 });
 
             modelBuilder.Entity("Sigil.Domain.Entities.SourceCodeProvider", b =>
