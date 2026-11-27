@@ -17,13 +17,14 @@
 
     <ItemGroup>
         <PackageReference Include="Fido2" Version="4.1.1" />
-        <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="10.0.12" />
-        <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
+        <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="10.0.15" />
+        <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.15" />
         <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="4.14.0" PrivateAssets="all" />
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
-        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
-        <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.12" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.15" />
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.15" />
+        <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.15" />
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+        <PackageReference Include="System.Formats.Cbor" Version="10.0.15" />
     </ItemGroup>
     
     <ItemGroup>
