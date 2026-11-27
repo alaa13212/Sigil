@@ -11,13 +11,35 @@ public class PrometheusExpositionWriterTests
     private static MetricsSnapshot Snapshot(
         IReadOnlyList<IssueCountSample>? issues = null,
         IReadOnlyList<EventCountSample>? events = null,
+        IReadOnlyList<ProjectEventCountSample>? projectEvents = null,
         IReadOnlyList<AlertDeliverySample>? deliveries = null,
+        IReadOnlyList<NewIssueCountSample>? newIssues = null,
+        IReadOnlyList<ReleaseInfoSample>? releases = null,
+        IReadOnlyList<EnvelopeDiscardSample>? discarded = null,
+        IReadOnlyList<EnvelopeDiscardSample>? discardedTotals = null,
         long ingested = 0,
         long dropped = 0,
         long backlog = 0,
+        double oldestPending = 0,
         DateTime? lastIngestion = null,
+        DateTime? persistedIngestion = null,
         string version = "9.1.0") =>
-        new(issues ?? [], events ?? [], deliveries ?? [], ingested, dropped, backlog, lastIngestion, version);
+        new(
+            issues ?? [],
+            events ?? [],
+            projectEvents ?? [],
+            deliveries ?? [],
+            newIssues ?? [],
+            releases ?? [],
+            discarded ?? [],
+            discardedTotals ?? [],
+            ingested,
+            dropped,
+            backlog,
+            oldestPending,
+            lastIngestion,
+            persistedIngestion,
+            version);
 
     private static string[] Lines(string text) =>
         text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
@@ -43,9 +65,16 @@ public class PrometheusExpositionWriterTests
         lines.Should().Contain("# TYPE sigil_events_ingested_total counter");
         lines.Should().Contain("# TYPE sigil_events_dropped_total counter");
         lines.Should().Contain("# TYPE sigil_digestion_backlog gauge");
+        lines.Should().Contain("# TYPE sigil_digestion_oldest_pending_seconds gauge");
+        lines.Should().Contain("# TYPE sigil_envelopes_discarded gauge");
+        lines.Should().Contain("# TYPE sigil_envelopes_discarded_total counter");
         lines.Should().Contain("# TYPE sigil_alert_deliveries_total counter");
+        lines.Should().Contain("# TYPE sigil_new_issues gauge");
+        lines.Should().Contain("# TYPE sigil_release_info gauge");
+        lines.Should().Contain("# TYPE sigil_release_first_seen_timestamp_seconds gauge");
         lines.Should().Contain("# TYPE sigil_last_ingestion_timestamp_seconds gauge");
         lines.Should().Contain("# TYPE sigil_build_info gauge");
+        lines.Should().Contain("# TYPE sigil_project_events gauge");
     }
 
     [Fact]
@@ -53,8 +82,8 @@ public class PrometheusExpositionWriterTests
     {
         string[] lines = Lines(PrometheusExpositionWriter.Write(Snapshot()));
 
-        lines.Count(l => l.StartsWith("# TYPE ")).Should().Be(8);
-        lines.Count(l => l.StartsWith("# HELP ")).Should().Be(8);
+        lines.Count(l => l.StartsWith("# TYPE ")).Should().Be(15);
+        lines.Count(l => l.StartsWith("# HELP ")).Should().Be(15);
     }
 
     [Fact]
@@ -62,7 +91,7 @@ public class PrometheusExpositionWriterTests
     {
         string[] lines = Lines(PrometheusExpositionWriter.Write(Snapshot(issues:
         [
-            new IssueCountSample("web", IssueStatus.Open, Severity.Error, 3)
+            new IssueCountSample("web", 3, IssueStatus.Open, Severity.Error, 3)
         ])));
 
         int typeLine = Array.FindIndex(lines, l => l == "# TYPE sigil_issues gauge");
@@ -98,12 +127,12 @@ public class PrometheusExpositionWriterTests
     {
         string text = PrometheusExpositionWriter.Write(Snapshot(issues:
         [
-            new IssueCountSample("web", IssueStatus.Open, Severity.Error, 3),
-            new IssueCountSample("web", IssueStatus.ResolvedInFuture, Severity.Warning, 1)
+            new IssueCountSample("web", 3, IssueStatus.Open, Severity.Error, 3),
+            new IssueCountSample("web", 3, IssueStatus.ResolvedInFuture, Severity.Warning, 1)
         ]));
 
-        text.Should().Contain("sigil_issues{project=\"web\",status=\"open\",level=\"error\"} 3");
-        text.Should().Contain("sigil_issues{project=\"web\",status=\"resolved_in_future\",level=\"warning\"} 1");
+        text.Should().Contain("sigil_issues{project=\"web\",project_id=\"3\",status=\"open\",level=\"error\"} 3");
+        text.Should().Contain("sigil_issues{project=\"web\",project_id=\"3\",status=\"resolved_in_future\",level=\"warning\"} 1");
     }
 
     [Fact]
@@ -112,7 +141,7 @@ public class PrometheusExpositionWriterTests
         Severity[] levels = [Severity.Debug, Severity.Info, Severity.Warning, Severity.Error, Severity.Fatal];
 
         string text = PrometheusExpositionWriter.Write(Snapshot(events:
-            levels.Select(l => new EventCountSample("web", l, MetricsDefaults.FiveMinutes, 1)).ToList()));
+            levels.Select(l => new EventCountSample("web", 3, l, MetricsDefaults.FiveMinutes, "production", IssueStatus.Open, 1)).ToList()));
 
         foreach (string expected in new[] { "debug", "info", "warning", "error", "fatal" })
             text.Should().Contain($"level=\"{expected}\"");
@@ -167,6 +196,26 @@ public class PrometheusExpositionWriterTests
     }
 
     [Fact]
+    public void Write_RendersThePersistedIngestionWhenTheCounterIsEmpty()
+    {
+        // After a restart the in-process counter is empty, the persisted instant keeps the
+        // staleness rule from reading the metric as "nothing for 56 years".
+        string text = PrometheusExpositionWriter.Write(Snapshot(lastIngestion: null, persistedIngestion: IngestedAt));
+
+        text.Should().Contain("sigil_last_ingestion_timestamp_seconds 1790856000");
+    }
+
+    [Fact]
+    public void Write_RendersTheLaterOfTheCounterAndThePersistedIngestion()
+    {
+        var older = IngestedAt.AddHours(-1);
+
+        string text = PrometheusExpositionWriter.Write(Snapshot(lastIngestion: older, persistedIngestion: IngestedAt));
+
+        text.Should().Contain("sigil_last_ingestion_timestamp_seconds 1790856000");
+    }
+
+    [Fact]
     public void Write_ConvertsNonUtcLastIngestionToTheSameInstant()
     {
         var local = IngestedAt.ToLocalTime();
@@ -205,16 +254,16 @@ public class PrometheusExpositionWriterTests
     public void Write_EscapesHostileProjectNamesInLabels()
     {
         string text = PrometheusExpositionWriter.Write(Snapshot(issues:
-            [new IssueCountSample("we\"ird\\name\nhere", IssueStatus.Open, Severity.Info, 1)]));
+            [new IssueCountSample("we\"ird\\name\nhere", 1, IssueStatus.Open, Severity.Info, 1)]));
 
-        text.Should().Contain("sigil_issues{project=\"we\\\"ird\\\\name\\nhere\",status=\"open\",level=\"info\"} 1");
+        text.Should().Contain("sigil_issues{project=\"we\\\"ird\\\\name\\nhere\",project_id=\"1\",status=\"open\",level=\"info\"} 1");
     }
 
     [Fact]
     public void Write_EverySampleLineStaysOnOneLine()
     {
         string text = PrometheusExpositionWriter.Write(Snapshot(issues:
-            [new IssueCountSample("line1\nline2", IssueStatus.Open, Severity.Error, 2)]));
+            [new IssueCountSample("line1\nline2", 1, IssueStatus.Open, Severity.Error, 2)]));
 
         text.Split('\n').Where(l => l.StartsWith("sigil_issues{")).Should().ContainSingle();
     }
@@ -232,12 +281,14 @@ public class PrometheusExpositionWriterTests
             string text = PrometheusExpositionWriter.Write(Snapshot(
                 ingested: 1234567,
                 backlog: 89,
+                oldestPending: 3.5,
                 lastIngestion: IngestedAt));
 
             text.Should().Contain("sigil_events_ingested_total 1234567");
             text.Should().Contain("sigil_digestion_backlog 89");
             text.Should().Contain("sigil_last_ingestion_timestamp_seconds 1790856000");
             text.Should().NotContain("1790856000,0");
+            text.Should().Contain("sigil_digestion_oldest_pending_seconds 3.5");
         }
         finally
         {
@@ -245,23 +296,66 @@ public class PrometheusExpositionWriterTests
         }
     }
 
+    // ── Event family ──────────────────────────────────────────────────────────
+
     [Fact]
     public void Write_DescribesTheEventWindowInHelp()
     {
-        PrometheusExpositionWriter.Write(Snapshot())
-            .Should().Contain("# HELP sigil_events Events received within the window, by project and level.");
+        string text = PrometheusExpositionWriter.Write(Snapshot());
+
+        text.Should().Contain("# HELP sigil_events Events received within the window, by project, level, environment and issue status.");
+    }
+
+    [Fact]
+    public void Write_DocumentsTheEnvironmentCapInTheEventHelp()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot());
+
+        text.Should().Contain($"the {MetricsDefaults.EnvironmentLabelLimit} most frequent values per project");
+        text.Should().Contain($"the remaining values are reported as {MetricsDefaults.EnvironmentOtherLabel}");
+    }
+
+    [Fact]
+    public void Write_ExplainsThatEventCombinationsReportEveryWindow()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot());
+
+        text.Should().Contain("reports all four windows, including the ones with no events");
+        text.Should().Contain("Use sigil_project_events for a series that outlives a day of silence.");
     }
 
     [Fact]
     public void Write_NoLongerExposesTheWindowedCountAsACounter()
     {
         string text = PrometheusExpositionWriter.Write(Snapshot(events:
-            [new EventCountSample("web", Severity.Error, MetricsDefaults.OneDay, 4)]));
+            [new EventCountSample("web", 3, Severity.Error, MetricsDefaults.OneDay, "production", IssueStatus.Open, 4)]));
 
         // The old family was a 24 hour window typed as a counter, so rate() and increase()
         // over it produced numbers that were not event rates.
         text.Should().NotContain("sigil_events_total");
         text.Should().Contain("# TYPE sigil_events gauge");
+    }
+
+    [Fact]
+    public void Write_RendersTheEventLabelsIncludingEnvironmentAndStatus()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(events:
+        [
+            new EventCountSample("web", 3, Severity.Error, MetricsDefaults.OneHour, "production", IssueStatus.Ignored, 7)
+        ]));
+
+        text.Should().Contain("sigil_events{project=\"web\",project_id=\"3\",level=\"error\",window=\"1h\",environment=\"production\",status=\"ignored\"} 7");
+    }
+
+    [Fact]
+    public void Write_RendersTheFoldedEnvironmentLabel()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(events:
+        [
+            new EventCountSample("web", 3, Severity.Error, MetricsDefaults.OneHour, MetricsDefaults.EnvironmentOtherLabel, IssueStatus.Open, 2)
+        ]));
+
+        text.Should().Contain("environment=\"other\"");
     }
 
     // ── Cardinality bounds ────────────────────────────────────────────────────
@@ -270,7 +364,7 @@ public class PrometheusExpositionWriterTests
     public void Write_NeverEmitsAnIssueIdLabel()
     {
         string text = PrometheusExpositionWriter.Write(Snapshot(issues:
-            [new IssueCountSample("web", IssueStatus.Open, Severity.Error, 1)]));
+            [new IssueCountSample("web", 3, IssueStatus.Open, Severity.Error, 1)]));
 
         text.Should().NotContain("issue_id");
         text.Should().NotContain("issue=");
@@ -280,7 +374,7 @@ public class PrometheusExpositionWriterTests
     public void Write_NeverEmitsATagValueLabel()
     {
         string text = PrometheusExpositionWriter.Write(Snapshot(issues:
-            [new IssueCountSample("web", IssueStatus.Open, Severity.Error, 1)]));
+            [new IssueCountSample("web", 3, IssueStatus.Open, Severity.Error, 1)]));
 
         foreach (string forbidden in new[] { "tag", "tag_key", "tag_value", "fingerprint", "title", "exception_type", "user_id", "message" })
             text.Should().NotContain(forbidden + "=\"");
@@ -289,12 +383,19 @@ public class PrometheusExpositionWriterTests
     [Fact]
     public void Write_EmitsOnlyTheDeclaredLabelNames()
     {
-        var allowed = new HashSet<string> { "project", "status", "level", "window", "channel", "version" };
+        var allowed = new HashSet<string>
+        {
+            "project", "project_id", "status", "level", "window", "environment",
+            "channel", "version", "type", "release", "commit"
+        };
 
         string text = PrometheusExpositionWriter.Write(Snapshot(
-            issues: [new IssueCountSample("web", IssueStatus.Open, Severity.Error, 3)],
-            events: [new EventCountSample("web", Severity.Fatal, MetricsDefaults.OneHour, 9)],
+            issues: [new IssueCountSample("web", 3, IssueStatus.Open, Severity.Error, 3)],
+            events: [new EventCountSample("web", 3, Severity.Fatal, MetricsDefaults.OneHour, "production", IssueStatus.Open, 9)],
             deliveries: [new AlertDeliverySample(AlertChannelType.Slack, AlertDeliveryStatus.Sent, 1)],
+            newIssues: [new NewIssueCountSample("web", 3, Severity.Error, MetricsDefaults.OneHour, 2)],
+            releases: [new ReleaseInfoSample("web", 3, "1.0.0", "abcdef1234", IngestedAt)],
+            discarded: [new EnvelopeDiscardSample("client_report", 4)],
             ingested: 5, dropped: 2, backlog: 4, lastIngestion: IngestedAt, version: "1.0.0"));
 
         List<string> labelNames = System.Text.RegularExpressions.Regex
@@ -314,7 +415,7 @@ public class PrometheusExpositionWriterTests
         foreach (string project in new[] { "a", "b", "c" })
             foreach (IssueStatus status in Enum.GetValues<IssueStatus>())
                 foreach (Severity level in Enum.GetValues<Severity>())
-                    issues.Add(new IssueCountSample(project, status, level, 1));
+                    issues.Add(new IssueCountSample(project, 1, status, level, 1));
 
         string[] lines = Lines(PrometheusExpositionWriter.Write(Snapshot(issues: issues)));
         lines.Count(l => l.StartsWith("sigil_issues{")).Should().Be(3 * 4 * 5);
@@ -328,7 +429,7 @@ public class PrometheusExpositionWriterTests
         foreach (string project in new[] { "a", "b", "c" })
             foreach (Severity level in Enum.GetValues<Severity>())
                 foreach (TimeSpan window in MetricsDefaults.EventWindows)
-                    events.Add(new EventCountSample(project, level, window, 1));
+                    events.Add(new EventCountSample(project, 1, level, window, "production", IssueStatus.Open, 1));
 
         string[] lines = Lines(PrometheusExpositionWriter.Write(Snapshot(events: events)));
         lines.Count(l => l.StartsWith("sigil_events{")).Should().Be(3 * 5 * 4);
@@ -341,14 +442,14 @@ public class PrometheusExpositionWriterTests
     {
         var events = new List<EventCountSample>();
         foreach (TimeSpan window in MetricsDefaults.EventWindows)
-            events.Add(new EventCountSample("web", Severity.Error, window, 1));
+            events.Add(new EventCountSample("web", 3, Severity.Error, window, "production", IssueStatus.Open, 1));
 
         string text = PrometheusExpositionWriter.Write(Snapshot(events: events));
 
-        text.Should().Contain("sigil_events{project=\"web\",level=\"error\",window=\"5m\"} 1");
-        text.Should().Contain("sigil_events{project=\"web\",level=\"error\",window=\"15m\"} 1");
-        text.Should().Contain("sigil_events{project=\"web\",level=\"error\",window=\"1h\"} 1");
-        text.Should().Contain("sigil_events{project=\"web\",level=\"error\",window=\"24h\"} 1");
+        text.Should().Contain("window=\"5m\"");
+        text.Should().Contain("window=\"15m\"");
+        text.Should().Contain("window=\"1h\"");
+        text.Should().Contain("window=\"24h\"");
     }
 
     [Fact]
@@ -356,12 +457,12 @@ public class PrometheusExpositionWriterTests
     {
         string text = PrometheusExpositionWriter.Write(Snapshot(events:
         [
-            new EventCountSample("web", Severity.Error, MetricsDefaults.FiveMinutes, 2),
-            new EventCountSample("web", Severity.Error, MetricsDefaults.OneHour, 40),
+            new EventCountSample("web", 3, Severity.Error, MetricsDefaults.FiveMinutes, "production", IssueStatus.Open, 2),
+            new EventCountSample("web", 3, Severity.Error, MetricsDefaults.OneHour, "production", IssueStatus.Open, 40),
         ]));
 
-        text.Should().Contain("sigil_events{project=\"web\",level=\"error\",window=\"5m\"} 2");
-        text.Should().Contain("sigil_events{project=\"web\",level=\"error\",window=\"1h\"} 40");
+        text.Should().Contain("sigil_events{project=\"web\",project_id=\"3\",level=\"error\",window=\"5m\",environment=\"production\",status=\"open\"} 2");
+        text.Should().Contain("sigil_events{project=\"web\",project_id=\"3\",level=\"error\",window=\"1h\",environment=\"production\",status=\"open\"} 40");
     }
 
     // ── Severity separation ───────────────────────────────────────────────────
@@ -371,12 +472,12 @@ public class PrometheusExpositionWriterTests
     {
         string text = PrometheusExpositionWriter.Write(Snapshot(events:
         [
-            new EventCountSample("web", Severity.Error, MetricsDefaults.FiveMinutes, 7),
-            new EventCountSample("web", Severity.Warning, MetricsDefaults.FiveMinutes, 300),
+            new EventCountSample("web", 3, Severity.Error, MetricsDefaults.FiveMinutes, "production", IssueStatus.Open, 7),
+            new EventCountSample("web", 3, Severity.Warning, MetricsDefaults.FiveMinutes, "production", IssueStatus.Open, 300),
         ]));
 
-        text.Should().Contain("sigil_events{project=\"web\",level=\"error\",window=\"5m\"} 7");
-        text.Should().Contain("sigil_events{project=\"web\",level=\"warning\",window=\"5m\"} 300");
+        text.Should().Contain("level=\"error\"");
+        text.Should().Contain("level=\"warning\"");
     }
 
     [Fact]
@@ -384,8 +485,8 @@ public class PrometheusExpositionWriterTests
     {
         string text = PrometheusExpositionWriter.Write(Snapshot(events:
         [
-            new EventCountSample("web", Severity.Fatal, MetricsDefaults.FiveMinutes, 1),
-            new EventCountSample("web", Severity.Error, MetricsDefaults.FiveMinutes, 2),
+            new EventCountSample("web", 3, Severity.Fatal, MetricsDefaults.FiveMinutes, "production", IssueStatus.Open, 1),
+            new EventCountSample("web", 3, Severity.Error, MetricsDefaults.FiveMinutes, "production", IssueStatus.Open, 2),
         ]));
 
         text.Should().Contain("level=\"fatal\"");
@@ -397,11 +498,143 @@ public class PrometheusExpositionWriterTests
     {
         string text = PrometheusExpositionWriter.Write(Snapshot(events:
         [
-            new EventCountSample("web", Severity.Error, MetricsDefaults.FiveMinutes, 1),
-            new EventCountSample("api", Severity.Error, MetricsDefaults.FiveMinutes, 1),
+            new EventCountSample("web", 3, Severity.Error, MetricsDefaults.FiveMinutes, "production", IssueStatus.Open, 1),
+            new EventCountSample("api", 4, Severity.Error, MetricsDefaults.FiveMinutes, "production", IssueStatus.Open, 1),
         ]));
 
-        text.Should().Contain("sigil_events{project=\"web\",level=\"error\",window=\"5m\"} 1");
-        text.Should().Contain("sigil_events{project=\"api\",level=\"error\",window=\"5m\"} 1");
+        text.Should().Contain("project=\"web\",project_id=\"3\"");
+        text.Should().Contain("project=\"api\",project_id=\"4\"");
+    }
+
+    // ── Project identifier ────────────────────────────────────────────────────
+
+    [Fact]
+    public void Write_PutsTheProjectIdentifierNextToTheProjectOnEveryProjectFamily()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(
+            issues: [new IssueCountSample("web", 12, IssueStatus.Open, Severity.Error, 3)],
+            events: [new EventCountSample("web", 12, Severity.Error, MetricsDefaults.OneHour, "production", IssueStatus.Open, 9)],
+            newIssues: [new NewIssueCountSample("web", 12, Severity.Error, MetricsDefaults.OneHour, 7)],
+            releases: [new ReleaseInfoSample("web", 12, "1.0.0+3f2a9c1", "3f2a9c1", IngestedAt)]));
+
+        text.Should().Contain("sigil_issues{project=\"web\",project_id=\"12\"");
+        text.Should().Contain("sigil_events{project=\"web\",project_id=\"12\"");
+        text.Should().Contain("sigil_new_issues{project=\"web\",project_id=\"12\"");
+        text.Should().Contain("sigil_release_info{project=\"web\",project_id=\"12\"");
+        text.Should().Contain("sigil_release_first_seen_timestamp_seconds{project=\"web\",project_id=\"12\"}");
+    }
+
+    // ── Digestion gauges ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Write_RendersTheOldestPendingAge()
+    {
+        PrometheusExpositionWriter.Write(Snapshot(oldestPending: 3.2))
+            .Should().Contain("sigil_digestion_oldest_pending_seconds 3.2");
+    }
+
+    [Fact]
+    public void Write_RendersZeroOldestPendingAgeWhenTheQueueIsEmpty()
+    {
+        PrometheusExpositionWriter.Write(Snapshot(backlog: 0, oldestPending: 0))
+            .Should().Contain("sigil_digestion_oldest_pending_seconds 0");
+    }
+
+    [Fact]
+    public void Write_RendersDiscardedEnvelopesHeldInTheDatabaseAsAGauge()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(discarded:
+        [
+            new EnvelopeDiscardSample("client_report", 12),
+            new EnvelopeDiscardSample("transaction", 4),
+        ]));
+
+        text.Should().Contain("sigil_envelopes_discarded{type=\"client_report\"} 12");
+        text.Should().Contain("sigil_envelopes_discarded{type=\"transaction\"} 4");
+    }
+
+    [Fact]
+    public void Write_RendersDiscardedEnvelopesSinceProcessStartAsACounter()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(discardedTotals:
+        [
+            new EnvelopeDiscardSample("client_report", 90),
+            new EnvelopeDiscardSample("transaction", 31),
+        ]));
+
+        text.Should().Contain("sigil_envelopes_discarded_total{type=\"client_report\"} 90");
+        text.Should().Contain("sigil_envelopes_discarded_total{type=\"transaction\"} 31");
+    }
+
+    [Fact]
+    public void Write_RendersProjectEventsWithProjectLevelAndWindow()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(projectEvents:
+        [
+            new ProjectEventCountSample("web", 12, Severity.Error, MetricsDefaults.OneHour, 5),
+            new ProjectEventCountSample("web", 12, Severity.Error, MetricsDefaults.FiveMinutes, 0),
+        ]));
+
+        text.Should().Contain("sigil_project_events{project=\"web\",project_id=\"12\",level=\"error\",window=\"1h\"} 5");
+        text.Should().Contain("sigil_project_events{project=\"web\",project_id=\"12\",level=\"error\",window=\"5m\"} 0");
+    }
+
+    // ── New issues ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Write_RendersNewIssuesWithLevelAndWindow()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(newIssues:
+        [
+            new NewIssueCountSample("web", 12, Severity.Error, MetricsDefaults.OneHour, 7)
+        ]));
+
+        text.Should().Contain("sigil_new_issues{project=\"web\",project_id=\"12\",level=\"error\",window=\"1h\"} 7");
+    }
+
+    // ── Release info ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Write_RendersTheNewestReleasePerProject()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(releases:
+        [
+            new ReleaseInfoSample("Kammelna ASP", 12, "1.0.0+3f2a9c1", "3f2a9c1", IngestedAt)
+        ]));
+
+        text.Should().Contain("sigil_release_info{project=\"Kammelna ASP\",project_id=\"12\",release=\"1.0.0+3f2a9c1\",commit=\"3f2a9c1\"} 1");
+    }
+
+    [Fact]
+    public void Write_TruncatesTheCommitShaToSevenCharacters()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(releases:
+        [
+            new ReleaseInfoSample("web", 12, "1.0.0", "3f2a9c1e9b8d4a6c", IngestedAt)
+        ]));
+
+        text.Should().Contain("commit=\"3f2a9c1\"");
+    }
+
+    [Fact]
+    public void Write_RendersAnEmptyCommitWhenTheReleaseCarriesNone()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(releases:
+        [
+            new ReleaseInfoSample("web", 12, "1.0.0", null, IngestedAt)
+        ]));
+
+        text.Should().Contain("sigil_release_info{project=\"web\",project_id=\"12\",release=\"1.0.0\",commit=\"\"} 1");
+    }
+
+    [Fact]
+    public void Write_RendersTheReleaseFirstSeenAsUnixSeconds()
+    {
+        string text = PrometheusExpositionWriter.Write(Snapshot(releases:
+        [
+            new ReleaseInfoSample("web", 12, "1.0.0", null, IngestedAt)
+        ]));
+
+        text.Should().Contain("sigil_release_first_seen_timestamp_seconds{project=\"web\",project_id=\"12\"} 1790856000");
     }
 }

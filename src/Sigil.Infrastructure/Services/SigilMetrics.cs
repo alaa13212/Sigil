@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Sigil.Application.Interfaces;
 
 namespace Sigil.Infrastructure.Services;
@@ -8,6 +9,7 @@ internal sealed class SigilMetrics : ISigilMetrics
     private long _eventsIngested;
     private long _eventsDropped;
     private long _lastIngestionTicks = DateTime.MinValue.Ticks;
+    private readonly ConcurrentDictionary<string, long> _envelopesDiscarded = new(StringComparer.Ordinal);
 
     public void RecordEventsIngested(int count)
     {
@@ -19,6 +21,17 @@ internal sealed class SigilMetrics : ISigilMetrics
     {
         if (count > 0)
             Interlocked.Add(ref _eventsDropped, count);
+    }
+
+    public void RecordEnvelopeDiscarded(string type)
+    {
+        if (string.IsNullOrWhiteSpace(type))
+            return;
+
+        _envelopesDiscarded.AddOrUpdate(
+            type.Trim().ToLowerInvariant(),
+            1,
+            (_, current) => current + 1);
     }
 
     public void RecordLastIngestion(DateTime receivedAtUtc)
@@ -48,6 +61,7 @@ internal sealed class SigilMetrics : ISigilMetrics
         return new SigilMetricsSnapshot(
             Interlocked.Read(ref _eventsIngested),
             Interlocked.Read(ref _eventsDropped),
-            lastIngestion);
+            lastIngestion,
+            new Dictionary<string, long>(_envelopesDiscarded, StringComparer.Ordinal));
     }
 }

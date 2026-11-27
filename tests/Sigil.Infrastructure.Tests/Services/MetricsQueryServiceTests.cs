@@ -7,6 +7,7 @@ using Sigil.Domain.Enums;
 using Sigil.Infrastructure.Persistence;
 using Sigil.Infrastructure.Services;
 using Sigil.Infrastructure.Tests.Fixtures;
+using Sigil.Infrastructure.Tests.Persistence;
 
 namespace Sigil.Infrastructure.Tests.Services;
 
@@ -18,8 +19,9 @@ public sealed class FakeSigilMetrics : ISigilMetrics
     public List<int> IngestedCounts { get; } = [];
     public List<int> DroppedCounts { get; } = [];
     public List<DateTime> LastIngestions { get; } = [];
+    public List<string> DiscardedEnvelopeTypes { get; } = [];
 
-    private SigilMetricsSnapshot _snapshot = new(0, 0, null);
+    private SigilMetricsSnapshot _snapshot = new(0, 0, null, new Dictionary<string, long>());
 
     public void RecordEventsIngested(int count)
     {
@@ -32,6 +34,8 @@ public sealed class FakeSigilMetrics : ISigilMetrics
         DroppedCalls++;
         DroppedCounts.Add(count);
     }
+
+    public void RecordEnvelopeDiscarded(string type) => DiscardedEnvelopeTypes.Add(type);
 
     public void RecordLastIngestion(DateTime receivedAtUtc) => LastIngestions.Add(receivedAtUtc);
 
@@ -90,6 +94,7 @@ public class MetricsQueryServiceTests(TestDatabaseFixture fixture)
         var sample = snapshot.Issues.Single(i => i.Project == "metrics-issues-project" && i.Status == IssueStatus.Open && i.Level == Severity.Error);
 
         sample.Count.Should().Be(2);
+        sample.ProjectId.Should().Be(project.Id);
         snapshot.Issues.Should().Contain(i => i.Project == "metrics-issues-project" && i.Status == IssueStatus.Resolved && i.Count == 1);
     }
 
@@ -124,6 +129,66 @@ public class MetricsQueryServiceTests(TestDatabaseFixture fixture)
     }
 
     [Fact]
+    public async Task GetSnapshot_ReportsEveryWindowOfAnObservedCombination()
+    {
+        var project = await SeedProjectAsync("metrics-zero-fill-project");
+        var (db, service, _) = CreateService();
+
+        var issue = NewIssue(project.Id, IssueStatus.Open, Severity.Error);
+        db.Issues.Add(issue);
+        await db.SaveChangesAsync();
+
+        db.Events.Add(SeedEventIn(db, project.Id, issue.Id, Severity.Error, _now.AddMinutes(-30)));
+        await db.SaveChangesAsync();
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        var samples = snapshot.Events
+            .Where(e => e.Project == "metrics-zero-fill-project" && e.Level == Severity.Error)
+            .ToList();
+
+        // The combination was seen in the last day, so all four windows are reported,
+        // the quiet ones with a zero, so the series does not disappear.
+        samples.Should().HaveCount(4);
+        samples.Single(e => e.Window == MetricsDefaults.FiveMinutes).Count.Should().Be(0);
+        samples.Single(e => e.Window == MetricsDefaults.FifteenMinutes).Count.Should().Be(0);
+        samples.Single(e => e.Window == MetricsDefaults.OneHour).Count.Should().Be(1);
+        samples.Single(e => e.Window == MetricsDefaults.OneDay).Count.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetSnapshot_ReportsAZeroFilledProjectSeriesForEveryProject()
+    {
+        var project = await SeedProjectAsync("metrics-silent-project-events");
+        var (_, service, _) = CreateService();
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        // A project with no events still reports a series, so a silence rule can fire.
+        snapshot.ProjectEvents.Should().Contain(e =>
+            e.Project == "metrics-silent-project-events" &&
+            e.ProjectId == project.Id &&
+            e.Level == Severity.Error &&
+            e.Window == MetricsDefaults.OneHour &&
+            e.Count == 0);
+    }
+
+    [Fact]
+    public async Task GetSnapshot_ReportsTheDiscardedEnvelopeCounterFromTheProcessCounter()
+    {
+        var (_, service, metrics) = CreateService();
+        metrics.SetSnapshot(new SigilMetricsSnapshot(
+            0,
+            0,
+            null,
+            new Dictionary<string, long> { ["client_report"] = 42 }));
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        snapshot.DiscardedEnvelopeTotals.Should().Contain(d => d.Type == "client_report" && d.Count == 42);
+    }
+
+    [Fact]
     public async Task GetSnapshot_CountsSeveritiesSeparately()
     {
         var project = await SeedProjectAsync("metrics-severity-project");
@@ -149,12 +214,10 @@ public class MetricsQueryServiceTests(TestDatabaseFixture fixture)
         Count(Severity.Error).Should().Be(2);
         Count(Severity.Warning).Should().Be(1);
         Count(Severity.Info).Should().Be(1);
-        Count(Severity.Fatal).Should().Be(0);
-        Count(Severity.Debug).Should().Be(0);
     }
 
     [Fact]
-    public async Task GetSnapshot_EmitsAZeroSeriesForEveryLevelAndWindow()
+    public async Task GetSnapshot_ReportsOnlyObservedEventCombinations()
     {
         var project = await SeedProjectAsync("metrics-zero-project");
         var (db, service, _) = CreateService();
@@ -170,27 +233,124 @@ public class MetricsQueryServiceTests(TestDatabaseFixture fixture)
 
         var forProject = snapshot.Events.Where(e => e.Project == "metrics-zero-project").ToList();
 
-        // A level without events still gets a series, so a panel shows 0 rather than no data
-        // and the series does not churn in Prometheus.
-        forProject.Should().HaveCount(Enum.GetValues<Severity>().Length * MetricsDefaults.EventWindows.Count);
-
-        foreach (Severity level in Enum.GetValues<Severity>())
-            foreach (TimeSpan window in MetricsDefaults.EventWindows)
-                forProject.Should().Contain(e => e.Level == level && e.Window == window);
+        // Only the observed combination is reported, the label cross-product is unbounded.
+        forProject.Should().HaveCount(MetricsDefaults.EventWindows.Count);
+        forProject.Select(e => e.Level).Distinct().Should().ContainSingle().Which.Should().Be(Severity.Error);
+        forProject.Select(e => e.Window).Distinct().Should().BeEquivalentTo(MetricsDefaults.EventWindows);
+        forProject.Should().OnlyContain(e => e.Count == 1);
     }
 
     [Fact]
-    public async Task GetSnapshot_EmitsZeroSeriesForAProjectWithoutAnyEvents()
+    public async Task GetSnapshot_ReportsNoEventSeriesForAProjectWithoutAnyEvents()
     {
         await SeedProjectAsync("metrics-silent-project");
         var (_, service, _) = CreateService();
 
         MetricsSnapshot snapshot = await service.GetSnapshotAsync();
 
-        var forProject = snapshot.Events.Where(e => e.Project == "metrics-silent-project").ToList();
+        snapshot.Events.Where(e => e.Project == "metrics-silent-project").Should().BeEmpty();
+    }
 
-        forProject.Should().HaveCount(Enum.GetValues<Severity>().Length * MetricsDefaults.EventWindows.Count);
-        forProject.Should().OnlyContain(e => e.Count == 0);
+    [Fact]
+    public async Task GetSnapshot_ReportsTheIssueStatusAsTheEventStatus()
+    {
+        var project = await SeedProjectAsync("metrics-status-project");
+        var (db, service, _) = CreateService();
+
+        var open = NewIssue(project.Id, IssueStatus.Open, Severity.Error);
+        var ignored = NewIssue(project.Id, IssueStatus.Ignored, Severity.Error);
+        db.Issues.AddRange(open, ignored);
+        await db.SaveChangesAsync();
+
+        db.Events.AddRange(
+            SeedEventIn(db, project.Id, open.Id, Severity.Error, _now.AddMinutes(-1)),
+            SeedEventIn(db, project.Id, ignored.Id, Severity.Error, _now.AddMinutes(-1)));
+        await db.SaveChangesAsync();
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        var forProject = snapshot.Events
+            .Where(e => e.Project == "metrics-status-project" && e.Window == MetricsDefaults.FiveMinutes)
+            .ToList();
+
+        forProject.Should().HaveCount(2);
+        forProject.Should().Contain(e => e.Status == IssueStatus.Open);
+        forProject.Should().Contain(e => e.Status == IssueStatus.Ignored);
+    }
+
+    [Fact]
+    public async Task GetSnapshot_ReportsTheEnvironmentOfAnEvent()
+    {
+        var project = await SeedProjectAsync("metrics-environment-project");
+        var (db, service, _) = CreateService();
+
+        var issue = NewIssue(project.Id, IssueStatus.Open, Severity.Error);
+        db.Issues.Add(issue);
+        await db.SaveChangesAsync();
+
+        var captured = SeedEventIn(db, project.Id, issue.Id, Severity.Error, _now.AddMinutes(-1));
+        await db.SaveChangesAsync();
+        await TestHelper.TagEventAsync(db, captured.Id, "environment", "production");
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        snapshot.Events
+            .Should().Contain(e => e.Project == "metrics-environment-project" && e.Environment == "production");
+    }
+
+    [Fact]
+    public async Task GetSnapshot_CapsTheEnvironmentValuesOfAProject()
+    {
+        var project = await SeedProjectAsync("metrics-environment-cap-project");
+        var (db, service, _) = CreateService();
+
+        var issue = NewIssue(project.Id, IssueStatus.Open, Severity.Error);
+        db.Issues.Add(issue);
+        await db.SaveChangesAsync();
+
+        // Twelve environments, the last two are the least frequent ones.
+        for (int i = 1; i <= MetricsDefaults.EnvironmentLabelLimit + 2; i++)
+        {
+            int count = MetricsDefaults.EnvironmentLabelLimit + 3 - i;
+            for (int c = 0; c < count; c++)
+            {
+                var captured = SeedEventIn(db, project.Id, issue.Id, Severity.Error, _now.AddMinutes(-1));
+                await db.SaveChangesAsync();
+                await TestHelper.TagEventAsync(db, captured.Id, "environment", $"env-{i:D2}");
+            }
+        }
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        var environments = snapshot.Events
+            .Where(e => e.Project == "metrics-environment-cap-project")
+            .Select(e => e.Environment)
+            .Distinct()
+            .ToList();
+
+        environments.Should().HaveCount(MetricsDefaults.EnvironmentLabelLimit + 1);
+        environments.Should().Contain(MetricsDefaults.EnvironmentOtherLabel);
+        environments.Should().NotContain("env-11");
+        environments.Should().NotContain("env-12");
+    }
+
+    [Fact]
+    public async Task GetSnapshot_ReportsTheMissingEnvironmentLabelForEventsWithoutOne()
+    {
+        var project = await SeedProjectAsync("metrics-environment-missing-project");
+        var (db, service, _) = CreateService();
+
+        var issue = NewIssue(project.Id, IssueStatus.Open, Severity.Error);
+        db.Issues.Add(issue);
+        await db.SaveChangesAsync();
+
+        db.Events.Add(SeedEventIn(db, project.Id, issue.Id, Severity.Error, _now.AddMinutes(-1)));
+        await db.SaveChangesAsync();
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        snapshot.Events
+            .Should().Contain(e => e.Project == "metrics-environment-missing-project" && e.Environment == MetricsDefaults.EnvironmentMissingLabel);
     }
 
     [Fact]
@@ -256,17 +416,156 @@ public class MetricsQueryServiceTests(TestDatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task GetSnapshot_CarriesTheCounterValues()
+    public async Task GetSnapshot_ReportsTheAgeOfTheOldestPendingEnvelope()
     {
-        var (_, service, metrics) = CreateService();
-        var ingestedAt = new DateTime(2026, 9, 30, 8, 0, 0, DateTimeKind.Utc);
-        metrics.SetSnapshot(new SigilMetricsSnapshot(41, 7, ingestedAt));
+        var project = await SeedProjectAsync("metrics-oldest-pending-project");
+        var (db, service, _) = CreateService();
+
+        db.RawEnvelopes.Add(NewEnvelope(project.Id, error: null, receivedAt: _now.AddSeconds(-100)));
+        await db.SaveChangesAsync();
 
         MetricsSnapshot snapshot = await service.GetSnapshotAsync();
 
+        DateTime? oldest = await db.RawEnvelopes
+            .Where(r => r.Error == null)
+            .OrderBy(r => r.ReceivedAt)
+            .Select(r => (DateTime?)r.ReceivedAt)
+            .FirstOrDefaultAsync();
+
+        oldest.Should().NotBeNull();
+
+        double expected = (_now - oldest!.Value).TotalSeconds;
+        snapshot.DigestionOldestPendingSeconds.Should().BeApproximately(expected, 0.001);
+        snapshot.DigestionOldestPendingSeconds.Should().BeGreaterThanOrEqualTo(100);
+    }
+
+    [Fact]
+    public async Task GetSnapshot_ExcludesDiscardedEnvelopesFromTheBacklogAndTheOldestPendingAge()
+    {
+        var project = await SeedProjectAsync("metrics-discarded-project");
+        var (db, service, metrics) = CreateService();
+
+        long backlogBefore = (await service.GetSnapshotAsync()).DigestionBacklog;
+
+        var service2 = new RawEnvelopeService(db, new FixedDateTime(_now), metrics);
+        await service2.StoreAsync(project.Id, ClientReportEnvelope(), _now.AddMinutes(-30));
+
+        var discarded = await db.RawEnvelopes
+            .Where(r => r.ProjectId == project.Id)
+            .OrderByDescending(r => r.Id)
+            .FirstAsync();
+
+        discarded.Error.Should().Be("unsupported envelope type: client_report");
+        discarded.ProcessedAt.Should().NotBeNull();
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        // A discarded envelope has left the queue, so it is neither backlog nor pending age.
+        (snapshot.DigestionBacklog - backlogBefore).Should().Be(0);
+        (await db.RawEnvelopes.Where(r => r.Error == null).AnyAsync(r => r.Id == discarded.Id)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetSnapshot_CountsDiscardedEnvelopesByItemType()
+    {
+        var project = await SeedProjectAsync("metrics-discarded-count-project");
+        var (db, service, metrics) = CreateService();
+
+        var service2 = new RawEnvelopeService(db, new FixedDateTime(_now), metrics);
+        await service2.StoreAsync(project.Id, ClientReportEnvelope(), _now);
+        await service2.StoreAsync(project.Id, ClientReportEnvelope(), _now);
+        await service2.StoreAsync(project.Id, TransactionEnvelope(), _now);
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        snapshot.DiscardedEnvelopes
+            .Should().Contain(d => d.Type == "client_report" && d.Count >= 2);
+        snapshot.DiscardedEnvelopes
+            .Should().Contain(d => d.Type == "transaction" && d.Count >= 1);
+    }
+
+    [Fact]
+    public async Task GetSnapshot_CountsNewIssuesPerWindow()
+    {
+        var project = await SeedProjectAsync("metrics-new-issues-project");
+        var (db, service, _) = CreateService();
+
+        db.Issues.AddRange(
+            NewIssue(project.Id, IssueStatus.Open, Severity.Error, firstSeen: _now.AddMinutes(-1)),
+            NewIssue(project.Id, IssueStatus.Open, Severity.Error, firstSeen: _now.AddMinutes(-1)),
+            NewIssue(project.Id, IssueStatus.Open, Severity.Warning, firstSeen: _now.AddMinutes(-10)),
+            NewIssue(project.Id, IssueStatus.Open, Severity.Error, firstSeen: _now.AddMinutes(-30)),
+            NewIssue(project.Id, IssueStatus.Open, Severity.Error, firstSeen: _now.AddHours(-5)));
+        await db.SaveChangesAsync();
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        long Count(Severity level, TimeSpan window) => snapshot.NewIssues
+            .Single(n => n.Project == "metrics-new-issues-project" && n.Level == level && n.Window == window)
+            .Count;
+
+        Count(Severity.Error, MetricsDefaults.FiveMinutes).Should().Be(2);
+        Count(Severity.Error, MetricsDefaults.FifteenMinutes).Should().Be(2);
+        Count(Severity.Error, MetricsDefaults.OneHour).Should().Be(3);
+        Count(Severity.Error, MetricsDefaults.OneDay).Should().Be(4);
+        Count(Severity.Warning, MetricsDefaults.OneHour).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetSnapshot_ReportsTheNewestReleaseOfEachProject()
+    {
+        var project = await SeedProjectAsync("metrics-release-project");
+        var (db, service, _) = CreateService();
+
+        db.Releases.AddRange(
+            new Release { ProjectId = project.Id, RawName = "metrics-release-1.0.0", FirstSeenAt = _now.AddDays(-2), CommitSha = "aaaaaaaaaaaa" },
+            new Release { ProjectId = project.Id, RawName = "metrics-release-1.1.0", FirstSeenAt = _now.AddDays(-1), CommitSha = "bbbbbbbbbb" },
+            new Release { ProjectId = project.Id, RawName = "metrics-release-1.2.0", FirstSeenAt = _now, CommitSha = "3f2a9c1e9b8d" });
+        await db.SaveChangesAsync();
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        var sample = snapshot.Releases.Single(r => r.Project == "metrics-release-project");
+
+        sample.Release.Should().Be("metrics-release-1.2.0");
+        sample.Commit.Should().Be("3f2a9c1e9b8d");
+        sample.ProjectId.Should().Be(project.Id);
+        sample.FirstSeenAt.Should().Be(_now);
+    }
+
+    [Fact]
+    public async Task GetSnapshot_SeedsTheLastIngestionFromPersistedData()
+    {
+        var project = await SeedProjectAsync("metrics-last-ingestion-project");
+        var (db, service, _) = CreateService();
+
+        var issue = NewIssue(project.Id, IssueStatus.Open, Severity.Error);
+        db.Issues.Add(issue);
+        await db.SaveChangesAsync();
+
+        db.Events.Add(SeedEventIn(db, project.Id, issue.Id, Severity.Error, _now.AddMinutes(-1)));
+        await db.SaveChangesAsync();
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        // The in-process counter is empty after a restart, the persisted instant fills the gap.
+        snapshot.LastPersistedIngestionUtc.Should().NotBeNull();
+        snapshot.LastPersistedIngestionUtc.Should().BeOnOrAfter(_now.AddMinutes(-1));
+        snapshot.LastIngestionUtc.Should().Be(snapshot.LastPersistedIngestionUtc);
+    }
+
+    [Fact]
+    public async Task GetSnapshot_KeepsTheLaterOfTheCounterAndThePersistedIngestion()
+    {
+        var (_, service, metrics) = CreateService();
+        var counterValue = new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        metrics.SetSnapshot(new SigilMetricsSnapshot(41, 7, counterValue, new Dictionary<string, long>()));
+
+        MetricsSnapshot snapshot = await service.GetSnapshotAsync();
+
+        snapshot.LastIngestionUtc.Should().Be(counterValue);
         snapshot.EventsIngested.Should().Be(41);
         snapshot.EventsDropped.Should().Be(7);
-        snapshot.LastIngestionUtc.Should().Be(ingestedAt);
     }
 
     [Fact]
@@ -282,8 +581,17 @@ public class MetricsQueryServiceTests(TestDatabaseFixture fixture)
     [Fact]
     public async Task GetSnapshot_ReportsEveryConfiguredEventWindow()
     {
-        await SeedProjectAsync("metrics-windows-project");
-        var (_, service, _) = CreateService();
+        var project = await SeedProjectAsync("metrics-windows-project");
+        var (db, service, _) = CreateService();
+
+        var issue = NewIssue(project.Id, IssueStatus.Open, Severity.Error);
+        db.Issues.Add(issue);
+        await db.SaveChangesAsync();
+
+        foreach (TimeSpan window in MetricsDefaults.EventWindows)
+            db.Events.Add(SeedEventIn(db, project.Id, issue.Id, Severity.Error, _now - window + TimeSpan.FromSeconds(1)));
+
+        await db.SaveChangesAsync();
 
         MetricsSnapshot snapshot = await service.GetSnapshotAsync();
 
@@ -321,14 +629,14 @@ public class MetricsQueryServiceTests(TestDatabaseFixture fixture)
         samples.Should().NotContain(s => issueIds.Select(i => i.ToString()).Contains(s.Project));
     }
 
-    private static Issue NewIssue(int projectId, IssueStatus status, Severity level) =>
+    private static Issue NewIssue(int projectId, IssueStatus status, Severity level, DateTime? firstSeen = null) =>
         new()
         {
             ProjectId = projectId,
             Fingerprint = Guid.NewGuid().ToString("N"),
             Status = status,
             Level = level,
-            FirstSeen = _nowStatic,
+            FirstSeen = firstSeen ?? _nowStatic,
             LastSeen = _nowStatic,
             LastChangedAt = _nowStatic
         };
@@ -352,12 +660,18 @@ public class MetricsQueryServiceTests(TestDatabaseFixture fixture)
         return captured;
     }
 
-    private static RawEnvelope NewEnvelope(int projectId, string? error) =>
+    private static RawEnvelope NewEnvelope(int projectId, string? error, DateTime? receivedAt = null) =>
         new()
         {
             ProjectId = projectId,
             RawData = "{}",
-            ReceivedAt = _nowStatic,
+            ReceivedAt = receivedAt ?? _nowStatic,
             Error = error
         };
+
+    private static string ClientReportEnvelope() =>
+        "{\"event_id\":\"5d1b1a1e\"}\n{\"type\":\"client_report\",\"length\":2}\n{}";
+
+    private static string TransactionEnvelope() =>
+        "{\"event_id\":\"5d1b1a1f\"}\n{\"type\":\"transaction\",\"length\":2}\n{}";
 }

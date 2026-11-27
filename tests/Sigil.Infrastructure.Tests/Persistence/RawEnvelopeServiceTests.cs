@@ -4,6 +4,8 @@ using Sigil.Domain.Entities;
 using Sigil.Infrastructure.Persistence;
 using Sigil.Infrastructure.Tests.Fixtures;
 
+using Sigil.Infrastructure.Tests.Services;
+
 namespace Sigil.Infrastructure.Tests.Persistence;
 
 [Collection(DbCollection)]
@@ -17,7 +19,7 @@ public class RawEnvelopeServiceTests(TestDatabaseFixture fixture)
         return dt;
     }
 
-    private static RawEnvelopeService Create(SigilDbContext ctx) => new(ctx, StubDateTime());
+    private static RawEnvelopeService Create(SigilDbContext ctx) => new(ctx, StubDateTime(), new FakeSigilMetrics());
 
     private async Task<RawEnvelope> InsertEnvelopeAsync(SigilDbContext ctx, int projectId,
         string rawData = "{}", DateTime? receivedAt = null, string? error = null, DateTime? processedAt = null)
